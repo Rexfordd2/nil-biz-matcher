@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0a0a;
+  --surface: #111111;
+  --border: #1f1f1f;
+  --brand: #e50914;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+.card {
+  @apply bg-surface border border-border rounded-xl;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold transition;
+}
+.btn-primary {
+  @apply bg-brand-red text-white hover:shadow-glow;
+}
+.btn-ghost {
+  @apply bg-transparent text-gray-200 border border-border hover:bg-mid;
+}
+
+.badge {
+  @apply inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-xs font-bold;
+}
+.badge-perfect { @apply bg-fit-perfect/15 text-fit-perfect ring-1 ring-fit-perfect/30; }
+.badge-good { @apply bg-fit-good/15 text-fit-good ring-1 ring-fit-good/30; }
+.badge-stretch { @apply bg-fit-stretch/15 text-fit-stretch ring-1 ring-fit-stretch/30; }
+.badge-poor { @apply bg-fit-poor/15 text-fit-poor ring-1 ring-fit-poor/30; }
+
+.level-local { @apply bg-brand-red/15 text-brand-red ring-1 ring-brand-red/30; }
+.level-regional { @apply bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30; }
+.level-national { @apply bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30; }
+
+.headline {
+  @apply text-white font-extrabold tracking-tight;
+}
+.subtle {
+  @apply text-gray-400;
+}
+
+.red-glow {
+  box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.35), 0 0 20px rgba(229, 9, 20, 0.25);
+}
+
+.fade-in {
+  animation: fade-in 300ms ease-out;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
