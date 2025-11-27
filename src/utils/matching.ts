@@ -1,5 +1,8 @@
 import { AthleteProfile, Business, BusinessLevel, FitRating, MatchResult } from '../types'
 import { guessCategory } from './analysis'
+import { buildFitProsCons } from './fitProsCons'
+import { estimateOpportunityCost } from './opportunityCost'
+import { buildMatchStrategy } from './strategy'
 
 function clamp(n: number, min = 0, max = 100) {
 	return Math.max(min, Math.min(max, n))
@@ -84,6 +87,16 @@ export function evaluateMatch(athlete: AthleteProfile, business: Business): Matc
 	}
 
 	const recommendedLevels: BusinessLevel[] = recommendLevels(athlete)
+	const { pros, cons } = buildFitProsCons({ athleteProfile: athlete, business, rating })
+	const opportunityCost = estimateOpportunityCost({
+		fit: rating,
+		athleteProfile: athlete,
+		// If collaboration type exists in future, pass it through here
+		collaborationType: undefined
+	})
+
+	// Build playbook strategy. For STRETCH/POOR we still generate but the copy is framed cautiously.
+	const strategy = buildMatchStrategy({ athleteProfile: athlete, business, fit: rating })
 
 	return {
 		brandAlignment,
@@ -92,7 +105,11 @@ export function evaluateMatch(athlete: AthleteProfile, business: Business): Matc
 		score,
 		rating,
 		explanation: explain(),
-		recommendedLevels
+		pros,
+		cons,
+		recommendedLevels,
+		opportunityCost,
+		strategy
 	}
 }
 

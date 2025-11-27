@@ -6,6 +6,8 @@ export function mapExternalToBusiness(ext: ExternalBusiness): Partial<Business> 
 		name: ext.name,
 		url: ext.url,
 		description: undefined, // will be filled later / manually if needed
+		rating: ext.rating,
+		reviewCount: ext.reviewCount,
 		location: [
 			ext.location?.address1,
 			ext.location?.address2,

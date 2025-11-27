@@ -1,0 +1,3 @@
+export const YOUTUBE_INTRO_VIDEO_ID = 'VIDEO_ID'
+
+
