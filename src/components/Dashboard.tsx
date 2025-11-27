@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import { Business, BusinessLevel, FitRating } from '../types'
 import { FitBadge, LevelBadge } from './ui/Badge'
 import { useToast } from './ui/Toast'
+import { getTargets } from '../recruiting/pipeline'
 
 type Props = {
 	businesses: Business[]
@@ -17,6 +18,14 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 	const { show } = useToast()
 	const [filterLevel, setFilterLevel] = useState<BusinessLevel | 'ALL'>('ALL')
 	const [filterFit, setFilterFit] = useState<FitRating | 'ALL'>('ALL')
+	const [recruitingCounts, setRecruitingCounts] = useState<{ pursue: number; inConversation: number }>({ pursue: 0, inConversation: 0 })
+
+	useEffect(() => {
+		const targets = getTargets()
+		const pursue = targets.filter(t => t.interestLevel === 'pursue').length
+		const inConversation = targets.filter(t => t.status === 'in_conversation').length
+		setRecruitingCounts({ pursue, inConversation })
+	}, [])
 
 	const filtered = businesses.filter(b => {
 		const levelOk = filterLevel === 'ALL' || b.level === filterLevel || b.analysis?.levelGuess === filterLevel
@@ -43,6 +52,16 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 				</select>
 			</div>
 		}>
+			<div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+				<div className="bg-mid border border-border rounded-md p-3">
+					<div className="text-gray-400 text-xs">Programs marked "Pursue"</div>
+					<div className="text-white text-2xl font-bold">{recruitingCounts.pursue}</div>
+				</div>
+				<div className="bg-mid border border-border rounded-md p-3">
+					<div className="text-gray-400 text-xs">In conversation</div>
+					<div className="text-white text-2xl font-bold">{recruitingCounts.inConversation}</div>
+				</div>
+			</div>
 			<div className="overflow-x-auto">
 				<table className="w-full text-left text-sm">
 					<thead className="text-gray-400">

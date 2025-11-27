@@ -80,6 +80,30 @@ export type TrainingLog = {
 	entries: TrainingLogEntry[]
 }
 
+// --- Recruiting additions ---
+export type PhysicalAttributes = {
+	heightInches?: number
+	weightLbs?: number
+	wingspanInches?: number
+	handSizeInches?: number
+	dominantHand?: 'left' | 'right' | 'ambi'
+}
+
+export type SportMetricEntry = {
+	sport: string
+	position?: string
+	metricName: string
+	value: string
+	dateRecorded?: string
+	verifiedBy?: string
+}
+
+export type GameFilmLink = {
+	platform: 'hudl' | 'youtube' | 'vimeo' | 'other'
+	label: string
+	url: string
+}
+
 export type OpportunityStatus = 'idea' | 'targeted' | 'pitched' | 'in_discussion' | 'launched' | 'archived'
 
 export type OpportunityCategory =
@@ -219,6 +243,12 @@ export type AthleteProfile = {
 	 * To be used later for partnership discovery
 	 */
 	monetizationInterests?: string[]
+	/**
+	 * Recruiting profile
+	 */
+	physicalAttributes?: PhysicalAttributes
+	sportMetrics?: SportMetricEntry[]
+	gameFilm?: GameFilmLink[]
 	/**
 	 * NIL-specific compliance and contact info
 	 */

@@ -22,8 +22,10 @@ import EventsPlanner from './components/EventsPlanner'
 import Welcome from './components/Welcome'
 import Resources from './components/Resources'
 import Guidelines from './components/Guidelines'
+import RecruitingFinder from './components/RecruitingFinder'
+import RecruitingBoard from './components/RecruitingBoard'
 
-type Tab = 'Welcome' | 'Athlete' | 'Businesses' | 'Discover' | 'Matches' | 'Deals' | 'Opportunities' | 'Events' | 'Dashboard' | 'Profile Preview' | 'Resources' | 'Guidelines' | 'NIL Hub' | 'Vendor Directory'
+type Tab = 'Welcome' | 'Athlete' | 'Businesses' | 'Discover' | 'Matches' | 'Deals' | 'Opportunities' | 'Events' | 'Dashboard' | 'Profile Preview' | 'Resources' | 'Guidelines' | 'NIL Hub' | 'Vendor Directory' | 'Recruiting' | 'Recruiting Board'
 
 export default function App() {
 	const [tab, setTab] = useState<Tab>('Welcome')
@@ -88,7 +90,7 @@ export default function App() {
 							<h1 className="headline text-2xl">Monster Collective</h1>
 						</div>
 						<nav className="flex gap-2">
-							{(['Welcome','Athlete','Businesses','Discover','Matches','Deals','Opportunities','Events','Dashboard','Profile Preview','Resources','Guidelines','NIL Hub','Vendor Directory'] as Tab[]).map(t => (
+							{(['Welcome','Athlete','Businesses','Discover','Matches','Deals','Opportunities','Events','Dashboard','Profile Preview','Resources','Guidelines','NIL Hub','Vendor Directory','Recruiting','Recruiting Board'] as Tab[]).map(t => (
 								<button
 									key={t}
 									onClick={() => setTab(t)}
@@ -315,6 +317,10 @@ export default function App() {
 					)}
 
 					{tab === 'Profile Preview' && <PublicProfile athlete={athlete} />}
+
+					{tab === 'Recruiting' && <RecruitingFinder athlete={athlete} />}
+
+					{tab === 'Recruiting Board' && <RecruitingBoard />}
 
 					{tab === 'Resources' && <Resources onGoVendors={() => setTab('Vendor Directory')} />}
 

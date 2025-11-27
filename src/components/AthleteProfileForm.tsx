@@ -116,6 +116,20 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 	const [collectiveContactEmail, setCollectiveContactEmail] = useState<string>(value?.nil?.associatedCollective?.contactEmail || '')
 	const [collectiveNotes, setCollectiveNotes] = useState<string>(value?.nil?.associatedCollective?.notes || '')
 
+	// Recruiting Profile state
+	const pa = value?.physicalAttributes
+	const [heightFeet, setHeightFeet] = useState<number | ''>(pa?.heightInches ? Math.floor(pa.heightInches / 12) : '')
+	const [heightInchesPart, setHeightInchesPart] = useState<number | ''>(pa?.heightInches ? pa.heightInches % 12 : '')
+	const [weightLbs, setWeightLbs] = useState<number | ''>(pa?.weightLbs ?? '')
+	const [wingspanInches, setWingspanInches] = useState<number | ''>(pa?.wingspanInches ?? '')
+	const [handSizeInches, setHandSizeInches] = useState<number | ''>(pa?.handSizeInches ?? '')
+	const [dominantHand, setDominantHand] = useState<'left' | 'right' | 'ambi' | ''>(pa?.dominantHand || '')
+
+	type Metric = { sport: string; position?: string; metricName: string; value: string; dateRecorded?: string; verifiedBy?: string }
+	const [sportMetrics, setSportMetrics] = useState<Metric[]>(value?.sportMetrics || [])
+	type Film = { platform: 'hudl' | 'youtube' | 'vimeo' | 'other'; label: string; url: string }
+	const [gameFilm, setGameFilm] = useState<Film[]>(value?.gameFilm || [])
+
 	const snapshot = useMemo(
 		() => ({
 			name,
@@ -301,6 +315,9 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 				samplePosts,
 				externalDeckUrl: externalDeckUrl.trim() || undefined
 			} : undefined
+		const totalInches =
+			(heightFeet === '' && heightInchesPart === '') ? undefined :
+			((Number(heightFeet || 0) * 12) + Number(heightInchesPart || 0))
 		const athlete: AthleteProfile = {
 			id: value?.id || `ath-${Date.now()}`,
 			name,
@@ -341,6 +358,17 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 				: undefined,
 			trainingLog: { entries: trainingEntries },
 			monetizationInterests,
+			physicalAttributes: (
+				totalInches || weightLbs !== '' || wingspanInches !== '' || handSizeInches !== '' || dominantHand
+			) ? {
+				heightInches: totalInches,
+				weightLbs: weightLbs === '' ? undefined : Number(weightLbs),
+				wingspanInches: wingspanInches === '' ? undefined : Number(wingspanInches),
+				handSizeInches: handSizeInches === '' ? undefined : Number(handSizeInches),
+				dominantHand: (dominantHand || undefined) as any
+			} : undefined,
+			sportMetrics: sportMetrics.length ? sportMetrics : undefined,
+			gameFilm: gameFilm.length ? gameFilm : undefined,
 			nil: {
 				complianceContactEmail: complianceEmail || undefined,
 				schoolNILPolicyUrl: policyUrl || undefined,
@@ -806,6 +834,82 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 								<input value={collectiveContactEmail} onChange={e => setCollectiveContactEmail(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Contact email" />
 							</div>
 							<input value={collectiveNotes} onChange={e => setCollectiveNotes(e.target.value)} className="mt-3 w-full bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Notes about the collective" />
+						</div>
+					</div>
+
+					{/* Recruiting Profile */}
+					<div className="md:col-span-2">
+						<div className="text-white font-semibold mb-2">Recruiting Profile</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="bg-mid border border-border rounded-md p-3">
+								<div className="text-gray-300 text-sm mb-2">Physical Attributes</div>
+								<div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+									<input value={heightFeet} onChange={e => setHeightFeet(e.target.value === '' ? '' : Number(e.target.value))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Height ft" />
+									<input value={heightInchesPart} onChange={e => setHeightInchesPart(e.target.value === '' ? '' : Number(e.target.value))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="in" />
+									<input value={weightLbs} onChange={e => setWeightLbs(e.target.value === '' ? '' : Number(e.target.value))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Weight lbs" />
+									<select value={dominantHand} onChange={e => setDominantHand(e.target.value as any)} className="bg-background border border-border rounded-md px-3 py-2 text-white">
+										<option value="">Dominant hand</option>
+										<option value="left">left</option>
+										<option value="right">right</option>
+										<option value="ambi">ambi</option>
+									</select>
+								</div>
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+									<input value={wingspanInches} onChange={e => setWingspanInches(e.target.value === '' ? '' : Number(e.target.value))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Wingspan (in)" />
+									<input value={handSizeInches} onChange={e => setHandSizeInches(e.target.value === '' ? '' : Number(e.target.value))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Hand size (in)" />
+								</div>
+								<div className="text-xs text-gray-400 mt-2">
+									Height will be stored as total inches. Example: 6'1&quot; → 73.
+								</div>
+							</div>
+
+							<div className="bg-mid border border-border rounded-md p-3">
+								<div className="flex items-center justify-between mb-2">
+									<div className="text-gray-300 text-sm">Sport-Specific Metrics</div>
+									<Button variant="ghost" onClick={() => setSportMetrics(curr => [...curr, { sport: '', metricName: '', value: '' }])}>Add metric</Button>
+								</div>
+								<div className="space-y-2">
+									{sportMetrics.map((m, idx) => (
+										<div key={`met-${idx}`} className="grid grid-cols-1 md:grid-cols-6 gap-2">
+											<input value={m.sport} onChange={e => setSportMetrics(curr => curr.map((x,i) => i===idx ? { ...x, sport: e.target.value } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Sport" />
+											<input value={m.position || ''} onChange={e => setSportMetrics(curr => curr.map((x,i) => i===idx ? { ...x, position: e.target.value } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Position" />
+											<input value={m.metricName} onChange={e => setSportMetrics(curr => curr.map((x,i) => i===idx ? { ...x, metricName: e.target.value } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder='Metric (e.g., "40-yard dash")' />
+											<input value={m.value} onChange={e => setSportMetrics(curr => curr.map((x,i) => i===idx ? { ...x, value: e.target.value } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder='Value (e.g., "4.55s")' />
+											<input type="date" value={m.dateRecorded || ''} onChange={e => setSportMetrics(curr => curr.map((x,i) => i===idx ? { ...x, dateRecorded: e.target.value || undefined } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white" />
+											<div className="flex gap-2">
+												<input value={m.verifiedBy || ''} onChange={e => setSportMetrics(curr => curr.map((x,i) => i===idx ? { ...x, verifiedBy: e.target.value || undefined } : x))} className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-white" placeholder='Verified by (e.g., "Coach")' />
+												<Button variant="ghost" onClick={() => setSportMetrics(curr => curr.filter((_,i) => i!==idx))}>Remove</Button>
+											</div>
+										</div>
+									))}
+									{sportMetrics.length === 0 && <div className="subtle text-sm">Add metrics like 40-yard dash, vertical, bench, etc.</div>}
+								</div>
+							</div>
+
+							<div className="md:col-span-2 bg-mid border border-border rounded-md p-3">
+								<div className="flex items-center justify-between mb-2">
+									<div className="text-gray-300 text-sm">Game Film Links</div>
+									<Button variant="ghost" onClick={() => setGameFilm(curr => [...curr, { platform: 'hudl', label: '', url: '' }])}>Add link</Button>
+								</div>
+								<div className="space-y-2">
+									{gameFilm.map((g, idx) => (
+										<div key={`gf-${idx}`} className="grid grid-cols-1 md:grid-cols-6 gap-2">
+											<select value={g.platform} onChange={e => setGameFilm(curr => curr.map((x,i) => i===idx ? { ...x, platform: e.target.value as any } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white">
+												<option value="hudl">Hudl</option>
+												<option value="youtube">YouTube</option>
+												<option value="vimeo">Vimeo</option>
+												<option value="other">Other</option>
+											</select>
+											<input value={g.label} onChange={e => setGameFilm(curr => curr.map((x,i) => i===idx ? { ...x, label: e.target.value } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white md:col-span-2" placeholder="Label (e.g., Junior season highlights)" />
+											<input value={g.url} onChange={e => setGameFilm(curr => curr.map((x,i) => i===idx ? { ...x, url: e.target.value } : x))} className="bg-background border border-border rounded-md px-3 py-2 text-white md:col-span-3" placeholder="URL" />
+											<div className="md:col-span-6 flex justify-end">
+												<Button variant="ghost" onClick={() => setGameFilm(curr => curr.filter((_,i) => i!==idx))}>Remove</Button>
+											</div>
+										</div>
+									))}
+									{gameFilm.length === 0 && <div className="subtle text-sm">Add Hudl/YouTube links so recruiters can evaluate quickly.</div>}
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
