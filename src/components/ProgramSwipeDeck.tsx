@@ -9,12 +9,14 @@ type Props = {
 	onIndexChange: (idx: number) => void
 	onSwipeDecision: (id: string, decision: 'pursue' | 'maybe' | 'skip') => void
 	summaryById?: Record<string, { rating?: string; note?: string; tags?: string[]; gpa?: string }>
+	disabled?: boolean
 }
 
-export default function ProgramSwipeDeck({ programs, currentIndex, onIndexChange, onSwipeDecision, summaryById }: Props) {
+export default function ProgramSwipeDeck({ programs, currentIndex, onIndexChange, onSwipeDecision, summaryById, disabled }: Props) {
 	const ordered = useMemo(() => programs, [programs])
 
 	function handleSwipe(dir: string, idx: number) {
+		if (disabled) return
 		const prog = ordered[idx]
 		if (!prog) return
 		if (dir === 'right') {
@@ -27,6 +29,7 @@ export default function ProgramSwipeDeck({ programs, currentIndex, onIndexChange
 	}
 
 	function manual(decision: 'pursue' | 'maybe' | 'skip') {
+		if (disabled) return
 		const prog = ordered[currentIndex]
 		if (!prog) return
 		onSwipeDecision(prog.id, decision)

@@ -11,7 +11,7 @@ import { upsertByProgram } from '../recruiting/pipeline'
 import { buildRecruitingScript } from '../utils/recruitingOutreach'
 import { useToast } from './ui/Toast'
 
-export default function RecruitingFinder({ athlete }: { athlete: AthleteProfile | null }) {
+export default function RecruitingFinder({ athlete, onRequireProfile }: { athlete: AthleteProfile | null; onRequireProfile?: () => void }) {
 	const { show } = useToast()
 	const [sport, setSport] = useState('')
 	const [level, setLevel] = useState('')
@@ -19,6 +19,7 @@ export default function RecruitingFinder({ athlete }: { athlete: AthleteProfile 
 	const [results, setResults] = useState<CollegeProgram[]>([])
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [currentIndex, setCurrentIndex] = useState(0)
+	const [isDeciding, setIsDeciding] = useState(false)
 
 	useEffect(() => {
 		// run initial search by athlete primary sport if available
@@ -60,13 +61,39 @@ export default function RecruitingFinder({ athlete }: { athlete: AthleteProfile 
 		if (idx >= 0) setCurrentIndex(idx)
 	}
 
-	function onSwipeDecision(programId: string, decision: 'pursue' | 'maybe' | 'skip') {
-		if (!athlete) return
-		if (decision === 'skip') return // no record for skip by default
-		upsertByProgram(athlete.id, programId, {
-			status: 'researching',
-			interestLevel: decision
-		})
+	async function onSwipeDecision(programId: string, decision: 'pursue' | 'maybe' | 'skip') {
+		if (isDeciding) return
+		const prev = currentIndex
+
+		// If no athlete profile, block and optionally redirect to profile
+		if (!athlete) {
+			show('Please create your profile first')
+			onRequireProfile?.()
+			// ProgramSwipeDeck calls onSwipeDecision before advancing; still ensure we stay put
+			setCurrentIndex(prev)
+			return
+		}
+
+		// Optimistic advance is handled by the deck; guard against double-submits here
+		setIsDeciding(true)
+		try {
+			if (decision !== 'skip') {
+				await Promise.resolve(
+					upsertByProgram(athlete.id, programId, {
+						status: 'researching',
+						interestLevel: decision
+					})
+				)
+			}
+		} catch (err) {
+			// Roll back index on failure
+			setCurrentIndex(prev)
+			show('Failed to save decision. Please try again.')
+			// eslint-disable-next-line no-console
+			console.error(err)
+		} finally {
+			setIsDeciding(false)
+		}
 	}
 
 	return (
@@ -108,6 +135,7 @@ export default function RecruitingFinder({ athlete }: { athlete: AthleteProfile 
 							currentIndex={currentIndex}
 							onIndexChange={setCurrentIndex}
 							onSwipeDecision={onSwipeDecision}
+							disabled={!athlete || isDeciding}
 							summaryById={summaries}
 						/>
 						{(() => {

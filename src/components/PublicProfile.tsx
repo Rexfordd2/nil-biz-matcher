@@ -59,7 +59,7 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 										<div className="text-white font-semibold mt-2">Game Film</div>
 										<div className="flex flex-wrap gap-2">
 											{(a.gameFilm || []).slice(0, 5).map((g, i) => (
-												<a key={`gf-${i}`} href={g.url} target="_blank" rel="noreferrer" className="inline-block px-3 py-1 rounded-md border border-border bg-mid hover:bg-dark">{g.label || g.platform}</a>
+												<a key={`gf-${i}`} href={g.url} target="_blank" rel="noreferrer" className="inline-block px-3 py-1 rounded-md border border-border bg-mid hover:bg-mid/80">{g.label || g.platform}</a>
 											))}
 										</div>
 									</div>

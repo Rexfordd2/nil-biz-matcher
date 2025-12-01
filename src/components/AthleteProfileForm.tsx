@@ -526,7 +526,7 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 								</div>
 								<div className="flex flex-wrap gap-3 mb-2">
 									{heroImages.map((src, idx) => (
-										<div key={`hero-${idx}`} className="relative w-24 h-16 rounded-md overflow-hidden border border-border bg-dark">
+										<div key={`hero-${idx}`} className="relative w-24 h-16 rounded-md overflow-hidden border border-border bg-surface">
 											<img src={src} alt="" className="w-full h-full object-cover" />
 											<button type="button" className="absolute top-1 right-1 text-xs bg-mid/80 hover:bg-mid text-white rounded px-1" onClick={() => removeHero(idx)}>Remove</button>
 										</div>
@@ -555,7 +555,7 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 								<div className="text-gray-300 text-sm mb-1">Logos</div>
 								<div className="flex flex-wrap gap-3 mb-2">
 									{logos.map((src, idx) => (
-										<div key={`logo-${idx}`} className="relative w-16 h-16 rounded-md overflow-hidden border border-border bg-dark">
+										<div key={`logo-${idx}`} className="relative w-16 h-16 rounded-md overflow-hidden border border-border bg-surface">
 											<img src={src} alt="" className="w-full h-full object-contain p-1" />
 											<button type="button" className="absolute top-1 right-1 text-xs bg-mid/80 hover:bg-mid text-white rounded px-1" onClick={() => removeLogo(idx)}>Remove</button>
 										</div>
@@ -995,7 +995,7 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 								<div className="text-white font-semibold mb-2">Hero Images</div>
 								<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
 									{heroImages.map((src, idx) => (
-										<div key={`ph-${idx}`} className="w-full h-28 bg-dark border border-border rounded-md overflow-hidden">
+										<div key={`ph-${idx}`} className="w-full h-28 bg-surface border border-border rounded-md overflow-hidden">
 											<img src={src} alt="" className="w-full h-full object-cover" />
 										</div>
 									))}
@@ -1007,7 +1007,7 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 								<div className="text-white font-semibold mb-2">Logos</div>
 								<div className="flex flex-wrap gap-3">
 									{logos.map((src, idx) => (
-										<div key={`pl-${idx}`} className="w-16 h-16 bg-dark border border-border rounded-md overflow-hidden flex items-center justify-center">
+										<div key={`pl-${idx}`} className="w-16 h-16 bg-surface border border-border rounded-md overflow-hidden flex items-center justify-center">
 											<img src={src} alt="" className="w-full h-full object-contain p-1" />
 										</div>
 									))}

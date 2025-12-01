@@ -1,7 +1,28 @@
-## Monster Collective
+## Athlete Ledger (formerly Monster Collective)
 
 ### Project summary
-Monster Collective is a Vite + React app that matches NIL-ready student‑athletes (middle/high school) with local and regional businesses. It includes an Athlete Profile Builder (multi‑sport, multi‑position, multiple social handles and content styles) and Business Discovery via URL import and embedded external search (Yelp or proxy). A built‑in NIL Hub provides educational resources, including a link to the Skool community.
+Athlete Ledger is a Vite + React app that matches NIL-ready student‑athletes (middle/high school) with local and regional businesses. It includes an Athlete Profile Builder (multi‑sport, multi‑position, multiple social handles and content styles) and Business Discovery via URL import and embedded external search (Yelp or proxy). A built‑in NIL Hub provides educational resources, including a link to the Skool community.
+
+### Rebrand status
+- UI title and header updated to “Athlete Ledger”.
+- Logo path now `/athlete-ledger-logo.png` (falls back gracefully if missing).
+- Future step: map Figma components and tokens to Tailwind theme.
+
+### Migration from Figma
+We will port the UX/UI from the Figma file to this codebase. Reference design: `https://www.figma.com/make/3uFixuxyIoQsJgqbD6kZtN/Athlete-Ledger-Web-App-Design?t=NjypYY9xTKMUwYwc-20&fullscreen=1`.
+
+#### Screen mapping checklist
+- App shell: Header, navigation, layout container
+- Athlete Profile: form fields, validation, preview
+- Business Discovery: search/import, results list, details
+- Matches: scoring card, strategy, opportunity cost
+- Deals / Opportunities / Events: boards and planners
+- NIL Hub / Resources / Guidelines
+- Recruiting Finder / Recruiting Board
+- Vendor Directory
+
+For each Figma frame, identify: component structure, states (empty/loading/error), tokens (colors, radii, spacing, typography), and interactions. Map to Tailwind classes or add tokens in `src/theme/tokens.ts` as needed.
+
 
 ### Features
 - **Athlete Profile Builder**: multi‑sport, multi‑position, social handles, content styles.

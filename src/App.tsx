@@ -4,7 +4,7 @@ import BusinessForm from './components/BusinessForm'
 import BusinessAnalysisCard from './components/BusinessAnalysisCard'
 import Dashboard from './components/Dashboard'
 import Outreach from './components/Outreach'
-import NILHub from './components/NILHub'
+import NILHub from './pages/NILHub'
 import VendorDirectory from './components/VendorDirectory'
 import Deals from './components/Deals'
 import { ToastProvider, useToast } from './components/ui/Toast'
@@ -72,14 +72,14 @@ export default function App() {
 
 	return (
 		<ToastProvider>
-			<div className="min-h-screen bg-background">
+			<div className="min-h-screen bg-background light-theme">
 				<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
 					<div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
 						<div className="flex items-center gap-3">
 							<div className="w-8 h-8 rounded-lg bg-brand-red shadow-glow overflow-hidden">
 								<img
-									src="/monster-logo.png"
-									alt="Monster Collective Logo"
+									src="/athlete-ledger-logo.png"
+									alt="Athlete Ledger Logo"
 									className="w-full h-full object-cover"
 									onError={(e) => {
 										// Hide the broken image icon, keep red background as fallback
@@ -87,14 +87,14 @@ export default function App() {
 									}}
 								/>
 							</div>
-							<h1 className="headline text-2xl">Monster Collective</h1>
+							<h1 className="headline text-2xl">Athlete Ledger</h1>
 						</div>
 						<nav className="flex gap-2">
 							{(['Welcome','Athlete','Businesses','Discover','Matches','Deals','Opportunities','Events','Dashboard','Profile Preview','Resources','Guidelines','NIL Hub','Vendor Directory','Recruiting','Recruiting Board'] as Tab[]).map(t => (
 								<button
 									key={t}
 									onClick={() => setTab(t)}
-									className={`px-3 py-2 rounded-md text-sm ${tab === t ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid'}`}
+									className={`px-3 py-2 rounded-md text-sm ${tab === t ? 'bg-mid text-foreground font-semibold' : 'text-foreground/70 hover:bg-mid'}`}
 								>
 									{t}
 								</button>
@@ -175,15 +175,15 @@ export default function App() {
 												<div className="mt-4 bg-mid border border-border rounded-lg p-4">
 													<div className="text-white font-semibold mb-2">Estimated Opportunity Cost</div>
 													<div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-														<div className="bg-dark border border-border rounded-md p-3">
+												<div className="bg-surface border border-border rounded-md p-3">
 															<div className="text-gray-400 text-xs">Estimated time per week</div>
 															<div className="text-white text-lg font-bold">{m.opportunityCost.timePerWeekHours} hrs</div>
 														</div>
-														<div className="bg-dark border border-border rounded-md p-3">
+												<div className="bg-surface border border-border rounded-md p-3">
 															<div className="text-gray-400 text-xs">Estimated duration</div>
 															<div className="text-white text-lg font-bold">{m.opportunityCost.durationWeeks} weeks</div>
 														</div>
-														<div className="bg-dark border border-border rounded-md p-3">
+												<div className="bg-surface border border-border rounded-md p-3">
 															<div className="text-gray-400 text-xs">Opportunity cost</div>
 															<div className={`text-lg font-bold ${m.opportunityCost.level === 'HIGH' ? 'text-red-400' : m.opportunityCost.level === 'MEDIUM' ? 'text-amber-300' : 'text-green-300'}`}>
 																{m.opportunityCost.level}
@@ -207,7 +207,7 @@ export default function App() {
 												<p className="text-gray-300 text-sm mt-2">{m.strategy.positioning}</p>
 												<div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
 													{m.strategy.ideas.map((idea, idx) => (
-														<div key={`idea-${idx}`} className="bg-dark border border-border rounded-lg p-4">
+												<div key={`idea-${idx}`} className="bg-surface border border-border rounded-lg p-4">
 															<div className="text-white font-semibold mb-1">{idea.title}</div>
 															<p className="text-gray-200 text-sm">{idea.description}</p>
 															<div className="mt-2 flex flex-wrap gap-2">
@@ -238,7 +238,7 @@ export default function App() {
 														})
 														return (
 															<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-																<div className="bg-dark border border-border rounded-md p-3">
+															<div className="bg-surface border border-border rounded-md p-3">
 																	<details>
 																		<summary className="cursor-pointer text-white font-semibold flex items-center justify-between">
 																			<span>Phone script</span>
@@ -247,7 +247,7 @@ export default function App() {
 																		<pre className="mt-3 bg-mid border border-border rounded-md p-3 whitespace-pre-wrap text-gray-100 text-sm">{conv.phoneScript}</pre>
 																	</details>
 																</div>
-																<div className="bg-dark border border-border rounded-md p-3">
+															<div className="bg-surface border border-border rounded-md p-3">
 																	<div className="text-white font-semibold mb-2">In-person talking points</div>
 																	<ul className="list-disc pl-6 space-y-2 text-gray-200 text-sm">
 																		{conv.inPersonOutline.map((line, idx) => (
@@ -318,7 +318,7 @@ export default function App() {
 
 					{tab === 'Profile Preview' && <PublicProfile athlete={athlete} />}
 
-					{tab === 'Recruiting' && <RecruitingFinder athlete={athlete} />}
+					{tab === 'Recruiting' && <RecruitingFinder athlete={athlete} onRequireProfile={() => setTab('Athlete')} />}
 
 					{tab === 'Recruiting Board' && <RecruitingBoard />}
 
@@ -326,7 +326,7 @@ export default function App() {
 
 					{tab === 'Guidelines' && <Guidelines />}
 
-					{tab === 'NIL Hub' && <NILHub onGoVendors={() => setTab('Vendor Directory')} />}
+					{tab === 'NIL Hub' && <NILHub />}
 
 					{tab === 'Vendor Directory' && <VendorDirectory />}
 				</main>

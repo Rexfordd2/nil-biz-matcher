@@ -5,13 +5,18 @@ export default {
 	theme: {
 		extend: {
 			colors: {
-				background: '#0a0a0a',
-				surface: '#111111',
-				border: '#1f1f1f',
-				mid: '#222222',
+				// Light theme palette
+				background: '#F2E8D5', // parchment
+				surface: '#FFFFFF', // cards/surfaces
+				border: '#E5DEC9', // soft border
+				mid: '#F7F1E3', // subtle surface
+				foreground: '#0D2C3A', // navy text
 				brand: {
-					red: '#e50914',
-					redGlow: '#ff1a1a'
+					// Keep existing keys for compatibility with classnames
+					red: '#0D2C3A', // alias to navy
+					redGlow: '#C89A3C', // alias to gold
+					navy: '#0D2C3A',
+					gold: '#C89A3C'
 				},
 				fit: {
 					perfect: '#16a34a',
@@ -21,7 +26,8 @@ export default {
 				}
 			},
 			boxShadow: {
-				glow: '0 0 0 2px rgba(229, 9, 20, 0.5), 0 0 20px rgba(229, 9, 20, 0.35)'
+				// subtle navy/gold glow
+				glow: '0 0 0 2px rgba(200, 154, 60, 0.45), 0 0 20px rgba(13, 44, 58, 0.30)'
 			}
 		}
 	},

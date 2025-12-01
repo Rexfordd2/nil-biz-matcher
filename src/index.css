@@ -2,11 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Light theme custom properties (optional) */
 :root {
-  --bg: #0a0a0a;
-  --surface: #111111;
-  --border: #1f1f1f;
-  --brand: #e50914;
+  --bg: #F2E8D5; /* parchment */
+  --surface: #FFFFFF;
+  --border: #E5DEC9;
+  --brand: #0D2C3A; /* navy */
+  --brand-accent: #C89A3C; /* gold */
+  --foreground: #0D2C3A;
 }
 
 html, body, #root {
@@ -24,7 +27,7 @@ html, body, #root {
   @apply bg-brand-red text-white hover:shadow-glow;
 }
 .btn-ghost {
-  @apply bg-transparent text-gray-200 border border-border hover:bg-mid;
+  @apply bg-transparent text-foreground/80 border border-border hover:bg-mid;
 }
 
 .badge {
@@ -40,14 +43,15 @@ html, body, #root {
 .level-national { @apply bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30; }
 
 .headline {
-  @apply text-white font-extrabold tracking-tight;
+  @apply text-foreground font-extrabold tracking-tight;
 }
 .subtle {
-  @apply text-gray-400;
+  @apply text-foreground/60;
 }
 
 .red-glow {
-  box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.35), 0 0 20px rgba(229, 9, 20, 0.25);
+  /* keep class name for compatibility, but use navy/gold glow */
+  box-shadow: 0 0 0 2px rgba(200, 154, 60, 0.35), 0 0 20px rgba(13, 44, 58, 0.25);
 }
 
 .fade-in {
@@ -57,5 +61,11 @@ html, body, #root {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Light theme overrides for legacy dark utilities used in components */
+.light-theme .text-white { color: var(--foreground); }
+.light-theme .text-gray-200 { color: color-mix(in oklab, var(--foreground) 70%, white); }
+.light-theme .text-gray-300 { color: color-mix(in oklab, var(--foreground) 60%, white); }
+.light-theme .text-gray-400 { color: color-mix(in oklab, var(--foreground) 50%, white); }
 
 
