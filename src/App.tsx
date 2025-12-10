@@ -173,52 +173,54 @@ export default function App() {
 						</div>
 					</div>
 				</header>
-				<main className="mx-auto max-w-7xl px-4 py-6">
+				<main className="mx-auto max-w-7xl px-4 pt-6 pb-24 md:pb-6">
 					<div className="grid grid-cols-1 md:grid-cols-[240px,1fr] gap-6">
-						<Sidebar
-							current={tab}
-							onSelect={(k) => goToTab(k as Tab)}
-							sections={[
-								{
-									title: 'Main',
-									items: [
-										{ key: 'Welcome', label: 'Home' },
-										{ key: 'Athlete', label: 'Athlete Profile' },
-										{ key: 'Discover', label: 'Discover' },
-										{ key: 'Matches', label: 'Matches' },
-										{ key: 'Dashboard', label: 'Dashboard' },
-										{ key: 'Profile Preview', label: 'Public Profile' },
-										...(currentUser ? [] as any : [{ key: 'Log In', label: 'Log In' }, { key: 'Sign Up', label: 'Sign Up' }])
-									]
-								},
-								{
-									title: 'Workflows',
-									items: [
-										{ key: 'Businesses', label: 'Businesses' },
-										{ key: 'Deals', label: 'Deals' },
-										{ key: 'Opportunities', label: 'Opportunities' },
-										{ key: 'Events', label: 'Events' }
-									]
-								},
-								{
-									title: 'Recruiting',
-									items: [
-										{ key: 'Recruiting', label: 'Finder' },
-										{ key: 'Recruiting Board', label: 'Board' },
-										{ key: 'Recruiting Blast', label: 'Blast' }
-									]
-								},
-								{
-									title: 'Learn',
-									items: [
-										{ key: 'NIL Hub', label: 'NIL Hub' },
-										{ key: 'Resources', label: 'Resources' },
-										{ key: 'Guidelines', label: 'Guidelines' },
-										{ key: 'Vendor Directory', label: 'Vendors' }
-									]
-								}
-							]}
-						/>
+						<div className="hidden md:block">
+							<Sidebar
+								current={tab}
+								onSelect={(k) => goToTab(k as Tab)}
+								sections={[
+									{
+										title: 'Main',
+										items: [
+											{ key: 'Welcome', label: 'Home' },
+											{ key: 'Athlete', label: 'Athlete Profile' },
+											{ key: 'Discover', label: 'Discover' },
+											{ key: 'Matches', label: 'Matches' },
+											{ key: 'Dashboard', label: 'Dashboard' },
+											{ key: 'Profile Preview', label: 'Public Profile' },
+											...(currentUser ? [] as any : [{ key: 'Log In', label: 'Log In' }, { key: 'Sign Up', label: 'Sign Up' }])
+										]
+									},
+									{
+										title: 'Workflows',
+										items: [
+											{ key: 'Businesses', label: 'Businesses' },
+											{ key: 'Deals', label: 'Deals' },
+											{ key: 'Opportunities', label: 'Opportunities' },
+											{ key: 'Events', label: 'Events' }
+										]
+									},
+									{
+										title: 'Recruiting',
+										items: [
+											{ key: 'Recruiting', label: 'Finder' },
+											{ key: 'Recruiting Board', label: 'Board' },
+											{ key: 'Recruiting Blast', label: 'Blast' }
+										]
+									},
+									{
+										title: 'Learn',
+										items: [
+											{ key: 'NIL Hub', label: 'NIL Hub' },
+											{ key: 'Resources', label: 'Resources' },
+											{ key: 'Guidelines', label: 'Guidelines' },
+											{ key: 'Vendor Directory', label: 'Vendors' }
+										]
+									}
+								]}
+							/>
+						</div>
 						<div className="space-y-6">
 					{tab === 'Welcome' && (
 						<Welcome
@@ -485,6 +487,48 @@ export default function App() {
 						</div>
 					</div>
 				</main>
+
+				{/* Mobile bottom navigation */}
+				<nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur">
+					<div className="grid grid-cols-5 gap-1 px-2 py-2">
+						<button
+							type="button"
+							onClick={() => goToTab('Welcome')}
+							className={`text-sm px-2 py-2 rounded-md ${tab === 'Welcome' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
+						>
+							Home
+						</button>
+						<button
+							type="button"
+							onClick={() => goToTab('Athlete')}
+							className={`text-sm px-2 py-2 rounded-md ${tab === 'Athlete' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
+						>
+							Athlete
+						</button>
+						<button
+							type="button"
+							onClick={() => goToTab('Discover')}
+							className={`text-sm px-2 py-2 rounded-md ${tab === 'Discover' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
+						>
+							Discover
+						</button>
+						<button
+							type="button"
+							onClick={() => goToTab('Matches')}
+							className={`text-sm px-2 py-2 rounded-md ${tab === 'Matches' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
+						>
+							Matches
+						</button>
+						<button
+							type="button"
+							onClick={() => goToTab('Dashboard')}
+							className={`text-sm px-2 py-2 rounded-md ${tab === 'Dashboard' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
+						>
+							Board
+						</button>
+					</div>
+				</nav>
+
 				<footer className="py-10" />
 			</div>
 		</ToastProvider>
