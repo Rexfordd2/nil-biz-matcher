@@ -3,6 +3,7 @@ import AthleteProfileForm from './components/AthleteProfileForm'
 import BusinessForm from './components/BusinessForm'
 import BusinessAnalysisCard from './components/BusinessAnalysisCard'
 import Dashboard from './components/Dashboard'
+import SuggestedPlays from './components/SuggestedPlays'
 import Outreach from './components/Outreach'
 import NILHub from './pages/NILHub'
 import VendorDirectory from './components/VendorDirectory'
@@ -24,8 +25,33 @@ import Resources from './components/Resources'
 import Guidelines from './components/Guidelines'
 import RecruitingFinder from './components/RecruitingFinder'
 import RecruitingBoard from './components/RecruitingBoard'
+import RecruitingBlast from './components/RecruitingBlast'
+import Sidebar from './components/Sidebar'
+import SignUp from './components/auth/SignUp'
+import Login from './components/auth/Login'
+import { authMe, authLogout, type CurrentUser } from './utils/auth'
+import { useAutosaveProfile } from './hooks/useAutosaveProfile'
 
-type Tab = 'Welcome' | 'Athlete' | 'Businesses' | 'Discover' | 'Matches' | 'Deals' | 'Opportunities' | 'Events' | 'Dashboard' | 'Profile Preview' | 'Resources' | 'Guidelines' | 'NIL Hub' | 'Vendor Directory' | 'Recruiting' | 'Recruiting Board'
+type Tab =
+	| 'Welcome'
+	| 'Athlete'
+	| 'Businesses'
+	| 'Discover'
+	| 'Matches'
+	| 'Deals'
+	| 'Opportunities'
+	| 'Events'
+	| 'Dashboard'
+	| 'Profile Preview'
+	| 'Resources'
+	| 'Guidelines'
+	| 'NIL Hub'
+	| 'Vendor Directory'
+	| 'Recruiting'
+	| 'Recruiting Board'
+	| 'Recruiting Blast'
+	| 'Sign Up'
+	| 'Log In'
 
 export default function App() {
 	const [tab, setTab] = useState<Tab>('Welcome')
@@ -33,9 +59,19 @@ export default function App() {
 	const [businesses, setBusinesses] = useState<Business[]>(() => load('businesses', []))
 	const [selectedBizId, setSelectedBizId] = useState<string | null>(null)
 	const { show } = useToast()
+	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+	const [userMenuOpen, setUserMenuOpen] = useState(false)
+	const autosave = useAutosaveProfile({ userId: currentUser?.id, debounceMs: 800 })
 
 	useEffect(() => save('athlete', athlete), [athlete])
 	useEffect(() => save('businesses', businesses), [businesses])
+
+	// Load current session on mount
+	useEffect(() => {
+		authMe().then(u => {
+			if (u) setCurrentUser(u)
+		})
+	}, [])
 
 	const selectedBiz = useMemo(() => businesses.find(b => b.id === selectedBizId) || null, [selectedBizId, businesses])
 
@@ -54,6 +90,19 @@ export default function App() {
 		setTab('Businesses')
 	}
 
+	function isProtected(target: Tab): boolean {
+		return ['Athlete', 'Deals', 'Opportunities', 'Recruiting', 'Recruiting Board', 'Recruiting Blast'].includes(target)
+	}
+
+	async function goToTab(next: Tab) {
+		if (isProtected(next) && !currentUser) {
+			show('Please log in to access this section')
+			setTab('Log In')
+			return
+		}
+		setTab(next)
+	}
+
 	function runMatches() {
 		if (!athlete) return
 		setBusinesses(prev =>
@@ -70,6 +119,15 @@ export default function App() {
 		navigator.clipboard.writeText(text).then(() => show('Copied to clipboard'))
 	}
 
+	async function handleLogout() {
+		try {
+			await authLogout()
+		} catch {}
+		setCurrentUser(null)
+		setUserMenuOpen(false)
+		show('Logged out')
+	}
+
 	return (
 		<ToastProvider>
 			<div className="min-h-screen bg-background light-theme">
@@ -82,37 +140,116 @@ export default function App() {
 									alt="Athlete Ledger Logo"
 									className="w-full h-full object-cover"
 									onError={(e) => {
-										// Hide the broken image icon, keep red background as fallback
 										;(e.currentTarget as HTMLImageElement).style.display = 'none'
 									}}
 								/>
 							</div>
 							<h1 className="headline text-2xl">Athlete Ledger</h1>
 						</div>
-						<nav className="flex gap-2">
-							{(['Welcome','Athlete','Businesses','Discover','Matches','Deals','Opportunities','Events','Dashboard','Profile Preview','Resources','Guidelines','NIL Hub','Vendor Directory','Recruiting','Recruiting Board'] as Tab[]).map(t => (
-								<button
-									key={t}
-									onClick={() => setTab(t)}
-									className={`px-3 py-2 rounded-md text-sm ${tab === t ? 'bg-mid text-foreground font-semibold' : 'text-foreground/70 hover:bg-mid'}`}
-								>
-									{t}
-								</button>
-							))}
-						</nav>
+						<div className="relative">
+							{currentUser ? (
+								<div className="flex items-center gap-3">
+									<button
+										type="button"
+										onClick={() => setUserMenuOpen(v => !v)}
+										className="text-white bg-mid border border-border rounded-md px-3 py-1 hover:bg-mid/80"
+									>
+										{currentUser.fullName}
+									</button>
+									{userMenuOpen && (
+										<div className="absolute right-0 mt-2 w-44 bg-background border border-border rounded-md shadow-lg overflow-hidden">
+											<button className="w-full text-left px-3 py-2 text-gray-200 hover:bg-mid" onClick={() => { setUserMenuOpen(false); goToTab('Athlete') }}>Profile</button>
+											<button className="w-full text-left px-3 py-2 text-gray-200 hover:bg-mid" onClick={() => setUserMenuOpen(false)}>Settings</button>
+											<button className="w-full text-left px-3 py-2 text-gray-200 hover:bg-mid" onClick={handleLogout}>Log out</button>
+										</div>
+									)}
+								</div>
+							) : (
+								<div className="flex items-center gap-2">
+									<button className="text-gray-300 hover:text-white" onClick={() => setTab('Log In')}>Log in</button>
+									<Button onClick={() => setTab('Sign Up')} className="red-glow">Sign up</Button>
+								</div>
+							)}
+						</div>
 					</div>
 				</header>
-				<main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+				<main className="mx-auto max-w-7xl px-4 py-6">
+					<div className="grid grid-cols-1 md:grid-cols-[240px,1fr] gap-6">
+						<Sidebar
+							current={tab}
+							onSelect={(k) => goToTab(k as Tab)}
+							sections={[
+								{
+									title: 'Main',
+									items: [
+										{ key: 'Welcome', label: 'Home' },
+										{ key: 'Athlete', label: 'Athlete Profile' },
+										{ key: 'Discover', label: 'Discover' },
+										{ key: 'Matches', label: 'Matches' },
+										{ key: 'Dashboard', label: 'Dashboard' },
+										{ key: 'Profile Preview', label: 'Public Profile' },
+										...(currentUser ? [] as any : [{ key: 'Log In', label: 'Log In' }, { key: 'Sign Up', label: 'Sign Up' }])
+									]
+								},
+								{
+									title: 'Workflows',
+									items: [
+										{ key: 'Businesses', label: 'Businesses' },
+										{ key: 'Deals', label: 'Deals' },
+										{ key: 'Opportunities', label: 'Opportunities' },
+										{ key: 'Events', label: 'Events' }
+									]
+								},
+								{
+									title: 'Recruiting',
+									items: [
+										{ key: 'Recruiting', label: 'Finder' },
+										{ key: 'Recruiting Board', label: 'Board' },
+										{ key: 'Recruiting Blast', label: 'Blast' }
+									]
+								},
+								{
+									title: 'Learn',
+									items: [
+										{ key: 'NIL Hub', label: 'NIL Hub' },
+										{ key: 'Resources', label: 'Resources' },
+										{ key: 'Guidelines', label: 'Guidelines' },
+										{ key: 'Vendor Directory', label: 'Vendors' }
+									]
+								}
+							]}
+						/>
+						<div className="space-y-6">
 					{tab === 'Welcome' && (
 						<Welcome
-							onStartProfile={() => setTab('Athlete')}
+							onStartProfile={() => goToTab('Athlete')}
 							onGoResources={() => setTab('Resources')}
 							onGoGuidelines={() => setTab('Guidelines')}
 						/>
 					)}
 					{tab === 'Athlete' && (
 						<>
-							<AthleteProfileForm value={athlete ?? undefined} onSave={setAthlete} />
+							<div className="flex items-center justify-between">
+								<div className="text-sm text-gray-400">
+									{autosave.statusText}
+									{autosave.lastSavedAt && (autosave.statusText === '' || autosave.statusText === 'All changes saved') && (
+										<span className="ml-2">Last saved at {new Date(autosave.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+									)}
+									{autosave.error && <span className="ml-2 text-amber-300">({autosave.error})</span>}
+								</div>
+							</div>
+							<AthleteProfileForm
+								key={`${currentUser?.id || 'anon'}:${autosave.initialProfile ? 'loaded' : 'new'}`}
+								value={autosave.initialProfile ?? undefined}
+								onSave={async (a) => {
+									setAthlete(a)
+									if (currentUser) autosave.onDraftChange(a)
+								}}
+								onChange={(draft) => {
+									setAthlete(draft)
+									if (currentUser) autosave.onDraftChange(draft)
+								}}
+							/>
 							<div className="flex justify-end">
 								<Button onClick={runMatches} className="red-glow">Evaluate Matches</Button>
 							</div>
@@ -309,11 +446,14 @@ export default function App() {
 					)}
 
 					{tab === 'Dashboard' && (
-						<Dashboard
-							businesses={businesses}
-							onUpdate={upsertBusiness}
-							onBuildOutreach={(b) => { setSelectedBizId(b.id); setTab('Matches') }}
-						/>
+						<>
+							<SuggestedPlays athlete={athlete} marketingConsent={currentUser?.marketingConsent} />
+							<Dashboard
+								businesses={businesses}
+								onUpdate={upsertBusiness}
+								onBuildOutreach={(b) => { setSelectedBizId(b.id); setTab('Matches') }}
+							/>
+						</>
 					)}
 
 					{tab === 'Profile Preview' && <PublicProfile athlete={athlete} />}
@@ -322,6 +462,19 @@ export default function App() {
 
 					{tab === 'Recruiting Board' && <RecruitingBoard />}
 
+					{tab === 'Recruiting Blast' && <RecruitingBlast athlete={athlete} />}
+
+					{tab === 'Sign Up' && (
+						<SignUp onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
+					)}
+
+					{tab === 'Log In' && (
+						<Login
+							onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
+							onNeedAccount={() => setTab('Sign Up')}
+						/>
+					)}
+
 					{tab === 'Resources' && <Resources onGoVendors={() => setTab('Vendor Directory')} />}
 
 					{tab === 'Guidelines' && <Guidelines />}
@@ -329,6 +482,8 @@ export default function App() {
 					{tab === 'NIL Hub' && <NILHub />}
 
 					{tab === 'Vendor Directory' && <VendorDirectory />}
+						</div>
+					</div>
 				</main>
 				<footer className="py-10" />
 			</div>

@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Coach {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  school    String
+  sport     String
+  level     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  outreach  Outreach[]
+}
+
+model HighlightClip {
+  id          String    @id @default(cuid())
+  athleteId   String
+  title       String
+  videoUrl    String
+  description String?
+  createdAt   DateTime  @default(now())
+
+  outreach    Outreach[]
+}
+
+model Outreach {
+  id         String   @id @default(cuid())
+  athleteId  String
+  clipId     String
+  subject    String
+  body       String
+  sentAt     DateTime @default(now())
+  status     String   // "sent" | "bounced" | "opened" | "clicked"
+  openCount  Int      @default(0)
+  clickCount Int      @default(0)
+  trackToken String   @unique
+
+  coach   Coach         @relation(fields: [coachId], references: [id])
+  coachId String
+
+  clip    HighlightClip @relation(fields: [clipId], references: [id])
+}
+
+// --- Accounts ---
+model User {
+  id               String           @id @default(cuid())
+  email            String           @unique
+  fullName         String
+  phone            String?
+  role             String           @default("athlete")
+  marketingConsent Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  // Relations
+  athleteProfile   AthleteProfile?
+  opportunities    Opportunity[]
+  deals            Deal[]
+  recruitingTargets RecruitingTarget[]
+
+  @@index([phone])
+}
+
+model AthleteProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  data      String
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// --- Opportunities ---
+model Opportunity {
+  id                String    @id @default(cuid())
+  athleteId         String
+  athlete           User      @relation(fields: [athleteId], references: [id])
+  title             String
+  category          String
+  description       String?
+  targetBrandName   String?
+  linkedDealId      String?
+  status            String
+  expectedStartDate DateTime?
+  expectedEndDate   DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([athleteId])
+  @@index([status])
+  @@index([category])
+}
+
+// --- Deals ---
+model Deal {
+  id                  String    @id @default(cuid())
+  athleteId           String
+  athlete             User      @relation(fields: [athleteId], references: [id])
+  title               String
+  dealType            String
+  brandName           String
+  status              String
+  valueEstimate       Float?
+  currency            String?
+  startDate           DateTime?
+  endDate             DateTime?
+  deliverables        String?
+  exclusivityNotes    String?
+  licensing           String?
+  reportedToSchool    Boolean?  @default(false)
+  reportedToCollective Boolean? @default(false)
+  complianceNotes     String?
+  collective          String?
+  documents           String?
+  payments            String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([athleteId])
+  @@index([status])
+  @@index([dealType])
+}
+
+// --- Recruiting Targets ---
+model RecruitingTarget {
+  id              String    @id @default(cuid())
+  athleteId       String
+  athlete         User      @relation(fields: [athleteId], references: [id])
+  programId       String
+  status          String
+  interestLevel   String?
+  notes           String?
+  lastContactDate DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([athleteId])
+  @@index([programId])
+  @@index([status])
+}
+
+

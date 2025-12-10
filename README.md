@@ -1,4 +1,4 @@
-## Athlete Ledger (formerly Monster Collective)
+## Athlete Ledger
 
 ### Project summary
 Athlete Ledger is a Vite + React app that matches NIL-ready student‑athletes (middle/high school) with local and regional businesses. It includes an Athlete Profile Builder (multi‑sport, multi‑position, multiple social handles and content styles) and Business Discovery via URL import and embedded external search (Yelp or proxy). A built‑in NIL Hub provides educational resources, including a link to the Skool community.
@@ -48,7 +48,7 @@ Paths of interest:
 ### Setup & install
 1) **Clone**
    - `git clone <your-repo-url>`
-   - `cd monster-collective`
+   - `cd athlete-ledger`
 2) **Install dependencies**
    - Using npm (recommended, `package-lock.json` present): `npm install`
 3) **Environment variables**
@@ -74,18 +74,49 @@ See `src/config/env.ts` for how these are read and used at runtime.
 - **Preview (static server)**: `npm run preview`
 - **Tests**: none configured at this time.
 
-### Deployment
-This is a client‑side Vite SPA and is best deployed to a static host.
+### Accounts, API & Database (MVP)
+This app includes serverless API routes (under `api/`) and a SQLite database via Prisma for minimal account support.
 
-- **Recommended platforms**: Vercel, Netlify, Cloudflare Pages, GitHub Pages (static hosting).
-- **Build command**: `npm run build`
-- **Output directory**: `dist`
-- **Start command**: not required for static hosts. For container/dyno previews only: `npm start` (runs `vite preview`).
-- **Environment variables**: Set all required `VITE_...` vars in the host dashboard. Vite inlines these at build time.
+- Database: Prisma with SQLite (`prisma/schema.prisma`)
+- API Routes:
+  - `POST /api/auth/register` → { email, fullName, phone?, marketingConsent? }
+  - `POST /api/auth/login` → { email }
+  - `GET /api/auth/me` → current user
+  - `POST /api/auth/logout` → clear session
+  - `GET /api/profile` → get or create the logged‑in athlete profile (JSON blob)
+  - `POST /api/profile` → save the athlete profile (JSON blob)
+
+Auth uses an HTTP‑only cookie with a signed token. For production, set a strong `AUTH_SECRET`.
+
+#### New environment variables
+- `DATABASE_URL="file:./dev.db"` (SQLite; default for local dev)
+- `AUTH_SECRET="change-this-to-a-long-random-string"` (used to sign session cookies)
+
+Optional (existing):
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `APP_URL` (for recruiting email features)
+
+#### Set up the DB and generate the client
+1) Ensure `.env` contains `DATABASE_URL="file:./dev.db"`
+2) Run Prisma generate:
+   - `npm run prisma:generate`
+3) Create/update the SQLite schema:
+   - Fast path (no migration history): `npm run prisma:push`
+   - Or with migrations (recommended):
+     - `npx prisma migrate dev --name init_accounts`
+4) Optional: Open Prisma Studio to inspect data:
+   - `npm run prisma:studio`
+
+#### Test sign‑up/log‑in locally
+1) `npm run dev` and open `http://localhost:5173`
+2) Use the header buttons or the sidebar to open “Sign Up” or “Log In”
+3) After registration/log‑in, you’ll be redirected to the “Athlete Profile”
+   - First visit creates an empty profile in the DB
+   - Saving in the Athlete Profile tab persists to `/api/profile` when logged in; if not logged in, it saves to localStorage (legacy behavior)
+
+### Deployment
+Deploy to a platform that supports both static assets and serverless (e.g., Vercel). Set `DATABASE_URL` to a persistent SQLite file or switch providers per Prisma docs. Set `AUTH_SECRET` and any SMTP variables in your host’s environment settings.
 
 Notes on integrations:
 - **Yelp integration**: For production, prefer a server‑side proxy by setting `VITE_YELP_PROXY_URL` so the client never sends secrets and to avoid CORS. If you instead set `VITE_YELP_API_KEY` for direct browser calls, expect potential CORS blocks and understand the key will be exposed to users.
-
-There are no dynamic API routes in this project; it is a pure SPA. Keep secrets in the host’s environment configuration—never commit real keys.
 
 

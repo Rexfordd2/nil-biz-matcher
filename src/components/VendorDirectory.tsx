@@ -37,7 +37,7 @@ export default function VendorDirectory() {
 					</label>
 				</div>
 				<p className="text-xs text-gray-400">
-					Monster Collective does not endorse or guarantee results. Do your own diligence.
+					Athlete Ledger does not endorse or guarantee results. Do your own diligence.
 				</p>
 			</Card>
 

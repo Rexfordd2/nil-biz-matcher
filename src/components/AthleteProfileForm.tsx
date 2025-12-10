@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import { AthleteProfile, AthleteSport, Professionalism, SchoolLevel, SocialHandle, SupportContact, TrustedContact, AcademicProfile, AvailabilityWindow, PerformanceStory, TrainingLogEntry } from '../types'
@@ -57,9 +57,10 @@ const MONETIZATION_OPTIONS: string[] = [
 type Props = {
 	value?: AthleteProfile
 	onSave: (a: AthleteProfile) => void
+	onChange?: (a: AthleteProfile) => void
 }
 
-export default function AthleteProfileForm({ value, onSave }: Props) {
+export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 	const { show } = useToast()
 	const [name, setName] = useState(value?.name || '')
 	const [school, setSchool] = useState(value?.school || '')
@@ -298,11 +299,8 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 		setBrandColors(curr => curr.filter((_, i) => i !== idx))
 	}
 
-	function handleSave() {
-		if (!name || !school || sports.length === 0 || !sports[0].sportName.trim()) {
-			show('Please fill name, school, and at least one sport')
-			return
-		}
+	// Build current athlete draft from local state
+	const currentDraft: AthleteProfile = useMemo(() => {
 		const samplePosts = samplePostsText
 			.split('\n')
 			.map(v => v.trim())
@@ -318,7 +316,7 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 		const totalInches =
 			(heightFeet === '' && heightInchesPart === '') ? undefined :
 			((Number(heightFeet || 0) * 12) + Number(heightInchesPart || 0))
-		const athlete: AthleteProfile = {
+		const draft: AthleteProfile = {
 			id: value?.id || `ath-${Date.now()}`,
 			name,
 			school,
@@ -383,7 +381,59 @@ export default function AthleteProfileForm({ value, onSave }: Props) {
 			},
 			createdAt: value?.createdAt || Date.now()
 		}
-		onSave(athlete)
+		return draft
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		value?.id,
+		value?.createdAt,
+		name,
+		school,
+		schoolLevel,
+		heroImages,
+		logos,
+		brandColors,
+		samplePostsText,
+		externalDeckUrl,
+		sports,
+		location,
+		socialHandles,
+		followers,
+		contentStyles,
+		personality,
+		values,
+		timePerWeekHours,
+		professionalism,
+		supportTeam,
+		trustedCircle,
+		academic,
+		availability,
+		internationalFlag,
+		performanceStory,
+		trainingEntries,
+		monetizationInterests,
+		weightLbs,
+		wingspanInches,
+		handSizeInches,
+		dominantHand,
+		complianceEmail,
+		policyUrl,
+		collectiveName,
+		collectiveContactName,
+		collectiveContactEmail,
+		collectiveNotes
+	])
+
+	// Notify parent on any change (debounced save handled by parent)
+	useEffect(() => {
+		if (onChange) onChange(currentDraft)
+	}, [onChange, currentDraft])
+
+	function handleSave() {
+		if (!name || !school || sports.length === 0 || !sports[0].sportName.trim()) {
+			show('Please fill name, school, and at least one sport')
+			return
+		}
+		onSave(currentDraft)
 		show('Athlete profile saved')
 	}
 

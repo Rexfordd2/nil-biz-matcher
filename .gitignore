@@ -1,3 +1,25 @@
+node_modules/
+dist/
+.vercel/
+
+# Local env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Prisma local DB files
+prisma/dev.db
+prisma/dev.db-journal
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+tsconfig.node.tsbuildinfo
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
 # Dependencies
 node_modules/
 
@@ -18,6 +40,10 @@ storybook-static/
 .env.*.local
 .env.test.local
 .env.production.local
+
+# Local SQLite database
+dev.db
+/prisma/dev.db
 
 # Logs
 logs/
@@ -70,3 +96,5 @@ Desktop.ini
 *.tgz
 .netlify/
 
+.vercel
+.env*.local

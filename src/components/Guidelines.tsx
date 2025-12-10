@@ -54,7 +54,7 @@ export default function Guidelines() {
 			</Card>
 
 			<Card>
-				<h3 className="text-white font-semibold mb-2">Monster Collective is education, not legal/financial advice</h3>
+				<h3 className="text-white font-semibold mb-2">Athlete Ledger is education, not legal/financial advice</h3>
 				<ul className="list-disc pl-6 space-y-2 text-gray-200">
 					<li>This app helps you think; it doesn’t replace pros.</li>
 					<li>For contracts, taxes, or entities, consult a qualified professional.</li>

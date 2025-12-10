@@ -13,7 +13,7 @@ export default function Welcome({ onStartProfile, onGoResources, onGoGuidelines 
 		<div className="space-y-8">
 			<section className="text-center space-y-4">
 				<h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-					Monster Collective: Turn Your Hustle into a Real NIL Game Plan
+					Athlete Ledger: Turn Your Hustle into a Real NIL Game Plan
 				</h2>
 				<p className="text-gray-200 text-lg max-w-3xl mx-auto">
 					Build a real athlete brand, find the right local businesses, and learn how to talk money without losing your eligibility—or your mind.
@@ -46,7 +46,7 @@ export default function Welcome({ onStartProfile, onGoResources, onGoGuidelines 
 					<iframe
 						className="w-full h-full"
 						src={`https://www.youtube.com/embed/${YOUTUBE_INTRO_VIDEO_ID}`}
-						title="Monster Collective NIL Intro"
+						title="Athlete Ledger NIL Intro"
 						frameBorder="0"
 						allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
 						allowFullScreen
