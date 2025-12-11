@@ -1,5 +1,5 @@
 export type ExternalBusiness = {
-	provider: 'yelp' | 'other'
+	provider: 'google' | 'other'
 	providerId: string
 	name: string
 	url?: string

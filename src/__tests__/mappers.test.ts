@@ -5,7 +5,7 @@ import type { ExternalBusiness } from '../services/businessSearchProvider'
 describe('mapExternalToBusiness', () => {
 	it('maps full external business to internal partial with joined location', () => {
 		const ext: ExternalBusiness = {
-			provider: 'yelp',
+			provider: 'google',
 			providerId: 'y1',
 			name: 'Joe Coffee',
 			url: 'https://joe.example',
@@ -26,7 +26,7 @@ describe('mapExternalToBusiness', () => {
 		expect(res.name).toBe('Joe Coffee')
 		expect(res.url).toBe('https://joe.example')
 		expect(res.logoUrl).toBe('https://img/joe.png')
-		expect(res.externalProvider).toBe('yelp')
+		expect(res.externalProvider).toBe('google')
 		expect(res.externalProviderId).toBe('y1')
 		expect(res.phone).toBe('123-456')
 		expect(res.coordinates).toEqual({ latitude: 30.27, longitude: -97.74 })

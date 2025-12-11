@@ -278,9 +278,9 @@ export type Business = {
 	website?: string
 	logoUrl?: string
 	/**
-	 * Optional reference to an external provider record (e.g., Yelp).
+	 * Optional reference to an external provider record (e.g., Google Places).
 	 */
-	externalProvider?: 'yelp' | 'other'
+	externalProvider?: 'google' | 'other'
 	externalProviderId?: string
 	phone?: string
 	coordinates?: {

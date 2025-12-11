@@ -55,7 +55,7 @@ export default function BusinessForm({ onAdd }: Props) {
 			return
 		}
 		if (!searchEnabled) {
-			show('Business search is disabled — configure Yelp API to enable.')
+			show('Business search requires a server GOOGLE_MAPS_API_KEY.')
 			return
 		}
 		try {
@@ -140,7 +140,7 @@ export default function BusinessForm({ onAdd }: Props) {
 				<div className="mb-2 headline text-lg">Search businesses</div>
 				{!searchEnabled && (
 					<p className="text-yellow-300 text-sm mb-2">
-						Developers: Business search is disabled. Set <code>VITE_BUSINESS_SEARCH_PROVIDER=yelp</code> and configure <code>VITE_YELP_API_KEY</code> or <code>VITE_YELP_PROXY_URL</code>.
+						Developers: Business search requires a server <code>GOOGLE_MAPS_API_KEY</code>.
 					</p>
 				)}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">

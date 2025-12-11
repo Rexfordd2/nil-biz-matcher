@@ -97,7 +97,7 @@ export default function Discover() {
 			}>
 				{!searchEnabled && (
 					<p className="text-yellow-300 text-sm mb-2">
-						Developers: enable search with <code>VITE_BUSINESS_SEARCH_PROVIDER=yelp</code> and a Yelp API key or proxy.
+						Developers: server-side business search requires <code>GOOGLE_MAPS_API_KEY</code>.
 					</p>
 				)}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">

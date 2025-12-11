@@ -61,6 +61,7 @@ export default function App() {
 	const { show } = useToast()
 	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 	const [userMenuOpen, setUserMenuOpen] = useState(false)
+	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const autosave = useAutosaveProfile({ userId: currentUser?.id, debounceMs: 800 })
 
 	useEffect(() => save('athlete', athlete), [athlete])
@@ -490,7 +491,7 @@ export default function App() {
 
 				{/* Mobile bottom navigation */}
 				<nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur">
-					<div className="grid grid-cols-5 gap-1 px-2 py-2">
+					<div className="grid grid-cols-6 gap-1 px-2 py-2">
 						<button
 							type="button"
 							onClick={() => goToTab('Welcome')}
@@ -526,8 +527,79 @@ export default function App() {
 						>
 							Board
 						</button>
+						<button
+							type="button"
+							onClick={() => setMobileMenuOpen(true)}
+							className="text-sm px-2 py-2 rounded-md text-gray-300 hover:bg-mid/60"
+						>
+							More
+						</button>
 					</div>
 				</nav>
+
+				{/* Mobile full menu overlay */}
+				{mobileMenuOpen && (
+					<div className="md:hidden fixed inset-0 z-30">
+						<div className="absolute inset-0 bg-black/60" onClick={() => setMobileMenuOpen(false)} />
+						<div className="absolute bottom-0 left-0 right-0 max-h-[75vh] overflow-y-auto bg-background border-t border-border rounded-t-2xl p-4">
+							<div className="flex items-center justify-between mb-3">
+								<div className="text-sm uppercase tracking-wide text-foreground/60">Menu</div>
+								<button
+									type="button"
+									onClick={() => setMobileMenuOpen(false)}
+									className="text-gray-300 hover:text-white px-3 py-1 border border-border rounded-md"
+								>
+									Close
+								</button>
+							</div>
+							<div className="space-y-5">
+								<div>
+									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Main</div>
+									<div className="grid grid-cols-2 gap-2">
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Welcome') }}>Home</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Athlete') }}>Athlete Profile</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Discover') }}>Discover</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Matches') }}>Matches</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Dashboard') }}>Dashboard</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Profile Preview') }}>Public Profile</button>
+										{!currentUser && (
+											<>
+												<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Log In') }}>Log In</button>
+												<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Sign Up') }}>Sign Up</button>
+											</>
+										)}
+									</div>
+								</div>
+								<div>
+									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Workflows</div>
+									<div className="grid grid-cols-2 gap-2">
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Businesses') }}>Businesses</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Deals') }}>Deals</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Opportunities') }}>Opportunities</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Events') }}>Events</button>
+									</div>
+								</div>
+								<div>
+									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Recruiting</div>
+									<div className="grid grid-cols-2 gap-2">
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Finder</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting Board') }}>Board</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting Blast') }}>Blast</button>
+									</div>
+								</div>
+								<div>
+									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Learn</div>
+									<div className="grid grid-cols-2 gap-2">
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('NIL Hub') }}>NIL Hub</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Resources') }}>Resources</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Guidelines') }}>Guidelines</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Vendor Directory') }}>Vendors</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				)}
 
 				<footer className="py-10" />
 			</div>

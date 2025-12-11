@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "prisma": "^5.20.0",
+    "dotenv": "^16.4.5",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.8",

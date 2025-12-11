@@ -5,7 +5,7 @@ export function createMockProvider(): BusinessSearchProvider {
 		async searchBusinesses(params) {
 			const base: ExternalBusiness[] = [
 				{
-					provider: 'yelp',
+					provider: 'google',
 					providerId: 'mock-1',
 					name: 'Beast Mode Gym',
 					url: 'https://example.com/gym',
@@ -17,7 +17,7 @@ export function createMockProvider(): BusinessSearchProvider {
 					coordinates: { latitude: 33.66, longitude: -117.74 }
 				},
 				{
-					provider: 'yelp',
+					provider: 'google',
 					providerId: 'mock-2',
 					name: 'Victory Pizza',
 					url: 'https://example.com/pizza',
