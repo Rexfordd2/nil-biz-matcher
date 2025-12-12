@@ -28,8 +28,8 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 		}
 	}, [athlete, sport])
 
-	function runSearch() {
-		const r = searchPrograms({ sport, level, region })
+	async function runSearch() {
+		const r = await searchPrograms({ sport, level, region })
 		setResults(r)
 		setSelectedId(null)
 		setCurrentIndex(0)

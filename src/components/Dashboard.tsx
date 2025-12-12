@@ -4,7 +4,8 @@ import Button from './ui/Button'
 import { Business, BusinessLevel, FitRating } from '../types'
 import { FitBadge, LevelBadge } from './ui/Badge'
 import { useToast } from './ui/Toast'
-import { getTargets } from '../recruiting/pipeline'
+import { getTargetsFor } from '../recruiting/pipeline'
+import { load } from '../utils/storage'
 
 type Props = {
 	businesses: Business[]
@@ -21,9 +22,11 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 	const [recruitingCounts, setRecruitingCounts] = useState<{ pursue: number; inConversation: number }>({ pursue: 0, inConversation: 0 })
 
 	useEffect(() => {
-		const targets = getTargets()
-		const pursue = targets.filter(t => t.interestLevel === 'pursue').length
-		const inConversation = targets.filter(t => t.status === 'in_conversation').length
+		const athlete = load<any>('athlete', null)
+		const athleteId: string | null = athlete?.id || null
+		const targets = getTargetsFor(athleteId || undefined)
+		const pursue = targets.filter((t) => t.interestLevel === 'pursue').length
+		const inConversation = targets.filter((t) => t.status === 'in_conversation').length
 		setRecruitingCounts({ pursue, inConversation })
 	}, [])
 

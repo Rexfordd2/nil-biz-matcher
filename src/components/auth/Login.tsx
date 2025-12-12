@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
-import { authLogin, type CurrentUser } from '../../utils/auth'
+import { type CurrentUser } from '../../utils/auth'
 import { useToast } from '../ui/Toast'
+import { useAuth } from '../../context/AuthContext'
 
 type Props = {
 	onLoggedIn: (user: CurrentUser) => void
@@ -11,6 +12,7 @@ type Props = {
 
 export default function Login({ onLoggedIn, onNeedAccount }: Props) {
 	const { show } = useToast()
+	const { login } = useAuth()
 	const [email, setEmail] = useState('')
 	const [loading, setLoading] = useState(false)
 
@@ -22,7 +24,7 @@ export default function Login({ onLoggedIn, onNeedAccount }: Props) {
 		}
 		setLoading(true)
 		try {
-			const user = await authLogin({ email })
+			const user = await login(email)
 			onLoggedIn(user)
 		} catch (err: any) {
 			show(err?.message || 'Login failed')

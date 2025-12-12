@@ -4,6 +4,7 @@ import Button from './ui/Button'
 import { useToast } from './ui/Toast'
 import type { AthleteProfile } from '../types'
 import type { CoachOutreach, HighlightClip, RecruitingCoach } from '../recruiting/blastTypes'
+import { useAuth } from '../context/AuthContext'
 import {
 	createOutreach,
 	deleteCoach,
@@ -23,6 +24,7 @@ type Props = {
 
 export default function RecruitingBlast({ athlete }: Props) {
 	const { show } = useToast()
+	const { user } = useAuth()
 	const [coaches, setCoaches] = useState<RecruitingCoach[]>([])
 	const [clips, setClips] = useState<HighlightClip[]>([])
 	const [outreach, setOutreach] = useState<CoachOutreach[]>([])
@@ -106,7 +108,11 @@ export default function RecruitingBlast({ athlete }: Props) {
 		if (selectedClipId === id) setSelectedClipId('')
 	}
 
-	function onSendBlast() {
+	async function onSendBlast() {
+		if (!user) {
+			show('Please log in to send emails')
+			return
+		}
 		if (!athlete?.id) {
 			show('Create your Athlete Profile first')
 			return
@@ -123,17 +129,54 @@ export default function RecruitingBlast({ athlete }: Props) {
 			show('Select at least one coach')
 			return
 		}
-		for (const coachId of selectedCoachIds) {
-			createOutreach({
-				athleteId: athlete.id,
-				coachId,
-				clipId: selectedClipId,
-				subject,
-				body
-			})
+		const selectedCoaches = coaches.filter(c => selectedCoachIds.includes(c.id) && !!c.email)
+		if (selectedCoaches.length === 0) {
+			show('Selected coaches have no emails')
+			return
 		}
-		setOutreach(getOutreach(athlete.id))
-		show(`Sent to ${selectedCoachIds.length} coach${selectedCoachIds.length > 1 ? 'es' : ''}`)
+		const clip = clips.find(c => c.id === selectedClipId)
+		if (!clip?.videoUrl) {
+			show('Clip is missing a video URL')
+			return
+		}
+
+		try {
+			const res = await fetch('/api/recruiting/send', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					athlete: { fullName: user.fullName, email: user.email, id: user.id },
+					clipUrl: clip.videoUrl,
+					coaches: selectedCoaches.map(c => ({ name: c.name, email: c.email })),
+					subject,
+					body
+				})
+			})
+			if (res.status === 503) {
+				show('Email sending is not configured yet. Ask an admin to set SMTP.')
+				return
+			}
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}))
+				show(err?.error || 'Failed to send emails')
+				return
+			}
+
+			// Mirror locally for user-facing history
+			for (const coachId of selectedCoachIds) {
+				createOutreach({
+					athleteId: athlete.id,
+					coachId,
+					clipId: selectedClipId,
+					subject,
+					body
+				})
+			}
+			setOutreach(getOutreach(athlete.id))
+			show(`Sent to ${selectedCoachIds.length} coach${selectedCoachIds.length > 1 ? 'es' : ''}`)
+		} catch {
+			show('Network error sending emails')
+		}
 	}
 
 	function simulateOpen(o: CoachOutreach) {

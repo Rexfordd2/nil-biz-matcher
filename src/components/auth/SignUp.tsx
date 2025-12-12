@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
-import { authRegister, type CurrentUser } from '../../utils/auth'
+import { type CurrentUser } from '../../utils/auth'
 import { useToast } from '../ui/Toast'
+import { useAuth } from '../../context/AuthContext'
 
 type Props = {
 	onSignedIn: (user: CurrentUser) => void
@@ -10,6 +11,7 @@ type Props = {
 
 export default function SignUp({ onSignedIn }: Props) {
 	const { show } = useToast()
+	const { signup } = useAuth()
 	const [fullName, setFullName] = useState('')
 	const [email, setEmail] = useState('')
 	const [phone, setPhone] = useState('')
@@ -24,7 +26,7 @@ export default function SignUp({ onSignedIn }: Props) {
 		}
 		setLoading(true)
 		try {
-			const user = await authRegister({ email, fullName, phone: phone || undefined, marketingConsent })
+			const user = await signup({ email, fullName, phone: phone || undefined, marketingConsent })
 			onSignedIn(user)
 		} catch (err: any) {
 			show(err?.message || 'Sign up failed')

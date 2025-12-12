@@ -2,8 +2,9 @@ import Card from './ui/Card'
 import Button from './ui/Button'
 import { useEffect, useMemo, useState } from 'react'
 import { CollegeProgram } from '../recruiting/programTypes'
-import { getTargets, RecruitingStatus, upsertTarget } from '../recruiting/pipeline'
+import { getTargetsFor, RecruitingStatus, upsertTarget } from '../recruiting/pipeline'
 import { SAMPLE_PROGRAMS } from '../recruiting/programData'
+import { load } from '../utils/storage'
 
 type Row = {
 	targetId: string
@@ -25,7 +26,10 @@ export default function RecruitingBoard() {
 	const [rows, setRows] = useState<Row[]>([])
 
 	useEffect(() => {
-		const targets = getTargets()
+		// Read the current athlete from localStorage to scope the pipeline
+		const athlete = load<any>('athlete', null)
+		const athleteId: string | null = athlete?.id || null
+		const targets = getTargetsFor(athleteId || undefined)
 		const byId: Record<string, CollegeProgram> = Object.fromEntries(SAMPLE_PROGRAMS.map(p => [p.id, p]))
 		const mapped: Row[] = targets
 			.map(t => (byId[t.programId] ? { targetId: t.id, program: byId[t.programId], status: t.status } : null))
@@ -42,7 +46,9 @@ export default function RecruitingBoard() {
 	}, [rows])
 
 	function updateStatus(targetId: string, status: RecruitingStatus) {
-		const t = getTargets().find(x => x.id === targetId)
+		const athlete = load<any>('athlete', null)
+		const athleteId: string | null = athlete?.id || null
+		const t = getTargetsFor(athleteId || undefined).find(x => x.id === targetId)
 		if (!t) return
 		upsertTarget({ ...t, status })
 		setRows(curr => curr.map(r => (r.targetId === targetId ? { ...r, status } : r)))

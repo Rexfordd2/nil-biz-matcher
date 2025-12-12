@@ -40,7 +40,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		try {
 			getEmailTransporter()
 		} catch (e: any) {
-			return res.status(500).json({ error: 'Email not configured' })
+			// Prior behavior returned 500; return 503 so UI can display a clear "not configured" message.
+			return res.status(503).json({ error: 'Email not configured' })
 		}
 
 		// If prisma-style inputs provided (athlete.id, clipId, coachIds), use DB

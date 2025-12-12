@@ -19,21 +19,24 @@ export type RecruitingTarget = {
 	lastContactDate?: string
 }
 
-const STORAGE_KEY = 'recruiting.targets'
+function storageKeyForAthlete(athleteId: string | undefined | null): string {
+	const id = (athleteId || 'anon').trim() || 'anon'
+	return `athleteLedger:recruitingTargets:${id}`
+}
 
-export function getTargets(): RecruitingTarget[] {
-	return load<RecruitingTarget[]>(STORAGE_KEY, [])
+export function getTargetsFor(athleteId?: string | null): RecruitingTarget[] {
+	return load<RecruitingTarget[]>(storageKeyForAthlete(athleteId), [])
 }
 
 export function upsertTarget(next: RecruitingTarget) {
-	const all = getTargets()
+	const all = getTargetsFor(next.athleteId)
 	const idx = all.findIndex(t => t.id === next.id)
 	const updated = idx === -1 ? [next, ...all] : Object.assign([], all, { [idx]: next })
-	save(STORAGE_KEY, updated)
+	save(storageKeyForAthlete(next.athleteId), updated)
 }
 
 export function upsertByProgram(athleteId: string, programId: string, updates: Partial<RecruitingTarget>) {
-	const all = getTargets()
+	const all = getTargetsFor(athleteId)
 	const existing = all.find(t => t.athleteId === athleteId && t.programId === programId)
 	const next: RecruitingTarget = existing
 		? { ...existing, ...updates }

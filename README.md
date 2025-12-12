@@ -83,6 +83,7 @@ This app includes serverless API routes (under `api/`) and a SQLite database via
   - `GET /api/profile` → get or create the logged‑in athlete profile (JSON blob)
   - `POST /api/profile` → save the athlete profile (JSON blob)
   - `GET /api/business/search` → business discovery (Google Places backend)
+  - `GET /api/recruiting/search` → recruiting finder (filtered static dataset with server fallback)
 
 Auth uses an HTTP‑only cookie with a signed token. For production, set a strong `AUTH_SECRET`.
 
@@ -90,8 +91,11 @@ Auth uses an HTTP‑only cookie with a signed token. For production, set a stron
 - `DATABASE_URL="file:./dev.db"` (SQLite; default for local dev)
 - `AUTH_SECRET="change-this-to-a-long-random-string"` (used to sign session cookies)
 
-Optional (existing):
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `APP_URL` (for recruiting email features)
+Optional (existing and recommended):
+- Business search (server): `GOOGLE_MAPS_API_KEY` (Text Search), `GOOGLE_MAPS_REGION_BIAS` (optional, e.g., `us`)
+- Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `APP_URL`
+  - If SMTP is not configured, email sending will return HTTP 503 with `{ "error": "Email not configured" }`
+  - `APP_URL` is required by recruiting email tracking links
 
 #### Set up the DB and generate the client
 1) Ensure `.env` contains `DATABASE_URL="file:./dev.db"`
