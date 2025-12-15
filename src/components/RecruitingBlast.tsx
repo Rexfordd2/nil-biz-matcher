@@ -156,6 +156,11 @@ export default function RecruitingBlast({ athlete }: Props) {
 				show('Email sending is not configured yet. Ask an admin to set SMTP.')
 				return
 			}
+			if (res.status === 404) {
+				// Local dev without API server
+				show('Email service unavailable in local dev. Configure SMTP/server to send.')
+				return
+			}
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}))
 				show(err?.error || 'Failed to send emails')
@@ -175,7 +180,7 @@ export default function RecruitingBlast({ athlete }: Props) {
 			setOutreach(getOutreach(athlete.id))
 			show(`Sent to ${selectedCoachIds.length} coach${selectedCoachIds.length > 1 ? 'es' : ''}`)
 		} catch {
-			show('Network error sending emails')
+			show('Email service unavailable in local dev. Configure SMTP/server to send.')
 		}
 	}
 
