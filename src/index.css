@@ -15,6 +15,9 @@
 html, body, #root {
   height: 100%;
 }
+body {
+  margin: 0;
+}
 
 .card {
   @apply bg-surface border border-border rounded-xl;
@@ -63,9 +66,23 @@ html, body, #root {
 }
 
 /* Light theme overrides for legacy dark utilities used in components */
-.light-theme .text-white { color: var(--foreground); }
-.light-theme .text-gray-200 { color: color-mix(in oklab, var(--foreground) 90%, white); }
-.light-theme .text-gray-300 { color: color-mix(in oklab, var(--foreground) 80%, white); }
-.light-theme .text-gray-400 { color: color-mix(in oklab, var(--foreground) 70%, white); }
-
-
+.light-theme .text-white {
+  /* Fallback for browsers without CSS variables */
+  color: #0D2C3A;
+  color: var(--foreground);
+}
+.light-theme .text-gray-200 {
+  /* Fallback for browsers without color-mix support */
+  color: #2a3f4a;
+  color: color-mix(in oklab, var(--foreground) 90%, white);
+}
+.light-theme .text-gray-300 {
+  /* Fallback for browsers without color-mix support */
+  color: #3a5060;
+  color: color-mix(in oklab, var(--foreground) 80%, white);
+}
+.light-theme .text-gray-400 {
+  /* Fallback for browsers without color-mix support */
+  color: #4c6270;
+  color: color-mix(in oklab, var(--foreground) 70%, white);
+}

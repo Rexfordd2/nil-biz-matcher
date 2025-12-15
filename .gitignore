@@ -1,3 +1,24 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+.next/
+build/
+
+# Env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Misc
+.DS_Store
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
 node_modules/
 dist/
 .vercel/

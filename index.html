@@ -9,7 +9,12 @@
 		<link rel="apple-touch-icon" href="/athlete-ledger-logo.png" />
 	</head>
 	<body class="bg-background text-foreground">
-		<div id="root"></div>
+		<div id="root">
+			<!-- Fallback content shown before React mounts -->
+			<div style="padding:16px;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0D2C3A">
+				Loading…
+			</div>
+		</div>
 		<script type="module" src="/src/main.tsx"></script>
 	</body>
 	</html>

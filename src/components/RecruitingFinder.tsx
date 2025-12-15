@@ -10,9 +10,12 @@ import { analyzeProgramFit } from '../recruiting/fit'
 import { upsertByProgram } from '../recruiting/pipeline'
 import { buildRecruitingScript } from '../utils/recruitingOutreach'
 import { useToast } from './ui/Toast'
+import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 
 export default function RecruitingFinder({ athlete, onRequireProfile }: { athlete: AthleteProfile | null; onRequireProfile?: () => void }) {
 	const { show } = useToast()
+	const { user } = useAuth()
 	const [sport, setSport] = useState('')
 	const [level, setLevel] = useState('')
 	const [region, setRegion] = useState('')
@@ -78,12 +81,23 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 		setIsDeciding(true)
 		try {
 			if (decision !== 'skip') {
-				await Promise.resolve(
-					upsertByProgram(athlete.id, programId, {
-						status: 'researching',
-						interestLevel: decision
+				// Try cloud first when available
+				const program = results.find(p => p.id === programId) || null
+				if (supabase && user && program) {
+					await supabase.from('recruiting_targets').insert({
+						user_id: user.id,
+						program,
+						status: 'researching'
 					})
-				)
+				} else {
+					// Fallback to local pipeline
+					await Promise.resolve(
+						upsertByProgram(athlete.id, programId, {
+							status: 'researching',
+							interestLevel: decision
+						})
+					)
+				}
 			}
 		} catch (err) {
 			// Roll back index on failure

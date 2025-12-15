@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AthleteProfile } from '../types'
+import { supabase } from '../lib/supabaseClient'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error' | 'loading'
 
@@ -30,12 +31,13 @@ export function useAutosaveProfile(params: {
 	const lsKey = useMemo(() => (userId ? `athleteProfileDraft:${userId}` : null), [userId])
 
 	const statusText = useMemo(() => {
+		if (!supabase && userId) return 'Cloud sync unavailable'
 		if (status === 'saving') return 'Saving…'
 		if (status === 'saved') return 'All changes saved'
 		if (status === 'error') return "Couldn't save. Will retry."
 		if (status === 'loading') return 'Loading…'
 		return ''
-	}, [status])
+	}, [status, userId])
 
 	const loadFromServer = useCallback(async () => {
 		if (!userId) {
@@ -47,24 +49,35 @@ export function useAutosaveProfile(params: {
 		setStatus('loading')
 		setError(null)
 		try {
-			const res = await fetch('/api/athlete/profile', { method: 'GET' })
-			if (!res.ok) throw new Error(`Load failed: ${res.status}`)
-			const data = await res.json()
-			const serverProfile = (data?.profile || {}) as AthleteProfile
-			const serverUpdatedAt: number = data?.updatedAt || 0
-			let useProfile = serverProfile
+			let cloudProfile: AthleteProfile | null = null
+			let cloudUpdatedAt: number = 0
+			if (supabase) {
+				const { data, error } = await supabase
+					.from('profiles')
+					.select('profile, updated_at, full_name, phone')
+					.eq('id', userId)
+					.maybeSingle()
+				if (error) throw error
+				if (data) {
+					const profileJson = (data as any)?.profile || {}
+					if ((data as any).full_name && typeof profileJson === 'object' && profileJson) {
+						;(profileJson as any).name = (profileJson as any).name || (data as any).full_name
+					}
+					cloudProfile = profileJson as AthleteProfile
+					cloudUpdatedAt = (data as any).updated_at ? new Date((data as any).updated_at as string).getTime() : 0
+				}
+			}
+			let useProfile = cloudProfile || ({} as AthleteProfile)
 			// Compare with localStorage draft if present
 			if (lsKey) {
 				try {
 					const raw = localStorage.getItem(lsKey)
 					if (raw) {
 						const parsed = JSON.parse(raw) as { data: AthleteProfile; updatedAt: number; dirty?: boolean }
-						if ((parsed?.updatedAt || 0) > (serverUpdatedAt || 0)) {
-							// simple prompt to restore
+						if ((parsed?.updatedAt || 0) > (cloudUpdatedAt || 0)) {
 							if (window.confirm('We found unsaved changes from your last session. Restore them?')) {
 								useProfile = parsed.data
 							} else {
-								// discard local
 								localStorage.removeItem(lsKey)
 							}
 						}
@@ -72,10 +85,10 @@ export function useAutosaveProfile(params: {
 				} catch {}
 			}
 			setInitialProfile(useProfile && Object.keys(useProfile).length ? (useProfile as AthleteProfile) : undefined)
-			setLastSavedAt(serverUpdatedAt || null)
+			setLastSavedAt(cloudUpdatedAt || null)
 			setStatus('idle')
 			latestDraftRef.current = JSON.stringify(useProfile || {})
-			lastSentRef.current = JSON.stringify(serverProfile || {})
+			lastSentRef.current = JSON.stringify(cloudProfile || {})
 		} catch (err: any) {
 			setError(err?.message || 'Failed to load')
 			setStatus('error')
@@ -95,16 +108,28 @@ export function useAutosaveProfile(params: {
 		setStatus('saving')
 		setError(null)
 		try {
-			const res = await fetch('/api/athlete/profile', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body)
-			})
-			if (!res.ok) throw new Error(`Save failed: ${res.status}`)
-			const data = await res.json()
-			setLastSavedAt(data?.updatedAt || Date.now())
-			setStatus('saved')
-			lastSentRef.current = JSON.stringify(data?.profile || body)
+			if (supabase) {
+				const { error } = await supabase
+					.from('profiles')
+					.upsert(
+						{
+							id: userId,
+							full_name: body.name || null,
+							phone: null,
+							profile: body
+						},
+						{ onConflict: 'id' }
+					)
+				if (error) throw error
+				setLastSavedAt(Date.now())
+				setStatus('saved')
+				lastSentRef.current = serialized
+			} else {
+				// No cloud; treat local mirror as saved
+				setLastSavedAt(Date.now())
+				setStatus('saved')
+				lastSentRef.current = serialized
+			}
 			// mark localStorage as synced
 			if (lsKey) {
 				try {
@@ -114,7 +139,6 @@ export function useAutosaveProfile(params: {
 		} catch (err: any) {
 			setStatus('error')
 			setError(err?.message || 'Save error')
-			// Leave lastSentRef unchanged so next debounce will retry
 		}
 	}, [userId, lsKey])
 

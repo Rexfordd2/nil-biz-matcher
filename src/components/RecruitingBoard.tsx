@@ -5,6 +5,8 @@ import { CollegeProgram } from '../recruiting/programTypes'
 import { getTargetsFor, RecruitingStatus, upsertTarget } from '../recruiting/pipeline'
 import { SAMPLE_PROGRAMS } from '../recruiting/programData'
 import { load } from '../utils/storage'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 type Row = {
 	targetId: string
@@ -24,18 +26,38 @@ const COLUMNS: RecruitingStatus[] = [
 
 export default function RecruitingBoard() {
 	const [rows, setRows] = useState<Row[]>([])
+	const { user } = useAuth()
 
 	useEffect(() => {
-		// Read the current athlete from localStorage to scope the pipeline
-		const athlete = load<any>('athlete', null)
-		const athleteId: string | null = athlete?.id || null
-		const targets = getTargetsFor(athleteId || undefined)
-		const byId: Record<string, CollegeProgram> = Object.fromEntries(SAMPLE_PROGRAMS.map(p => [p.id, p]))
-		const mapped: Row[] = targets
-			.map(t => (byId[t.programId] ? { targetId: t.id, program: byId[t.programId], status: t.status } : null))
-			.filter(Boolean) as Row[]
-		setRows(mapped)
-	}, [])
+		let cancelled = false
+		async function loadData() {
+			// Prefer Supabase when configured and logged in
+			if (supabase && user) {
+				const { data, error } = await supabase
+					.from('recruiting_targets')
+					.select('id, program, status')
+					.eq('user_id', user.id)
+					.order('created_at', { ascending: false })
+				if (!cancelled && !error && Array.isArray(data)) {
+					const mapped: Row[] = data
+						.map((r: any) => ({ targetId: r.id, program: r.program as CollegeProgram, status: r.status as RecruitingStatus }))
+					setRows(mapped)
+					return
+				}
+			}
+			// Fallback to localStorage pipeline
+			const athlete = load<any>('athlete', null)
+			const athleteId: string | null = athlete?.id || null
+			const targets = getTargetsFor(athleteId || undefined)
+			const byId: Record<string, CollegeProgram> = Object.fromEntries(SAMPLE_PROGRAMS.map(p => [p.id, p]))
+			const mapped: Row[] = targets
+				.map(t => (byId[t.programId] ? { targetId: t.id, program: byId[t.programId], status: t.status } : null))
+				.filter(Boolean) as Row[]
+			if (!cancelled) setRows(mapped)
+		}
+		loadData()
+		return () => { cancelled = true }
+	}, [user])
 
 	const byColumn = useMemo(() => {
 		const m: Record<RecruitingStatus, Row[]> = {
@@ -45,7 +67,16 @@ export default function RecruitingBoard() {
 		return m
 	}, [rows])
 
-	function updateStatus(targetId: string, status: RecruitingStatus) {
+	async function updateStatus(targetId: string, status: RecruitingStatus) {
+		// Try cloud update first
+		if (supabase && user) {
+			const { error } = await supabase.from('recruiting_targets').update({ status }).eq('id', targetId)
+			if (!error) {
+				setRows(curr => curr.map(r => (r.targetId === targetId ? { ...r, status } : r)))
+				return
+			}
+		}
+		// Fallback local
 		const athlete = load<any>('athlete', null)
 		const athleteId: string | null = athlete?.id || null
 		const t = getTargetsFor(athleteId || undefined).find(x => x.id === targetId)

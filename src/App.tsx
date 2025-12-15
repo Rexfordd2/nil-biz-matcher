@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Component, ReactNode, useEffect, useMemo, useState } from 'react'
 import AthleteProfileForm from './components/AthleteProfileForm'
 import BusinessForm from './components/BusinessForm'
 import BusinessAnalysisCard from './components/BusinessAnalysisCard'
@@ -28,9 +28,37 @@ import RecruitingBoard from './components/RecruitingBoard'
 import RecruitingBlast from './components/RecruitingBlast'
 import Sidebar from './components/Sidebar'
 import SignUp from './components/auth/SignUp'
+import SignUpSupabase from './components/auth/SignUpSupabase'
 import Login from './components/auth/Login'
+import LoginSupabase from './components/auth/LoginSupabase'
 import { authMe, authLogout, type CurrentUser } from './utils/auth'
 import { useAutosaveProfile } from './hooks/useAutosaveProfile'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
+	constructor(props: { children: ReactNode }) {
+		super(props)
+		this.state = { hasError: false }
+	}
+	static getDerivedStateFromError(error: any) {
+		return { hasError: true, error }
+	}
+	override componentDidCatch(error: any, info: any) {
+		// eslint-disable-next-line no-console
+		console.error('App error:', error, info)
+	}
+	override render() {
+		if (this.state.hasError) {
+			return (
+				<div className="mx-auto max-w-2xl p-6">
+					<h1 className="headline text-2xl mb-2">Something went wrong</h1>
+					<p className="text-gray-400 text-sm mb-4">An error occurred while rendering the app.</p>
+					<pre className="card p-4 overflow-auto text-xs">{String(this.state.error)}</pre>
+				</div>
+			)
+		}
+		return this.props.children
+	}
+}
 
 type Tab =
 	| 'Welcome'
@@ -67,9 +95,55 @@ export default function App() {
 	useEffect(() => save('athlete', athlete), [athlete])
 	useEffect(() => save('businesses', businesses), [businesses])
 
+	// Initial mount ping (independent of auth)
+	useEffect(() => {
+		// #region agent log
+		const __dbgMount = {
+			sessionId: 'debug-session',
+			runId: 'initial',
+			hypothesisId: 'B',
+			location: 'src/App.tsx:mount',
+			message: 'App mounted',
+			data: {},
+			timestamp: Date.now()
+		}
+		fetch('http://127.0.0.1:7242/ingest/f93d76cb-ddaa-401d-972f-239de3ada967', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(__dbgMount)
+		}).catch(() => {})
+		fetch('/api/debug/log', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(__dbgMount)
+		}).catch(() => {})
+		// #endregion
+	}, [])
+
 	// Load current session on mount
 	useEffect(() => {
 		authMe().then(u => {
+			// #region agent log
+			const __dbgAuth = {
+				sessionId: 'debug-session',
+				runId: 'initial',
+				hypothesisId: 'B',
+				location: 'src/App.tsx:authMeEffect',
+				message: 'Auth session check on mount',
+				data: { authorized: Boolean(u) },
+				timestamp: Date.now()
+			}
+			fetch('http://127.0.0.1:7242/ingest/f93d76cb-ddaa-401d-972f-239de3ada967', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(__dbgAuth)
+			}).catch(() => {})
+			fetch('/api/debug/log', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(__dbgAuth)
+			}).catch(() => {})
+			// #endregion
 			if (u) setCurrentUser(u)
 		})
 	}, [])
@@ -131,6 +205,7 @@ export default function App() {
 
 	return (
 		<ToastProvider>
+			<ErrorBoundary>
 			<div className="min-h-screen bg-background light-theme">
 				<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
 					<div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
@@ -468,14 +543,25 @@ export default function App() {
 					{tab === 'Recruiting Blast' && <RecruitingBlast athlete={athlete} />}
 
 					{tab === 'Sign Up' && (
-						<SignUp onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
+						import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? (
+							<SignUpSupabase onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
+						) : (
+							<SignUp onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
+						)
 					)}
 
 					{tab === 'Log In' && (
-						<Login
-							onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
-							onNeedAccount={() => setTab('Sign Up')}
-						/>
+						import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? (
+							<LoginSupabase
+								onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
+								onNeedAccount={() => setTab('Sign Up')}
+							/>
+						) : (
+							<Login
+								onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
+								onNeedAccount={() => setTab('Sign Up')}
+							/>
+						)
 					)}
 
 					{tab === 'Resources' && <Resources onGoVendors={() => setTab('Vendor Directory')} />}
@@ -603,6 +689,7 @@ export default function App() {
 
 				<footer className="py-10" />
 			</div>
+			</ErrorBoundary>
 		</ToastProvider>
 	)
 }
