@@ -68,7 +68,10 @@ export function clearSessionCookie(res: VercelResponse) {
 
 function getTokenFromRequest(req: VercelRequest): string | null {
 	const cookieHeader = req.headers.cookie || ''
-	const match = cookieHeader.split(';').map(s => s.trim()).find(kv => kv.startsWith(`${COOKIE_NAME}=`))
+	const match = cookieHeader
+		.split(';')
+		.map((s: string) => s.trim())
+		.find((kv: string) => kv.startsWith(`${COOKIE_NAME}=`))
 	if (match) {
 		return match.split('=')[1] || null
 	}
@@ -84,6 +87,7 @@ export async function getCurrentUser(req: VercelRequest) {
 	const parsed = verifySession(token)
 	if (!parsed) return null
 	try {
+		if (!prisma) return null
 		const user = await prisma.user.findUnique({ where: { id: parsed.userId } })
 		return user
 	} catch {

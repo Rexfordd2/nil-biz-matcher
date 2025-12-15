@@ -14,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 	// If Prisma is configured, persist counts
 	try {
-		if (token) {
+		if (prisma && token) {
 			const outreach = await prisma.outreach.findUnique({ where: { trackToken: token } })
 			if (outreach) {
 				if (type === 'open') {

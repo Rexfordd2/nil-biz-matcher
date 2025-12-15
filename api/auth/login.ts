@@ -50,6 +50,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return res.status(400).json({ error: 'Invalid email' })
 	}
 	try {
+		if (!prisma) {
+			return res.status(503).json({ error: 'Database not available' })
+		}
 		const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
 		if (!user) {
 			return res.status(404).json({ error: 'User not found' })

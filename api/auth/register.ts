@@ -34,6 +34,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	}
 
 	try {
+		if (!prisma) {
+			return res.status(503).json({ error: 'Database not available' })
+		}
 		let user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
 		if (!user) {
 			user = await prisma.user.create({
