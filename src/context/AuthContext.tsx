@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { CurrentUser } from '../utils/auth'
 import { authLogin, authLogout, authMe, authRegister } from '../utils/auth'
+import { supabase } from '../lib/supabaseClient'
 
 type AuthContextValue = {
 	user: CurrentUser | null
@@ -16,8 +17,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<CurrentUser | null>(null)
 
 	const refresh = useCallback(async () => {
+		// Try server-based session
 		const u = await authMe()
-		setUser(u)
+		if (u) {
+			setUser(u)
+			return
+		}
+		// Fallback to Supabase session if configured
+		if (supabase) {
+			const { data } = await supabase.auth.getUser()
+			const su = data.user
+			if (su) {
+				const mapped: CurrentUser = {
+					id: su.id,
+					email: su.email || '',
+					fullName: (su.user_metadata?.full_name as string) || su.email || 'User',
+					role: (su.user_metadata?.role as string) || 'athlete',
+					marketingConsent: Boolean(su.user_metadata?.marketingConsent)
+				}
+				setUser(mapped)
+				return
+			}
+		}
+		setUser(null)
 	}, [])
 
 	useEffect(() => {
