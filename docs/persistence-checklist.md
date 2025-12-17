@@ -2,6 +2,12 @@
 
 Use this to verify autosave + reload works locally and on the deployed Vercel URL.
 
+Local setup
+
+1. Copy `.env.example` to `.env.local`.
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for your project in `.env.local`. Do not commit `.env.local` (it is gitignored).
+3. In Vercel, set the same variables in the Environment Variables for Production (and Preview if needed).
+
 1. Sign up or log in
    - If using Supabase auth screens, confirm login succeeds.
 2. Edit Athlete Profile fields
