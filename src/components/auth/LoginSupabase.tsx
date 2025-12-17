@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../ui/Button'
+import Input from '../ui/Input'
 import Card from '../ui/Card'
 import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
@@ -58,22 +59,20 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 				<form className="space-y-4" onSubmit={handleSubmit}>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Email</span>
-						<input
+						<Input
 							type="email"
 							value={email}
 							onChange={e => setEmail(e.target.value)}
 							placeholder="you@example.com"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Password</span>
-						<input
+						<Input
 							type="password"
 							value={password}
 							onChange={e => setPassword(e.target.value)}
 							placeholder="••••••••"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					{err && <div className="text-red-400 text-sm">{err}</div>}

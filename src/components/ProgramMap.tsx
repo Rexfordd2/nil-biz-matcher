@@ -61,7 +61,7 @@ export default function ProgramMap({ programs, selectedId, onSelectProgram }: Pr
 
 	if (!hasCoords) {
 		return (
-			<div className="card p-4 text-sm text-gray-300">
+			<div className="card text-sm text-gray-300">
 				Map not available for these results (no coordinates).
 			</div>
 		)

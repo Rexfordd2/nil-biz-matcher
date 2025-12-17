@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
+import Input from './ui/Input'
+import Select from './ui/Select'
 import ProgramMap from './ProgramMap'
 import ProgramSwipeDeck from './ProgramSwipeDeck'
 import { AthleteProfile } from '../types'
@@ -114,8 +116,8 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 		<div className="space-y-4">
 			<Card title="College & Semi-Pro Finder">
 				<div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-					<input value={sport} onChange={e => setSport(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Sport (e.g., Football)" />
-					<select value={level} onChange={e => setLevel(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+					<Input value={sport} onChange={e => setSport(e.target.value)} placeholder="Sport (e.g., Football)" />
+					<Select value={level} onChange={e => setLevel(e.target.value)}>
 						<option value="">Any Level</option>
 						<option value="ncaa_d1">NCAA_D1</option>
 						<option value="ncaa_d2">NCAA_D2</option>
@@ -123,8 +125,8 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 						<option value="naia">NAIA</option>
 						<option value="juco">JUCO</option>
 						<option value="semi_pro">SEMI_PRO</option>
-					</select>
-					<input value={region} onChange={e => setRegion(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Region/state (e.g., TX)" />
+					</Select>
+					<Input value={region} onChange={e => setRegion(e.target.value)} placeholder="Region/state (e.g., TX)" />
 					<div className="md:col-span-2 flex gap-2">
 						<Button onClick={runSearch}>Search</Button>
 						{!athlete && <div className="subtle text-sm self-center">Create your profile for better fit analysis.</div>}
@@ -157,7 +159,7 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 							if (!p) return null
 							const s = summaries[p.id]
 							return (
-								<div className="card p-4">
+								<div className="card">
 									<div className="flex items-center justify-between mb-2">
 										<div className="text-white font-semibold truncate">{p.name}</div>
 										{s?.rating && <div className="text-xs text-gray-300">{s.rating}</div>}

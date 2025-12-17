@@ -5,18 +5,18 @@ export default {
 	theme: {
 		extend: {
 			colors: {
-				// Light theme palette
-				background: '#F2E8D5', // parchment
-				surface: '#FFFFFF', // cards/surfaces
-				border: '#E5DEC9', // soft border
-				mid: '#F7F1E3', // subtle surface
-				foreground: '#0D2C3A', // navy text
+				// Unified light theme palette (high-contrast on light)
+				background: '#f8fafc', // slate-50 page background
+				surface: '#ffffff', // cards/surfaces
+				border: '#e2e8f0', // slate-200 borders
+				mid: '#f1f5f9', // slate-100 subtle surface
+				foreground: '#0f172a', // slate-900 primary text
 				brand: {
 					// Keep existing keys for compatibility with classnames
-					red: '#0D2C3A', // alias to navy
-					redGlow: '#C89A3C', // alias to gold
-					navy: '#0D2C3A',
-					gold: '#C89A3C'
+					red: '#0f172a', // use slate-900 as "brand red" alias
+					redGlow: '#334155', // slate-700 accent glow
+					navy: '#0f172a',
+					gold: '#334155'
 				},
 				fit: {
 					perfect: '#16a34a',
@@ -26,8 +26,8 @@ export default {
 				}
 			},
 			boxShadow: {
-				// subtle navy/gold glow
-				glow: '0 0 0 2px rgba(200, 154, 60, 0.45), 0 0 20px rgba(13, 44, 58, 0.30)'
+				// subtle neutral glow suitable for light theme
+				glow: '0 0 0 2px rgba(51, 65, 85, 0.25), 0 0 16px rgba(15, 23, 42, 0.12)'
 			}
 		}
 	},

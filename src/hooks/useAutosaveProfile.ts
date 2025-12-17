@@ -53,18 +53,20 @@ export function useAutosaveProfile(params: {
 			let cloudUpdatedAt: number = 0
 			if (supabase) {
 				const { data, error } = await supabase
-					.from('profiles')
-					.select('profile, updated_at, full_name, phone')
-					.eq('id', userId)
+					.from('athlete_profiles')
+					.select('profile, updated_at')
+					.eq('user_id', userId)
 					.maybeSingle()
 				if (error) throw error
 				if (data) {
 					const profileJson = (data as any)?.profile || {}
-					if ((data as any).full_name && typeof profileJson === 'object' && profileJson) {
-						;(profileJson as any).name = (profileJson as any).name || (data as any).full_name
-					}
 					cloudProfile = profileJson as AthleteProfile
 					cloudUpdatedAt = (data as any).updated_at ? new Date((data as any).updated_at as string).getTime() : 0
+				} else {
+					// Ensure row exists for this user
+					await supabase
+						.from('athlete_profiles')
+						.upsert({ user_id: userId, profile: {} }, { onConflict: 'user_id' })
 				}
 			}
 			let useProfile = cloudProfile || ({} as AthleteProfile)
@@ -110,15 +112,13 @@ export function useAutosaveProfile(params: {
 		try {
 			if (supabase) {
 				const { error } = await supabase
-					.from('profiles')
+					.from('athlete_profiles')
 					.upsert(
 						{
-							id: userId,
-							full_name: body.name || null,
-							phone: null,
+							user_id: userId,
 							profile: body
 						},
-						{ onConflict: 'id' }
+						{ onConflict: 'user_id' }
 					)
 				if (error) throw error
 				setLastSavedAt(Date.now())

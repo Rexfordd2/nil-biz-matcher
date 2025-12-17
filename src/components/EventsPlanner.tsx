@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
+import Input from './ui/Input'
+import Select from './ui/Select'
+import Textarea from './ui/Textarea'
 import { AthleteProfile, DealLogEntry, EventPlan, EventType } from '../types'
 import { load, save } from '../utils/storage'
 
@@ -63,7 +66,7 @@ export default function EventsPlanner({ athlete }: Props) {
 		<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 			<Card title="Events & Camps" actions={<Button onClick={addNew}>New</Button>}>
 				<div className="overflow-auto">
-					<table className="min-w-full text-left text-sm">
+					<table className="table min-w-full text-left text-sm">
 						<thead>
 							<tr className="text-gray-400">
 								<th className="py-2 pr-2">Date</th>
@@ -117,10 +120,10 @@ export default function EventsPlanner({ athlete }: Props) {
 				{!selected ? (
 					<div className="subtle">Notes and planning details will appear here.</div>
 				) : (
-					<textarea
+					<Textarea
 						value={selected.notes || ''}
 						onChange={e => upsert({ ...selected, notes: e.target.value })}
-						className="w-full bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[200px]"
+						className="min-h-[200px]"
 						placeholder="Agenda, action items, logistics…"
 					/>
 				)}
@@ -133,25 +136,25 @@ function EventEditor({ value, onChange, deals }: { value: EventPlan; onChange: (
 	return (
 		<div className="space-y-3">
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<input value={value.name} onChange={e => onChange({ ...value, name: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Event name" />
-				<select value={value.type} onChange={e => onChange({ ...value, type: e.target.value as EventType })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<Input value={value.name} onChange={e => onChange({ ...value, name: e.target.value })} placeholder="Event name" />
+				<Select value={value.type} onChange={e => onChange({ ...value, type: e.target.value as EventType })}>
 					{TYPES.map(t => <option key={t} value={t}>{t.replaceAll('_',' ')}</option>)}
-				</select>
-				<input type="date" value={value.date} onChange={e => onChange({ ...value, date: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
-				<input value={value.location} onChange={e => onChange({ ...value, location: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Location" />
-				<input value={value.hostOrganization || ''} onChange={e => onChange({ ...value, hostOrganization: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Host/organizer (optional)" />
-				<input type="number" min={0} value={value.expectedAttendees ?? ''} onChange={e => onChange({ ...value, expectedAttendees: e.target.value === '' ? undefined : Number(e.target.value) })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Expected attendees (optional)" />
+				</Select>
+				<Input type="date" value={value.date} onChange={e => onChange({ ...value, date: e.target.value })} />
+				<Input value={value.location} onChange={e => onChange({ ...value, location: e.target.value })} placeholder="Location" />
+				<Input value={value.hostOrganization || ''} onChange={e => onChange({ ...value, hostOrganization: e.target.value })} placeholder="Host/organizer (optional)" />
+				<Input type="number" min={0} value={value.expectedAttendees ?? ''} onChange={e => onChange({ ...value, expectedAttendees: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="Expected attendees (optional)" />
 			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<input value={(value.sponsors || []).join(', ')} onChange={e => onChange({ ...value, sponsors: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Sponsor names (comma-separated)" />
-				<select value={value.linkedDealId || ''} onChange={e => onChange({ ...value, linkedDealId: (e.target.value || undefined) })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<Input value={(value.sponsors || []).join(', ')} onChange={e => onChange({ ...value, sponsors: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} placeholder="Sponsor names (comma-separated)" />
+				<Select value={value.linkedDealId || ''} onChange={e => onChange({ ...value, linkedDealId: (e.target.value || undefined) })}>
 					<option value="">Link to a Deal (optional)</option>
 					{deals.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
-				</select>
+				</Select>
 			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<input value={value.runOfShowUrl || ''} onChange={e => onChange({ ...value, runOfShowUrl: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Run-of-show doc URL (optional)" />
-				<input value={value.waiversUrl || ''} onChange={e => onChange({ ...value, waiversUrl: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Waivers doc URL (optional)" />
+				<Input value={value.runOfShowUrl || ''} onChange={e => onChange({ ...value, runOfShowUrl: e.target.value })} placeholder="Run-of-show doc URL (optional)" />
+				<Input value={value.waiversUrl || ''} onChange={e => onChange({ ...value, waiversUrl: e.target.value })} placeholder="Waivers doc URL (optional)" />
 			</div>
 		</div>
 	)

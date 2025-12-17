@@ -55,7 +55,7 @@ export default function ProgramSwipeDeck({ programs, currentIndex, onIndexChange
 								onSwipe={(dir) => handleSwipe(dir, idx)}
 								preventSwipe={['up', 'down']}
 							>
-								<div className={`card p-5 ${idx === currentIndex ? 'shadow-lg' : 'opacity-70'}`}>
+								<div className={`card ${idx === currentIndex ? 'shadow-lg' : 'opacity-70'}`}>
 									<header className="mb-3">
 										<div className="text-white font-semibold text-lg truncate">{p.name}</div>
 										<div className="text-gray-400 text-sm truncate">{[p.sport, p.level, p.conference].filter(Boolean).join(' • ')}</div>

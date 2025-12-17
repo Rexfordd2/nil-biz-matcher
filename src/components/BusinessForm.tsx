@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
+import Input from './ui/Input'
+import Textarea from './ui/Textarea'
+import Select from './ui/Select'
 import { Business, SocialHandle } from '../types'
 import { useToast } from './ui/Toast'
 import { autoAnalyzeBusiness } from '../utils/analysis'
@@ -130,13 +133,13 @@ export default function BusinessForm({ onAdd }: Props) {
 			<div className="mb-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
 				<label className="flex flex-col gap-2">
 					<span className="subtle text-sm">Paste business website or profile link</span>
-					<input type="url" value={importUrl} onChange={e => setImportUrl(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="https://example.com or social profile URL" />
+					<Input type="url" value={importUrl} onChange={e => setImportUrl(e.target.value)} placeholder="https://example.com or social profile URL" />
 				</label>
 				<div className="flex items-end">
 					<Button variant="ghost" onClick={handleImport}>Import from URL</Button>
 				</div>
 			</div>
-			<div className="mb-4 card p-4">
+			<div className="mb-4 card">
 				<div className="mb-2 headline text-lg">Search businesses</div>
 				{!searchEnabled && (
 					<p className="text-yellow-300 text-sm mb-2">
@@ -144,8 +147,8 @@ export default function BusinessForm({ onAdd }: Props) {
 					</p>
 				)}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-					<input value={term} onChange={e => setTerm(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Search term (pizza, gym, store...)" />
-					<input value={searchLoc} onChange={e => setSearchLoc(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Location (City, ST or zip)" />
+					<Input value={term} onChange={e => setTerm(e.target.value)} placeholder="Search term (pizza, gym, store...)" />
+					<Input value={searchLoc} onChange={e => setSearchLoc(e.target.value)} placeholder="Location (City, ST or zip)" />
 					<div className="flex items-center">
 						<Button onClick={runSearch} className="w-full" disabled={searching || !searchEnabled}>{searching ? 'Searching…' : 'Search'}</Button>
 					</div>
@@ -174,19 +177,19 @@ export default function BusinessForm({ onAdd }: Props) {
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 				<label className="flex flex-col gap-2">
 					<span className="subtle text-sm">Business Name</span>
-					<input value={name} onChange={e => setName(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Business Inc." />
+					<Input value={name} onChange={e => setName(e.target.value)} placeholder="Business Inc." />
 				</label>
 				<label className="flex flex-col gap-2">
 					<span className="subtle text-sm">Location</span>
-					<input value={location} onChange={e => setLocation(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="City, ST" />
+					<Input value={location} onChange={e => setLocation(e.target.value)} placeholder="City, ST" />
 				</label>
 				<label className="flex flex-col gap-2">
 					<span className="subtle text-sm">Website</span>
-					<input value={url} onChange={e => setUrl(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="https://example.com" />
+					<Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com" />
 				</label>
 				<label className="flex flex-col gap-2">
 					<span className="subtle text-sm">Social Links (comma-separated)</span>
-					<input value={social} onChange={e => setSocial(e.target.value)} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="https://tiktok.com/.., https://instagram.com/.." />
+					<Input value={social} onChange={e => setSocial(e.target.value)} placeholder="https://tiktok.com/.., https://instagram.com/.." />
 				</label>
 				<div className="md:col-span-2">
 					<div className="subtle text-sm mb-2">Social Handles (structured)</div>
@@ -194,23 +197,20 @@ export default function BusinessForm({ onAdd }: Props) {
 						{(socialHandles || []).map((s, idx) => (
 							<div key={idx} className="bg-mid border border-border rounded-md p-3">
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-									<select
+									<Select
 										value={s.platform}
 										onChange={e => setSocialHandles(list => list.map((x, i) => i === idx ? { ...x, platform: e.target.value } : x))}
-										className="bg-background border border-border rounded-md px-3 py-2 text-white"
 									>
 										{['Instagram','TikTok','YouTube','Twitter/X','Twitch','Snapchat','Facebook','Other'].map(p => <option key={p} value={p}>{p}</option>)}
-									</select>
-									<input
+									</Select>
+									<Input
 										value={s.handle}
 										onChange={e => setSocialHandles(list => list.map((x, i) => i === idx ? { ...x, handle: e.target.value } : x))}
-										className="bg-background border border-border rounded-md px-3 py-2 text-white"
 										placeholder="@brand"
 									/>
-									<input
+									<Input
 										value={s.url || ''}
 										onChange={e => setSocialHandles(list => list.map((x, i) => i === idx ? { ...x, url: e.target.value } : x))}
-										className="bg-background border border-border rounded-md px-3 py-2 text-white"
 										placeholder="Full URL"
 									/>
 								</div>
@@ -226,7 +226,7 @@ export default function BusinessForm({ onAdd }: Props) {
 				</div>
 				<label className="md:col-span-2 flex flex-col gap-2">
 					<span className="subtle text-sm">Description</span>
-					<textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Tell us about the business, its story, goals, and audience." />
+					<Textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} placeholder="Tell us about the business, its story, goals, and audience." />
 				</label>
 			</div>
 			<p className="mt-3 subtle text-sm">We’ll auto-extract history, mission, goals, marketing needs, and suggest a level badge.</p>

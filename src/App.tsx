@@ -52,7 +52,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 				<div className="mx-auto max-w-2xl p-6">
 					<h1 className="headline text-2xl mb-2">Something went wrong</h1>
 					<p className="text-gray-400 text-sm mb-4">An error occurred while rendering the app.</p>
-					<pre className="card p-4 overflow-auto text-xs">{String(this.state.error)}</pre>
+					<pre className="card overflow-auto text-xs">{String(this.state.error)}</pre>
 				</div>
 			)
 		}
@@ -91,6 +91,7 @@ export default function App() {
 	const [userMenuOpen, setUserMenuOpen] = useState(false)
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const autosave = useAutosaveProfile({ userId: currentUser?.id, debounceMs: 800 })
+	const cloudConfigured = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
 	useEffect(() => save('athlete', athlete), [athlete])
 	useEffect(() => save('businesses', businesses), [businesses])
@@ -208,7 +209,7 @@ export default function App() {
 			<ErrorBoundary>
 			<div className="min-h-screen bg-background light-theme">
 				<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
-					<div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
+					<div className="mx-auto max-w-6xl px-4 md:px-6 py-4 flex items-center justify-between">
 						<div className="flex items-center gap-3">
 							<div className="w-8 h-8 rounded-lg bg-brand-red shadow-glow overflow-hidden">
 								<img
@@ -222,7 +223,14 @@ export default function App() {
 							</div>
 							<h1 className="headline text-2xl">Athlete Ledger</h1>
 						</div>
-						<div className="relative">
+						<div className="relative flex flex-col items-end gap-1">
+							<div className="text-xs">
+								{cloudConfigured ? (
+									<span className="text-green-300">Cloud sync: Available</span>
+								) : (
+									<span className="text-amber-300">Cloud sync unavailable (missing env)</span>
+								)}
+							</div>
 							{currentUser ? (
 								<div className="flex items-center gap-3">
 									<button
@@ -249,7 +257,27 @@ export default function App() {
 						</div>
 					</div>
 				</header>
-				<main className="mx-auto max-w-7xl px-4 pt-6 pb-24 md:pb-6">
+				<main className="mx-auto max-w-6xl px-4 md:px-6 pt-6 pb-24 md:pb-6">
+					{(() => {
+						const params = new URLSearchParams(window.location.search)
+						const showDebug = params.get('debug') === '1'
+						if (!showDebug) return null
+						return (
+							<div className="mb-4 p-3 rounded-md border border-border bg-surface text-xs text-gray-200">
+								<div className="flex items-center justify-between">
+									<div>
+										<div>User ID: <span className="text-white">{currentUser?.id || '—'}</span></div>
+										<div>Last saved: <span className="text-white">{autosave.lastSavedAt ? new Date(autosave.lastSavedAt).toLocaleString() : '—'}</span></div>
+										<div>Status: <span className="text-white">{autosave.statusText || '—'}</span></div>
+										{autosave.error && <div>Error: <span className="text-amber-300">{autosave.error}</span></div>}
+									</div>
+									<div>
+										<Button variant="ghost" onClick={() => autosave.refresh()}>Force reload from Supabase</Button>
+									</div>
+								</div>
+							</div>
+						)
+					})()}
 					<div className="grid grid-cols-1 md:grid-cols-[240px,1fr] gap-6">
 						<div className="hidden md:block">
 							<Sidebar
@@ -368,7 +396,7 @@ export default function App() {
 									if (!m) return null
 									const active = selectedBizId === null || selectedBizId === b.id
 									return (
-										<section key={b.id} className={`card p-5 ${active ? 'fade-in' : 'opacity-60'}`}>
+										<section key={b.id} className={`card ${active ? 'fade-in' : 'opacity-60'}`}>
 											<header className="flex items-center justify-between mb-4">
 												<div>
 													<div className="text-white font-semibold text-lg">{b.name}</div>

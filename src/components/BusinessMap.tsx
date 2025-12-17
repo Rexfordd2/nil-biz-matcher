@@ -64,7 +64,7 @@ export default function BusinessMap({ businesses, selectedId, onSelectBusiness }
 
 	if (!hasCoords) {
 		return (
-			<div className="card p-4 text-sm text-gray-300">
+			<div className="card text-sm text-gray-300">
 				Map not available for these results (no coordinates).
 			</div>
 		)

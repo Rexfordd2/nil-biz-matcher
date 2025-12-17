@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import Button from '../ui/Button'
+import Input from '../ui/Input'
+import Select from '../ui/Select'
 import Card from '../ui/Card'
 import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
@@ -70,44 +72,40 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 				<form className="space-y-4" onSubmit={handleSubmit}>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Display name</span>
-						<input
+						<Input
 							type="text"
 							value={displayName}
 							onChange={e => setDisplayName(e.target.value)}
 							placeholder="Your display name"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Role</span>
-						<select
+						<Select
 							value={role}
 							onChange={e => setRole(e.target.value as Role)}
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						>
 							<option value="athlete">Athlete</option>
 							<option value="parent">Parent/Guardian</option>
 							<option value="coach">Coach/AD/Agent</option>
-						</select>
+						</Select>
 					</label>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Email</span>
-						<input
+						<Input
 							type="email"
 							value={email}
 							onChange={e => setEmail(e.target.value)}
 							placeholder="you@example.com"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Password</span>
-						<input
+						<Input
 							type="password"
 							value={password}
 							onChange={e => setPassword(e.target.value)}
 							placeholder="••••••••"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					{err && <div className="text-red-400 text-sm">{err}</div>}

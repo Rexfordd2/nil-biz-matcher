@@ -19,7 +19,7 @@ export default function NILHub({ onGoVendors }: { onGoVendors?: () => void }) {
 		<Card title="NIL Rules & Guidelines Hub">
 			<div className="space-y-4 text-gray-200">
 				<p className="text-white font-semibold">Stay smart. Keep it clean. Bring a parent/guardian along.</p>
-				<section className="card p-4">
+				<section className="card">
 					<h3 className="headline text-lg mb-1">Learn NIL with Skool (Community)</h3>
 					<p className="text-gray-300 mb-3">
 						Step-by-step NIL education, office hours, and resources for athletes and parents who want to understand NIL and build their brand the right way.
@@ -30,7 +30,7 @@ export default function NILHub({ onGoVendors }: { onGoVendors?: () => void }) {
 				</section>
 
 				{onGoVendors && (
-					<section className="card p-4">
+					<section className="card">
 						<h3 className="headline text-lg mb-2">Support & Services</h3>
 						<p className="text-gray-300 mb-3">
 							Looking for help? Browse our informational directory of trusted partners (photographers, editors, trainers, and more).
@@ -41,7 +41,7 @@ export default function NILHub({ onGoVendors }: { onGoVendors?: () => void }) {
 						</div>
 					</section>
 				)}
-				<section className="card p-4">
+				<section className="card">
 					<h3 className="headline text-lg mb-2">External NIL Resources</h3>
 					<ul className="list-disc pl-6 space-y-1">
 						<li>
@@ -56,7 +56,7 @@ export default function NILHub({ onGoVendors }: { onGoVendors?: () => void }) {
 					</ul>
 				</section>
 
-				<section className="card p-4">
+				<section className="card">
 					<h3 className="headline text-lg mb-2">Tax & Entity Prep (Educational)</h3>
 					<ul className="space-y-2 text-sm">
 						<li className="flex items-center gap-2">

@@ -9,7 +9,7 @@ type Props = PropsWithChildren<{
 
 export default function Card({ title, actions, className, children }: Props) {
 	return (
-		<section className={clsx('card p-5', className)}>
+		<section className={clsx('card', className)}>
 			{(title || actions) && (
 				<header className="mb-4 flex items-center justify-between">
 					{title && <h3 className="headline text-xl">{title}</h3>}

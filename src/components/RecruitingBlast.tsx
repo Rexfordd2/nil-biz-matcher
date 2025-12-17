@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
+import Input from './ui/Input'
+import Textarea from './ui/Textarea'
 import { useToast } from './ui/Toast'
 import type { AthleteProfile } from '../types'
 import type { CoachOutreach, HighlightClip, RecruitingCoach } from '../recruiting/blastTypes'
@@ -199,11 +201,11 @@ export default function RecruitingBlast({ athlete }: Props) {
 			<Card title="Coaches">
 				<div className="space-y-3">
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-						<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Name" value={coachForm.name} onChange={e => setCoachForm({ ...coachForm, name: e.target.value })} />
-						<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Email" value={coachForm.email} onChange={e => setCoachForm({ ...coachForm, email: e.target.value })} />
-						<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="School" value={coachForm.school} onChange={e => setCoachForm({ ...coachForm, school: e.target.value })} />
-						<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Sport" value={coachForm.sport} onChange={e => setCoachForm({ ...coachForm, sport: e.target.value })} />
-						<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Level (e.g., D1, NAIA)" value={coachForm.level} onChange={e => setCoachForm({ ...coachForm, level: e.target.value })} />
+						<Input placeholder="Name" value={coachForm.name} onChange={e => setCoachForm({ ...coachForm, name: e.target.value })} />
+						<Input placeholder="Email" value={coachForm.email} onChange={e => setCoachForm({ ...coachForm, email: e.target.value })} />
+						<Input placeholder="School" value={coachForm.school} onChange={e => setCoachForm({ ...coachForm, school: e.target.value })} />
+						<Input placeholder="Sport" value={coachForm.sport} onChange={e => setCoachForm({ ...coachForm, sport: e.target.value })} />
+						<Input placeholder="Level (e.g., D1, NAIA)" value={coachForm.level} onChange={e => setCoachForm({ ...coachForm, level: e.target.value })} />
 					</div>
 					<div className="flex justify-end">
 						<Button onClick={onAddCoach}>Add Coach</Button>
@@ -249,9 +251,9 @@ export default function RecruitingBlast({ athlete }: Props) {
 			<Card title="Highlight Clips">
 				<div className="space-y-3">
 					<div className="grid grid-cols-1 gap-2">
-						<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Title" value={clipForm.title} onChange={e => setClipForm({ ...clipForm, title: e.target.value })} />
-						<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Video URL (Hudl/YouTube)" value={clipForm.videoUrl} onChange={e => setClipForm({ ...clipForm, videoUrl: e.target.value })} />
-						<textarea className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Description (optional)" value={clipForm.description || ''} onChange={e => setClipForm({ ...clipForm, description: e.target.value })} />
+						<Input placeholder="Title" value={clipForm.title} onChange={e => setClipForm({ ...clipForm, title: e.target.value })} />
+						<Input placeholder="Video URL (Hudl/YouTube)" value={clipForm.videoUrl} onChange={e => setClipForm({ ...clipForm, videoUrl: e.target.value })} />
+						<Textarea placeholder="Description (optional)" value={clipForm.description || ''} onChange={e => setClipForm({ ...clipForm, description: e.target.value })} />
 					</div>
 					<div className="flex justify-end">
 						<Button onClick={onAddClip}>Save Clip</Button>
@@ -281,8 +283,8 @@ export default function RecruitingBlast({ athlete }: Props) {
 
 			<Card title="Compose & Send">
 				<div className="space-y-3">
-					<input className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} />
-					<textarea className="bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[160px]" placeholder="Body" value={body} onChange={e => setBody(e.target.value)} />
+					<Input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} />
+					<Textarea className="min-h-[160px]" placeholder="Body" value={body} onChange={e => setBody(e.target.value)} />
 					<div className="flex justify-end">
 						<Button onClick={onSendBlast}>Send Blast</Button>
 					</div>

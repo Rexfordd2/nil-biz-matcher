@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
+import Select from './ui/Select'
 import { Business, BusinessLevel, FitRating } from '../types'
 import { FitBadge, LevelBadge } from './ui/Badge'
 import { useToast } from './ui/Toast'
@@ -40,19 +41,19 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 	return (
 		<Card title="Business Portfolio Dashboard" actions={
 			<div className="flex gap-2">
-				<select value={filterLevel} onChange={e => setFilterLevel(e.target.value as BusinessLevel | 'ALL')} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<Select value={filterLevel} onChange={e => setFilterLevel(e.target.value as BusinessLevel | 'ALL')}>
 					<option value="ALL">All Levels</option>
 					<option value="LOCAL">LOCAL</option>
 					<option value="REGIONAL">REGIONAL</option>
 					<option value="NATIONAL">NATIONAL</option>
-				</select>
-				<select value={filterFit} onChange={e => setFilterFit(e.target.value as FitRating | 'ALL')} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				</Select>
+				<Select value={filterFit} onChange={e => setFilterFit(e.target.value as FitRating | 'ALL')}>
 					<option value="ALL">All Fits</option>
 					<option value="PERFECT FIT">PERFECT</option>
 					<option value="GOOD FIT">GOOD</option>
 					<option value="STRETCH FIT">STRETCH</option>
 					<option value="POOR FIT">POOR</option>
-				</select>
+				</Select>
 			</div>
 		}>
 			<div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -66,7 +67,7 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 				</div>
 			</div>
 			<div className="overflow-x-auto">
-				<table className="w-full text-left text-sm">
+				<table className="table w-full text-left text-sm">
 					<thead className="text-gray-400">
 						<tr>
 							<th className="py-2">Business</th>
@@ -90,16 +91,15 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 									{b.match ? <FitBadge rating={b.match.rating} /> : <span className="subtle">—</span>}
 								</td>
 								<td className="py-3">
-									<select
+									<Select
 										value={b.status || 'Not Contacted'}
 										onChange={e => {
 											onUpdate({ ...b, status: e.target.value as Business['status'] })
 											show('Status updated')
 										}}
-										className="bg-mid border border-border rounded-md px-2 py-1 text-white"
 									>
 										{statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-									</select>
+									</Select>
 								</td>
 								<td className="py-3">
 									<div className="flex gap-2">

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../ui/Button'
+import Input from '../ui/Input'
 import Card from '../ui/Card'
 import { type CurrentUser } from '../../utils/auth'
 import { useToast } from '../ui/Toast'
@@ -41,32 +42,29 @@ export default function SignUp({ onSignedIn }: Props) {
 				<form className="space-y-4" onSubmit={handleSubmit}>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Full name</span>
-						<input
+						<Input
 							type="text"
 							value={fullName}
 							onChange={e => setFullName(e.target.value)}
 							placeholder="Your full name"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Email</span>
-						<input
+						<Input
 							type="email"
 							value={email}
 							onChange={e => setEmail(e.target.value)}
 							placeholder="you@example.com"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Phone (optional)</span>
-						<input
+						<Input
 							type="tel"
 							value={phone}
 							onChange={e => setPhone(e.target.value)}
 							placeholder="(555) 123-4567"
-							className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						/>
 					</label>
 					<label className="inline-flex items-center gap-2 text-sm text-gray-300">

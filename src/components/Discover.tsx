@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
+import Input from './ui/Input'
 import BusinessMap from './BusinessMap'
 import BusinessSwipeDeck from './BusinessSwipeDeck'
 import { Business } from '../types'
@@ -101,16 +102,14 @@ export default function Discover() {
 					</p>
 				)}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-					<input
+					<Input
 						value={term}
 						onChange={e => setTerm(e.target.value)}
-						className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						placeholder="Search term (pizza, gym, store...)"
 					/>
-					<input
+					<Input
 						value={loc}
 						onChange={e => setLoc(e.target.value)}
-						className="bg-mid border border-border rounded-md px-3 py-2 text-white"
 						placeholder="Location (City, ST or zip)"
 					/>
 					<div className="flex items-center">
@@ -148,7 +147,7 @@ export default function Discover() {
 							onSwipeDecision={onSwipeDecision}
 						/>
 						{active && (
-							<div className="card p-4">
+							<div className="card">
 								<div className="flex items-center justify-between mb-2">
 									<div className="text-white font-semibold truncate">{active.name}</div>
 									{typeof active.rating === 'number' && (
