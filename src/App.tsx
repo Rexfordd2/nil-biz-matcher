@@ -236,7 +236,13 @@ export default function App() {
 					.limit(1)
 				if (error) {
 					next.dbOk = false
-					next.dbError = [typeof error.status !== 'undefined' ? `status=${error.status}` : null, typeof error.code !== 'undefined' ? `code=${error.code}` : null, error.message ? `message=${error.message}` : null].filter(Boolean).join(' | ')
+					next.dbError = [
+						'status' in error ? `status=${(error as any).status}` : null,
+						typeof error.code !== 'undefined' ? `code=${error.code}` : null,
+						error.message ? `message=${error.message}` : null
+					]
+						.filter(Boolean)
+						.join(' | ')
 				} else {
 					next.dbOk = true
 					next.dbError = null
