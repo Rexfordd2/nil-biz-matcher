@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AthleteProfile } from '../types'
-import { supabase } from '../lib/supabaseClient'
+import { supabase, supabaseEnvConfigured } from '../lib/supabaseClient'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error' | 'loading'
 
@@ -23,6 +23,7 @@ export function useAutosaveProfile(params: {
 	const [status, setStatus] = useState<Status>('loading')
 	const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
 	const [error, setError] = useState<string | null>(null)
+	const [hadSupabaseError, setHadSupabaseError] = useState(false)
 
 	const timerRef = useRef<number | null>(null)
 	const latestDraftRef = useRef<string>('') // serialized
@@ -31,19 +32,35 @@ export function useAutosaveProfile(params: {
 	const lsKey = useMemo(() => (userId ? `athleteProfileDraft:${userId}` : null), [userId])
 
 	const statusText = useMemo(() => {
-		if (!supabase && userId) return 'Cloud sync unavailable'
+		// Only show "Cloud sync unavailable" if env missing OR session missing OR Supabase returned an error
+		if (!supabaseEnvConfigured || !userId || hadSupabaseError) return 'Cloud sync unavailable'
 		if (status === 'saving') return 'Saving…'
 		if (status === 'saved') return 'All changes saved'
 		if (status === 'error') return "Couldn't save. Will retry."
 		if (status === 'loading') return 'Loading…'
 		return ''
-	}, [status, userId])
+	}, [status, userId, hadSupabaseError])
+
+	function formatSupabaseError(err: any): string {
+		// Capture status codes and messages as-is; do not paraphrase
+		const status = err?.status
+		const code = err?.code
+		const message = err?.message || String(err)
+		const details = err?.details
+		const parts = []
+		if (typeof status !== 'undefined') parts.push(`status=${status}`)
+		if (typeof code !== 'undefined') parts.push(`code=${code}`)
+		if (typeof message !== 'undefined') parts.push(`message=${message}`)
+		if (typeof details !== 'undefined') parts.push(`details=${details}`)
+		return parts.join(' | ')
+	}
 
 	const loadFromServer = useCallback(async () => {
 		if (!userId) {
 			setInitialProfile(undefined)
 			setStatus('idle')
 			setLastSavedAt(null)
+			setHadSupabaseError(false)
 			return
 		}
 		setStatus('loading')
@@ -64,9 +81,10 @@ export function useAutosaveProfile(params: {
 					cloudUpdatedAt = (data as any).updated_at ? new Date((data as any).updated_at as string).getTime() : 0
 				} else {
 					// Ensure row exists for this user
-					await supabase
+					const up = await supabase
 						.from('athlete_profiles')
 						.upsert({ user_id: userId, profile: {} }, { onConflict: 'user_id' })
+					if ((up as any)?.error) throw (up as any).error
 				}
 			}
 			let useProfile = cloudProfile || ({} as AthleteProfile)
@@ -92,7 +110,8 @@ export function useAutosaveProfile(params: {
 			latestDraftRef.current = JSON.stringify(useProfile || {})
 			lastSentRef.current = JSON.stringify(cloudProfile || {})
 		} catch (err: any) {
-			setError(err?.message || 'Failed to load')
+			setHadSupabaseError(true)
+			setError(formatSupabaseError(err) || 'Failed to load')
 			setStatus('error')
 		}
 	}, [userId, lsKey])
@@ -109,6 +128,7 @@ export function useAutosaveProfile(params: {
 		const body = JSON.parse(serialized) as AthleteProfile
 		setStatus('saving')
 		setError(null)
+		setHadSupabaseError(false)
 		try {
 			if (supabase) {
 				const { error } = await supabase
@@ -138,7 +158,8 @@ export function useAutosaveProfile(params: {
 			}
 		} catch (err: any) {
 			setStatus('error')
-			setError(err?.message || 'Save error')
+			setHadSupabaseError(true)
+			setError(formatSupabaseError(err) || 'Save error')
 		}
 	}, [userId, lsKey])
 

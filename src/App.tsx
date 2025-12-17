@@ -33,6 +33,8 @@ import Login from './components/auth/Login'
 import LoginSupabase from './components/auth/LoginSupabase'
 import { authMe, authLogout, type CurrentUser } from './utils/auth'
 import { useAutosaveProfile } from './hooks/useAutosaveProfile'
+import { supabase, supabaseEnvConfigured } from './lib/supabaseClient'
+import { getSession } from './lib/authSupabase'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -91,7 +93,16 @@ export default function App() {
 	const [userMenuOpen, setUserMenuOpen] = useState(false)
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const autosave = useAutosaveProfile({ userId: currentUser?.id, debounceMs: 800 })
-	const cloudConfigured = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+	const cloudConfigured = supabaseEnvConfigured
+
+	// Debug-only health check state
+	const [healthRunning, setHealthRunning] = useState(false)
+	const [healthResult, setHealthResult] = useState<{
+		sessionOk: boolean | null
+		sessionError?: string | null
+		dbOk: boolean | null
+		dbError?: string | null
+	}>(() => ({ sessionOk: null, sessionError: null, dbOk: null, dbError: null }))
 
 	useEffect(() => save('athlete', athlete), [athlete])
 	useEffect(() => save('businesses', businesses), [businesses])
@@ -195,6 +206,53 @@ export default function App() {
 		navigator.clipboard.writeText(text).then(() => show('Copied to clipboard'))
 	}
 
+	async function runHealthCheck() {
+		setHealthRunning(true)
+		const next: typeof healthResult = { sessionOk: null, sessionError: null, dbOk: null, dbError: null }
+		try {
+			// Session check
+			const sess = await getSession()
+			if (sess.error) {
+				next.sessionOk = false
+				next.sessionError = sess.error
+			} else {
+				next.sessionOk = Boolean(sess.data)
+				next.sessionError = null
+			}
+		} catch (e: any) {
+			next.sessionOk = false
+			next.sessionError = String(e?.message || e)
+		}
+		try {
+			// DB check (non-destructive)
+			if (!supabase) {
+				next.dbOk = false
+				next.dbError = 'Supabase client not initialized'
+			} else {
+				const { data, error } = await supabase
+					.from('athlete_profiles')
+					.select('updated_at')
+					.eq('user_id', currentUser?.id || '00000000-0000-0000-0000-000000000000')
+					.limit(1)
+				if (error) {
+					next.dbOk = false
+					next.dbError = [typeof error.status !== 'undefined' ? `status=${error.status}` : null, typeof error.code !== 'undefined' ? `code=${error.code}` : null, error.message ? `message=${error.message}` : null].filter(Boolean).join(' | ')
+				} else {
+					next.dbOk = true
+					next.dbError = null
+				}
+			}
+		} catch (e: any) {
+			next.dbOk = false
+			next.dbError = String(e?.message || e)
+		}
+		setHealthResult(next)
+		setHealthRunning(false)
+	}
+
+	// Derived cloud availability for header
+	const cloudAvailable = cloudConfigured && Boolean(currentUser) && !Boolean(autosave.error)
+
 	async function handleLogout() {
 		try {
 			await authLogout()
@@ -225,10 +283,10 @@ export default function App() {
 						</div>
 						<div className="relative flex flex-col items-end gap-1">
 							<div className="text-xs">
-								{cloudConfigured ? (
+								{cloudAvailable ? (
 									<span className="text-green-300">Cloud sync: Available</span>
 								) : (
-									<span className="text-amber-300">Cloud sync unavailable (missing env)</span>
+									<span className="text-amber-300">Cloud sync unavailable</span>
 								)}
 							</div>
 							{currentUser ? (
@@ -267,12 +325,20 @@ export default function App() {
 								<div className="flex items-center justify-between">
 									<div>
 										<div>User ID: <span className="text-white">{currentUser?.id || '—'}</span></div>
+										<div>Env configured: <span className="text-white">{String(cloudConfigured)}</span></div>
 										<div>Last saved: <span className="text-white">{autosave.lastSavedAt ? new Date(autosave.lastSavedAt).toLocaleString() : '—'}</span></div>
 										<div>Status: <span className="text-white">{autosave.statusText || '—'}</span></div>
 										{autosave.error && <div>Error: <span className="text-amber-300">{autosave.error}</span></div>}
+										{(healthResult.sessionOk !== null || healthResult.dbOk !== null) && (
+											<div className="mt-2 space-y-1">
+												<div>Health Session: <span className={healthResult.sessionOk ? 'text-green-300' : 'text-amber-300'}>{healthResult.sessionOk ? 'pass' : 'fail'}</span> {healthResult.sessionError ? `- ${healthResult.sessionError}` : ''}</div>
+												<div>Health DB: <span className={healthResult.dbOk ? 'text-green-300' : 'text-amber-300'}>{healthResult.dbOk ? 'pass' : 'fail'}</span> {healthResult.dbError ? `- ${healthResult.dbError}` : ''}</div>
+											</div>
+										)}
 									</div>
 									<div>
 										<Button variant="ghost" onClick={() => autosave.refresh()}>Force reload from Supabase</Button>
+										<Button variant="ghost" onClick={() => runHealthCheck()} disabled={healthRunning} className="ml-2">{healthRunning ? 'Health Check…' : 'Health Check'}</Button>
 									</div>
 								</div>
 							</div>
