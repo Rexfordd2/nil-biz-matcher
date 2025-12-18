@@ -31,10 +31,13 @@ import SignUp from './components/auth/SignUp'
 import SignUpSupabase from './components/auth/SignUpSupabase'
 import Login from './components/auth/Login'
 import LoginSupabase from './components/auth/LoginSupabase'
-import { authMe, authLogout, type CurrentUser } from './utils/auth'
+import { type CurrentUser } from './utils/auth'
 import { useAutosaveProfile } from './hooks/useAutosaveProfile'
 import { supabase, supabaseEnvConfigured } from './lib/supabaseClient'
 import { getSession } from './lib/authSupabase'
+import { signOut } from './lib/authSupabase'
+import LoginPage from './components/LoginPage'
+import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseSessionContext'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -83,7 +86,7 @@ type Tab =
 	| 'Sign Up'
 	| 'Log In'
 
-export default function App() {
+function MainApp() {
 	const [tab, setTab] = useState<Tab>('Welcome')
 	const [athlete, setAthlete] = useState<AthleteProfile | null>(() => migrateAthleteProfile(load('athlete', null)))
 	const [businesses, setBusinesses] = useState<Business[]>(() => load('businesses', []))
@@ -92,7 +95,8 @@ export default function App() {
 	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 	const [userMenuOpen, setUserMenuOpen] = useState(false)
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-	const autosave = useAutosaveProfile({ userId: currentUser?.id, debounceMs: 800 })
+	const { user, loading } = useSupabaseSession()
+	const autosave = useAutosaveProfile({ user, debounceMs: 800 })
 	const cloudConfigured = supabaseEnvConfigured
 
 	// Debug-only health check state
@@ -132,33 +136,21 @@ export default function App() {
 		// #endregion
 	}, [])
 
-	// Load current session on mount
+	// Map Supabase user to CurrentUser shape whenever it changes
 	useEffect(() => {
-		authMe().then(u => {
-			// #region agent log
-			const __dbgAuth = {
-				sessionId: 'debug-session',
-				runId: 'initial',
-				hypothesisId: 'B',
-				location: 'src/App.tsx:authMeEffect',
-				message: 'Auth session check on mount',
-				data: { authorized: Boolean(u) },
-				timestamp: Date.now()
+		if (user) {
+			const mapped: CurrentUser = {
+				id: user.id,
+				email: user.email || '',
+				fullName: (user.user_metadata?.full_name as string) || user.email || 'User',
+				role: (user.user_metadata?.role as string) || 'athlete',
+				marketingConsent: Boolean(user.user_metadata?.marketingConsent)
 			}
-			fetch('http://127.0.0.1:7242/ingest/f93d76cb-ddaa-401d-972f-239de3ada967', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(__dbgAuth)
-			}).catch(() => {})
-			fetch('/api/debug/log', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(__dbgAuth)
-			}).catch(() => {})
-			// #endregion
-			if (u) setCurrentUser(u)
-		})
-	}, [])
+			setCurrentUser(mapped)
+		} else {
+			setCurrentUser(null)
+		}
+	}, [user])
 
 	const selectedBiz = useMemo(() => businesses.find(b => b.id === selectedBizId) || null, [selectedBizId, businesses])
 
@@ -261,7 +253,7 @@ export default function App() {
 
 	async function handleLogout() {
 		try {
-			await authLogout()
+			await signOut()
 		} catch {}
 		setCurrentUser(null)
 		setUserMenuOpen(false)
@@ -791,6 +783,24 @@ export default function App() {
 			</div>
 			</ErrorBoundary>
 		</ToastProvider>
+	)
+}
+
+function AppShell() {
+	const { user, loading } = useSupabaseSession()
+	if (!supabaseEnvConfigured) {
+		return <div>Cloud sync unavailable (missing Supabase env variables)</div>
+	}
+	if (loading) return <div>Loading auth…</div>
+	if (!user) return <LoginPage />
+	return <MainApp />
+}
+
+export default function App() {
+	return (
+		<SupabaseSessionProvider>
+			<AppShell />
+		</SupabaseSessionProvider>
 	)
 }
 

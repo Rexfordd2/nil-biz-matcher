@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
 import type { AthleteProfile } from '../types'
 import { supabase, supabaseEnvConfigured } from '../lib/supabaseClient'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error' | 'loading'
 
 export function useAutosaveProfile(params: {
-	userId?: string | null
+	user: User | null
 	debounceMs?: number
 }): {
 	initialProfile: AthleteProfile | undefined
@@ -16,7 +17,7 @@ export function useAutosaveProfile(params: {
 	onDraftChange: (draft: AthleteProfile) => void
 	refresh: () => void
 } {
-	const userId = params.userId || null
+	const userId = params.user?.id || null
 	const debounceMs = params.debounceMs ?? 800
 
 	const [initialProfile, setInitialProfile] = useState<AthleteProfile | undefined>(undefined)
