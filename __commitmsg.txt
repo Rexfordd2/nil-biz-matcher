@@ -1,0 +1,7 @@
+chore: production persistence hardening
+
+- Add runtime env sanity check for Supabase vars (boolean only)
+- Surface Supabase select/upsert errors verbatim in debug panel
+- Add debug-only Health Check (session and DB select)
+- Tighten Cloud sync availability logic
+- Add docs/production-release.md checklist
