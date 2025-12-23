@@ -8,6 +8,7 @@ import { supabase, supabaseEnvConfigured } from '../lib/supabaseClient'
 import { useSupabaseSession } from '../context/SupabaseSessionContext'
 import { parseCsvFile } from '../utils/csv'
 import { CsvOrgRow, normalizeColumns, parseContacts, validateRow } from '../utils/recruitingImport'
+import Papa from 'papaparse'
 
 type Org = {
   id: string
@@ -488,6 +489,7 @@ function Field({ label, value, kind }: { label: string, value: string | null, ki
 function TargetsPanel({ userId }: { userId: string | null }) {
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<TargetRow[]>([])
+  const [dueOnly, setDueOnly] = useState<boolean>(false)
 
   async function loadTargets() {
     if (!userId) return
@@ -523,13 +525,60 @@ function TargetsPanel({ userId }: { userId: string | null }) {
     return value.split(',').map(s => s.trim()).filter(Boolean)
   }
 
+  const filteredRows = rows.filter(r => {
+    if (!dueOnly) return true
+    if (!r.next_followup_at) return false
+    try {
+      return new Date(r.next_followup_at).getTime() <= Date.now()
+    } catch {
+      return false
+    }
+  })
+
+  function exportCsv() {
+    const data = filteredRows.map(r => ({
+      org_name: r.orgs?.name ?? '',
+      sport: r.orgs?.sport ?? '',
+      level: r.orgs?.level ?? '',
+      org_type: r.orgs?.org_type ?? '',
+      location: [r.orgs?.city, r.orgs?.region, r.orgs?.country].filter(Boolean).join(', '),
+      website_url: r.orgs?.website_url ?? '',
+      general_email: r.orgs?.general_email ?? '',
+      general_phone: r.orgs?.general_phone ?? '',
+      status: r.status,
+      tags: (r.tags || []).join(','),
+      notes: r.notes ?? '',
+      next_followup_at: r.next_followup_at ?? ''
+    }))
+    const csv = Papa.unparse(data, { header: true })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'my-targets.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const STATUS_OPTIONS = ['To Contact', 'Contacted', 'In Progress', 'Offer/Visit', 'Closed']
+
   return (
-    <Card title="My Targets">
+    <Card
+      title="My Targets"
+      actions={(
+        <div className="flex items-center gap-2">
+          <Button variant={dueOnly ? 'primary' : 'secondary'} onClick={() => setDueOnly(v => !v)}>
+            {dueOnly ? 'Due Follow-ups (On)' : 'Due Follow-ups'}
+          </Button>
+          <Button onClick={exportCsv} disabled={filteredRows.length === 0}>Export CSV</Button>
+        </div>
+      )}
+    >
       <div className="space-y-4">
-        {rows.length === 0 && (
+        {filteredRows.length === 0 && (
           <div className="text-foreground/70">{loading ? 'Loading…' : 'No saved targets yet.'}</div>
         )}
-        {rows.map(r => (
+        {filteredRows.map(r => (
           <div key={r.id} className="border border-border rounded-lg p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -554,6 +603,19 @@ function TargetsPanel({ userId }: { userId: string | null }) {
                   </Button>
                 )}
               </div>
+            </div>
+
+            {/* Quick status chips */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {STATUS_OPTIONS.map(s => (
+                <Button
+                  key={`${r.id}-${s}`}
+                  variant={r.status === s ? 'primary' : 'secondary'}
+                  onClick={() => updateRow(r.id, { status: s })}
+                >
+                  {s.replace('/', '-')}
+                </Button>
+              ))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
