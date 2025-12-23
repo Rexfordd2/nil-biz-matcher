@@ -6,6 +6,8 @@ import Textarea from './ui/Textarea'
 import Button from './ui/Button'
 import { supabase, supabaseEnvConfigured } from '../lib/supabaseClient'
 import { useSupabaseSession } from '../context/SupabaseSessionContext'
+import { parseCsvFile } from '../utils/csv'
+import { CsvOrgRow, normalizeColumns, parseContacts, validateRow } from '../utils/recruitingImport'
 
 type Org = {
   id: string
@@ -102,6 +104,12 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   const [contacts, setContacts] = useState<OrgContact[]>([])
   const [savingTarget, setSavingTarget] = useState(false)
   const [devBusy, setDevBusy] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importParsing, setImportParsing] = useState(false)
+  const [importRows, setImportRows] = useState<CsvOrgRow[]>([])
+  const [importErrors, setImportErrors] = useState<string[]>([])
+  const [importPhase, setImportPhase] = useState<'idle' | 'parsed' | 'importing' | 'done'>('idle')
+  const [importSummary, setImportSummary] = useState<{ orgs: number; contacts: number; failures: number } | null>(null)
 
   const canQuery = useMemo(() => Boolean(userId), [userId])
 
@@ -192,10 +200,15 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   return (
     <Card
       title="Directory"
-      actions={import.meta.env.DEV && (
-        <Button onClick={seedSample} disabled={!userId || devBusy}>
-          {devBusy ? 'Seeding…' : 'Seed sample (dev)'}
-        </Button>
+      actions={(
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setImportOpen(true)} disabled={!userId}>Import CSV</Button>
+          {import.meta.env.DEV && (
+            <Button onClick={seedSample} disabled={!userId || devBusy}>
+              {devBusy ? 'Seeding…' : 'Seed sample (dev)'}
+            </Button>
+          )}
+        </div>
       )}
     >
       <div className="grid grid-cols-1 md:grid-cols-[1fr,360px] gap-6">
@@ -277,6 +290,175 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Import modal */}
+        {importOpen && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center md:justify-center">
+            <div className="bg-background rounded-t-xl md:rounded-xl w-full md:max-w-4xl p-4 border border-border">
+              <div className="flex items-start justify-between mb-2">
+                <div className="headline text-lg">Import CSV</div>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => { setImportOpen(false); setImportRows([]); setImportErrors([]); setImportPhase('idle'); setImportSummary(null) }}>Close</Button>
+                </div>
+              </div>
+
+              {importPhase === 'idle' && (
+                <div className="space-y-3">
+                  <div className="text-sm text-foreground/80">
+                    Expected columns (case-insensitive): org_name, sport, level, org_type, country, region, city, website_url, general_email, general_phone, source_url, contacts_json (optional).
+                  </div>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      setImportParsing(true)
+                      try {
+                        const { rows, errors } = await parseCsvFile(file)
+                        const normalized = rows.map(r => normalizeColumns(r))
+                        const validationErrors = normalized.flatMap((r, idx) => validateRow(r, idx))
+                        setImportRows(normalized)
+                        setImportErrors([...errors, ...validationErrors])
+                        setImportPhase('parsed')
+                      } finally {
+                        setImportParsing(false)
+                      }
+                    }}
+                  />
+                  {importParsing && <div className="text-sm">Parsing…</div>}
+                </div>
+              )}
+
+              {importPhase === 'parsed' && (
+                <div className="space-y-3">
+                  <div className="text-sm">
+                    Rows parsed: <span className="font-semibold">{importRows.length}</span>
+                  </div>
+                  {importErrors.length > 0 && (
+                    <div className="border border-amber-500/40 bg-amber-500/10 rounded-md p-3 text-sm">
+                      <div className="font-semibold mb-1">Errors</div>
+                      <ul className="list-disc pl-5 space-y-1 max-h-44 overflow-auto">
+                        {importErrors.map((e, i) => <li key={`err-${i}`}>{e}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="overflow-auto border border-border rounded-md">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-surface">
+                        <tr>
+                          {['org_name','sport','level','org_type','country','region','city','website_url','general_email','general_phone','source_url','contacts_json'].map(h => (
+                            <th key={h} className="px-2 py-2 text-left font-medium border-b border-border">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importRows.slice(0, 10).map((r, i) => (
+                          <tr key={`row-${i}`} className="border-b border-border">
+                            <td className="px-2 py-2">{r.org_name}</td>
+                            <td className="px-2 py-2">{r.sport}</td>
+                            <td className="px-2 py-2">{r.level}</td>
+                            <td className="px-2 py-2">{r.org_type}</td>
+                            <td className="px-2 py-2">{r.country}</td>
+                            <td className="px-2 py-2">{r.region}</td>
+                            <td className="px-2 py-2">{r.city}</td>
+                            <td className="px-2 py-2 break-all">{r.website_url}</td>
+                            <td className="px-2 py-2 break-all">{r.general_email}</td>
+                            <td className="px-2 py-2 break-all">{r.general_phone}</td>
+                            <td className="px-2 py-2 break-all">{r.source_url}</td>
+                            <td className="px-2 py-2"><span className="text-foreground/60">{r.contacts_json ? 'yes' : ''}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="text-xs text-foreground/70">Showing first 10 rows.</div>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={async () => {
+                        if (!userId) return
+                        setImportPhase('importing')
+                        let insertedOrgs = 0
+                        let insertedContacts = 0
+                        let failures = 0
+                        try {
+                          const orgPayload = importRows.map(r => ({
+                            name: r.org_name,
+                            sport: r.sport || null,
+                            level: r.level || null,
+                            org_type: r.org_type || null,
+                            country: r.country || null,
+                            region: r.region || null,
+                            city: r.city || null,
+                            website_url: r.website_url || null,
+                            general_email: r.general_email || null,
+                            general_phone: r.general_phone || null,
+                            source_url: r.source_url || null,
+                            owner_id: userId
+                          }))
+                          const { data: orgsIns, error: orgErr } = await supabase!.from('orgs').insert(orgPayload).select('*')
+                          if (orgErr) throw orgErr
+                          insertedOrgs = (orgsIns || []).length
+
+                          // Build contacts
+                          const contactsIns = []
+                          for (let i = 0; i < importRows.length; i++) {
+                            const row = importRows[i]
+                            const org = (orgsIns as any[])[i]
+                            if (!org) continue
+                            const contacts = parseContacts(row.contacts_json)
+                            for (const c of contacts) {
+                              contactsIns.push({
+                                org_id: org.id,
+                                role: c.role ?? null,
+                                name: c.name ?? null,
+                                email: c.email ?? null,
+                                phone: c.phone ?? null,
+                                contact_url: c.contact_url ?? null
+                              })
+                            }
+                          }
+                          if (contactsIns.length > 0) {
+                            const { data: contactsData, error: cErr } = await supabase!.from('org_contacts').insert(contactsIns).select('id')
+                            if (cErr) throw cErr
+                            insertedContacts = (contactsData || []).length
+                          }
+
+                          setImportSummary({ orgs: insertedOrgs, contacts: insertedContacts, failures })
+                          setImportPhase('done')
+                          await loadOrgs()
+                        } catch (e) {
+                          failures = importRows.length
+                          setImportSummary({ orgs: insertedOrgs, contacts: insertedContacts, failures })
+                          setImportPhase('done')
+                        }
+                      }}
+                      disabled={importErrors.length > 0 || !userId}
+                    >
+                      Confirm Import
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {importPhase === 'importing' && (
+                <div className="text-sm">Importing…</div>
+              )}
+
+              {importPhase === 'done' && importSummary && (
+                <div className="space-y-2">
+                  <div className="font-medium">Import complete</div>
+                  <div className="text-sm">Inserted orgs: {importSummary.orgs}</div>
+                  <div className="text-sm">Inserted contacts: {importSummary.contacts}</div>
+                  <div className="text-sm">Failures: {importSummary.failures}</div>
+                  <div className="flex justify-end">
+                    <Button onClick={() => { setImportOpen(false); setImportRows([]); setImportErrors([]); setImportPhase('idle'); setImportSummary(null) }}>Done</Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
