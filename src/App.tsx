@@ -38,6 +38,7 @@ import { getSession } from './lib/authSupabase'
 import { signOut } from './lib/authSupabase'
 import LoginPage from './components/LoginPage'
 import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseSessionContext'
+import { getBuildStamp } from './config/env'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -286,6 +287,9 @@ function MainApp() {
 								) : (
 									<span className="text-amber-300">Cloud sync unavailable</span>
 								)}
+							</div>
+							<div className="text-xs text-foreground/60">
+								{getBuildStamp()}
 							</div>
 							{currentUser ? (
 								<div className="flex items-center gap-3">

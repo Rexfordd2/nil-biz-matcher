@@ -117,6 +117,9 @@ export default function Discover() {
 
 	return (
 		<div className="space-y-5">
+			<div className="rounded-md border border-amber-400 bg-amber-900/30 px-3 py-2 text-amber-200 font-semibold uppercase tracking-wide">
+				NEW DISCOVER UI ACTIVE
+			</div>
 			<Card title="Discover Businesses" actions={
 				<Button onClick={onSearch} disabled={!hasClientKey || loading} className="red-glow">
 					{loading ? 'Searching…' : 'Search'}

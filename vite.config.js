@@ -62,8 +62,19 @@ function wrapRes(res) {
     };
     return r;
 }
+// Compute a build identifier at build time:
+// - Prefer VITE_BUILD_ID if provided (from Vercel env or local)
+// - Else use VERCEL_GIT_COMMIT_SHA when building on Vercel
+// - Else fallback to ISO timestamp
+var __rawBuildId = (process.env.VITE_BUILD_ID || process.env.VERCEL_GIT_COMMIT_SHA || new Date().toISOString());
+// If it looks like a git SHA, shorten to 7 characters
+var __buildId = /^[a-f0-9]{7,40}$/i.test(__rawBuildId) ? __rawBuildId.slice(0, 7) : __rawBuildId;
 export default defineConfig({
     base: '/',
+    define: {
+        // Expose a stable, build-time value for the client
+        'import.meta.env.VITE_BUILD_ID': JSON.stringify(__buildId)
+    },
     plugins: [
         react(),
         {
