@@ -23,10 +23,10 @@ import EventsPlanner from './components/EventsPlanner'
 import Welcome from './components/Welcome'
 import Resources from './components/Resources'
 import Guidelines from './components/Guidelines'
-import RecruitingFinder from './components/RecruitingFinder'
 import RecruitingBoard from './components/RecruitingBoard'
 import RecruitingBlast from './components/RecruitingBlast'
 import Sidebar from './components/Sidebar'
+import Recruiting from './components/Recruiting'
 import SignUp from './components/auth/SignUp'
 import SignUpSupabase from './components/auth/SignUpSupabase'
 import Login from './components/auth/Login'
@@ -360,6 +360,7 @@ function MainApp() {
 											{ key: 'Discover', label: 'Discover' },
 											{ key: 'Matches', label: 'Matches' },
 											{ key: 'Dashboard', label: 'Dashboard' },
+											{ key: 'Recruiting', label: 'Recruiting' },
 											{ key: 'Profile Preview', label: 'Public Profile' },
 											...(currentUser ? [] as any : [{ key: 'Log In', label: 'Log In' }, { key: 'Sign Up', label: 'Sign Up' }])
 										]
@@ -376,7 +377,6 @@ function MainApp() {
 									{
 										title: 'Recruiting',
 										items: [
-											{ key: 'Recruiting', label: 'Finder' },
 											{ key: 'Recruiting Board', label: 'Board' },
 											{ key: 'Recruiting Blast', label: 'Blast' }
 										]
@@ -632,7 +632,7 @@ function MainApp() {
 
 					{tab === 'Profile Preview' && <PublicProfile athlete={athlete} />}
 
-					{tab === 'Recruiting' && <RecruitingFinder athlete={athlete} onRequireProfile={() => setTab('Athlete')} />}
+					{tab === 'Recruiting' && <Recruiting />}
 
 					{tab === 'Recruiting Board' && <RecruitingBoard />}
 
@@ -743,6 +743,7 @@ function MainApp() {
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Discover') }}>Discover</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Matches') }}>Matches</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Dashboard') }}>Dashboard</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Recruiting</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Profile Preview') }}>Public Profile</button>
 										{!currentUser && (
 											<>
@@ -764,7 +765,6 @@ function MainApp() {
 								<div>
 									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Recruiting</div>
 									<div className="grid grid-cols-2 gap-2">
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Finder</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting Board') }}>Board</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting Blast') }}>Blast</button>
 									</div>
