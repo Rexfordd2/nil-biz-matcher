@@ -100,9 +100,9 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   const [region, setRegion] = useState('')
 
   const [loading, setLoading] = useState(false)
-  const [orgs, setOrgs] = useState<Org[]>([])
+	const [orgs, setOrgs] = useState<Org[]>([])
   const [selected, setSelected] = useState<Org | null>(null)
-  const [contacts, setContacts] = useState<OrgContact[]>([])
+	const [contacts, setContacts] = useState<OrgContact[]>([])
   const [savingTarget, setSavingTarget] = useState(false)
   const [devBusy, setDevBusy] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -129,7 +129,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
       if (region) query = query.eq('region', region)
       const { data, error } = await query
       if (error) throw error
-      setOrgs(data as Org[])
+			setOrgs(Array.isArray(data) ? (data as Org[]) : [])
       // Reset details when list changes
       setSelected(null)
       setContacts([])
@@ -148,7 +148,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   async function loadContacts(orgId: string) {
     const { data, error } = await supabase!.from('org_contacts').select('*').eq('org_id', orgId).order('created_at', { ascending: true })
     if (error) throw error
-    setContacts(data as OrgContact[])
+		setContacts(Array.isArray(data) ? (data as OrgContact[]) : [])
   }
 
   async function onSelectOrg(o: Org) {
@@ -493,14 +493,38 @@ function TargetsPanel({ userId }: { userId: string | null }) {
 
   function toDateInputValue(value: string | null | undefined): string {
     if (!value) return ''
-    const ts = Date.parse(value)
-    if (Number.isNaN(ts)) return ''
-    try {
-      return new Date(ts).toISOString().slice(0, 10)
-    } catch {
-      return ''
-    }
+		const ts = Date.parse(value)
+		if (Number.isNaN(ts)) return ''
+		try {
+			const d = new Date(ts)
+			const t = d.getTime()
+			if (Number.isNaN(t)) return ''
+			return d.toISOString().slice(0, 10)
+		} catch {
+			return ''
+		}
   }
+
+	function sanitizeTargetRow(input: any): TargetRow {
+		const tags: string[] = Array.isArray(input?.tags) ? input.tags.filter(Boolean).map((x: any) => String(x)) : []
+		const nextFollowup: string | null =
+			typeof input?.next_followup_at === 'string' && !Number.isNaN(Date.parse(input.next_followup_at))
+				? input.next_followup_at
+				: null
+		const status: string = typeof input?.status === 'string' && input.status.trim() ? input.status : 'To Contact'
+		return {
+			id: String(input?.id ?? ''),
+			user_id: String(input?.user_id ?? ''),
+			org_id: String(input?.org_id ?? ''),
+			status,
+			tags,
+			notes: input?.notes ?? null,
+			next_followup_at: nextFollowup,
+			created_at: String(input?.created_at ?? new Date().toISOString()),
+			updated_at: String(input?.updated_at ?? new Date().toISOString()),
+			orgs: (input?.orgs && typeof input.orgs === 'object') ? input.orgs as Org : undefined
+		}
+	}
 
   async function loadTargets() {
     if (!userId) return
@@ -511,7 +535,8 @@ function TargetsPanel({ userId }: { userId: string | null }) {
         .select('*, orgs:org_id(*)')
         .order('updated_at', { ascending: false })
       if (error) throw error
-      setRows(data as TargetRow[])
+			const safe = Array.isArray(data) ? (data as any[]).map(sanitizeTargetRow) : []
+			setRows(safe)
     } finally {
       setLoading(false)
     }
@@ -547,28 +572,44 @@ function TargetsPanel({ userId }: { userId: string | null }) {
   })
 
   function exportCsv() {
-    const data = filteredRows.map(r => ({
-      org_name: r.orgs?.name ?? '',
-      sport: r.orgs?.sport ?? '',
-      level: r.orgs?.level ?? '',
-      org_type: r.orgs?.org_type ?? '',
-      location: [r.orgs?.city, r.orgs?.region, r.orgs?.country].filter(Boolean).join(', '),
-      website_url: r.orgs?.website_url ?? '',
-      general_email: r.orgs?.general_email ?? '',
-      general_phone: r.orgs?.general_phone ?? '',
-      status: r.status,
-      tags: (r.tags || []).join(','),
-      notes: r.notes ?? '',
-      next_followup_at: r.next_followup_at ?? ''
-    }))
-    const csv = Papa.unparse(data, { header: true })
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'my-targets.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+		const rowsForCsv = filteredRows.map(r => ({
+			org_name: r.orgs?.name ?? '',
+			sport: r.orgs?.sport ?? '',
+			level: r.orgs?.level ?? '',
+			org_type: r.orgs?.org_type ?? '',
+			location: [r.orgs?.city, r.orgs?.region, r.orgs?.country].filter(Boolean).join(', '),
+			website_url: r.orgs?.website_url ?? '',
+			general_email: r.orgs?.general_email ?? '',
+			general_phone: r.orgs?.general_phone ?? '',
+			status: r.status ?? 'To Contact',
+			tags: (Array.isArray(r.tags) ? r.tags : []).join(','),
+			notes: r.notes ?? '',
+			next_followup_at: r.next_followup_at ?? ''
+		}))
+		let csv = ''
+		try {
+			csv = Papa.unparse(rowsForCsv, { header: true })
+		} catch {
+			// Fallback manual CSV to avoid runtime crash
+			if (rowsForCsv.length > 0) {
+				const headers = Object.keys(rowsForCsv[0])
+				const escape = (v: unknown) => String(v ?? '').replace(/"/g, '""')
+				const lines = [
+					headers.join(','),
+					...rowsForCsv.map(r => headers.map(h => `"${escape((r as any)[h])}"`).join(','))
+				]
+				csv = lines.join('\r\n')
+			} else {
+				csv = ''
+			}
+		}
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+		const url = URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = url
+		a.download = 'my-targets.csv'
+		a.click()
+		URL.revokeObjectURL(url)
   }
 
   const STATUS_OPTIONS = ['To Contact', 'Contacted', 'In Progress', 'Offer/Visit', 'Closed']
@@ -621,8 +662,8 @@ function TargetsPanel({ userId }: { userId: string | null }) {
               {STATUS_OPTIONS.map(s => (
                 <Button
                   key={`${r.id}-${s}`}
-                  variant={r.status === s ? 'primary' : 'secondary'}
-                  onClick={() => updateRow(r.id, { status: s })}
+									variant={(r.status ?? 'To Contact') === s ? 'primary' : 'secondary'}
+									onClick={() => updateRow(r.id, { status: s })}
                 >
                   {s.replace('/', '-')}
                 </Button>
@@ -632,7 +673,7 @@ function TargetsPanel({ userId }: { userId: string | null }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
               <div>
                 <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Status</div>
-                <Select value={r.status} onChange={e => updateRow(r.id, { status: e.target.value })}>
+								<Select value={r.status ?? 'To Contact'} onChange={e => updateRow(r.id, { status: e.target.value })}>
                   {['To Contact', 'Contacted', 'In Progress', 'Offer/Visit', 'Closed'].map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
@@ -644,7 +685,16 @@ function TargetsPanel({ userId }: { userId: string | null }) {
                   type="date"
                   value={toDateInputValue(r.next_followup_at)}
                   onChange={e => {
-                    const iso = e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : null
+										let iso: string | null = null
+										if (e.target.value) {
+											try {
+												const d = new Date(e.target.value + 'T12:00:00')
+												const t = d.getTime()
+												iso = Number.isNaN(t) ? null : d.toISOString()
+											} catch {
+												iso = null
+											}
+										}
                     // eslint-disable-next-line @typescript-eslint/no-floating-promises
                     updateRow(r.id, { next_followup_at: iso as any })
                   }}
