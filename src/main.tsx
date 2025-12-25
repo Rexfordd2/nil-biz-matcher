@@ -25,6 +25,10 @@ window.addEventListener('unhandledrejection', (e) => {
 	showBootError((e as any)?.reason || e)
 })
 
+// Temporary crash logger (explicit console output for runtime errors)
+window.addEventListener('error', (e) => console.error('[window.error]', (e as any)?.error || (e as any)?.message, e))
+window.addEventListener('unhandledrejection', (e) => console.error('[unhandledrejection]', (e as any)?.reason, e))
+
 try {
 	const rootNode = document.getElementById('root')
 	if (!rootNode) {

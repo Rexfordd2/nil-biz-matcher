@@ -491,6 +491,17 @@ function TargetsPanel({ userId }: { userId: string | null }) {
   const [rows, setRows] = useState<TargetRow[]>([])
   const [dueOnly, setDueOnly] = useState<boolean>(false)
 
+  function toDateInputValue(value: string | null | undefined): string {
+    if (!value) return ''
+    const ts = Date.parse(value)
+    if (Number.isNaN(ts)) return ''
+    try {
+      return new Date(ts).toISOString().slice(0, 10)
+    } catch {
+      return ''
+    }
+  }
+
   async function loadTargets() {
     if (!userId) return
     setLoading(true)
@@ -631,7 +642,7 @@ function TargetsPanel({ userId }: { userId: string | null }) {
                 <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Next Follow-Up</div>
                 <Input
                   type="date"
-                  value={r.next_followup_at ? new Date(r.next_followup_at).toISOString().slice(0, 10) : ''}
+                  value={toDateInputValue(r.next_followup_at)}
                   onChange={e => {
                     const iso = e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : null
                     // eslint-disable-next-line @typescript-eslint/no-floating-promises

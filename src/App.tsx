@@ -39,6 +39,7 @@ import { signOut } from './lib/authSupabase'
 import LoginPage from './components/LoginPage'
 import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseSessionContext'
 import { getBuildStamp } from './config/env'
+import SectionErrorBoundary from './components/ErrorBoundary'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -632,7 +633,11 @@ function MainApp() {
 
 					{tab === 'Profile Preview' && <PublicProfile athlete={athlete} />}
 
-					{tab === 'Recruiting' && <Recruiting />}
+					{tab === 'Recruiting' && (
+						<SectionErrorBoundary>
+							<Recruiting />
+						</SectionErrorBoundary>
+					)}
 
 					{tab === 'Recruiting Board' && <RecruitingBoard />}
 
