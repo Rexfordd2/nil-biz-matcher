@@ -67,26 +67,29 @@ export default function Recruiting() {
   const { user } = useSupabaseSession()
   const isMobile = useIsMobile()
   const [tab, setTab] = useState<'Directory' | 'My Targets'>('Directory')
-
-  if (!supabaseEnvConfigured || !supabase) {
-    return (
-      <Card title="Recruiting">
-        <p className="text-foreground/80">
-          Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.
-        </p>
-      </Card>
-    )
-  }
+  const cloudAvailable = supabaseEnvConfigured && Boolean(supabase)
 
   return (
     <div className="space-y-6">
+      <div className="text-xs uppercase tracking-wide text-foreground/60">RECRUITING UI v1 ACTIVE</div>
+
       <div className="flex items-center gap-2">
         <Button variant={tab === 'Directory' ? 'primary' : 'secondary'} onClick={() => setTab('Directory')}>Directory</Button>
         <Button variant={tab === 'My Targets' ? 'primary' : 'secondary'} onClick={() => setTab('My Targets')}>My Targets</Button>
       </div>
 
-      {tab === 'Directory' && <DirectoryPanel userId={user?.id ?? null} isMobile={isMobile} />}
-      {tab === 'My Targets' && <TargetsPanel userId={user?.id ?? null} />}
+      {!cloudAvailable ? (
+        <Card title="Recruiting">
+          <p className="text-foreground/80">
+            Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.
+          </p>
+        </Card>
+      ) : (
+        <>
+          {tab === 'Directory' && <DirectoryPanel userId={user?.id ?? null} isMobile={isMobile} />}
+          {tab === 'My Targets' && <TargetsPanel userId={user?.id ?? null} />}
+        </>
+      )}
     </div>
   )
 }
