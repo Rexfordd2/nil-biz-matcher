@@ -9,6 +9,8 @@ import { useSupabaseSession } from '../context/SupabaseSessionContext'
 import { parseCsvFile } from '../utils/csv'
 import { CsvOrgRow, normalizeColumns, parseContacts, validateRow } from '../utils/recruitingImport'
 import Papa from 'papaparse'
+import { isGoogleCseConfigured, searchContacts, type CseResult } from '../services/googleCse'
+import { buildSearchLinks } from '../utils/searchLinks'
 
 type Org = {
   id: string
@@ -116,6 +118,19 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   const [importSummary, setImportSummary] = useState<{ orgs: number; contacts: number; failures: number } | null>(null)
 
   const canQuery = useMemo(() => Boolean(userId), [userId])
+  const cseReady = isGoogleCseConfigured()
+
+  // Contact search + manual add state
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [results, setResults] = useState<CseResult[]>([])
+  const [contactRole, setContactRole] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [contactUrl, setContactUrl] = useState('')
+  const [contactNotes, setContactNotes] = useState('')
+  const [savingContact, setSavingContact] = useState(false)
 
   async function loadOrgs() {
     if (!canQuery) return
@@ -157,6 +172,15 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   async function onSelectOrg(o: Org) {
     setSelected(o)
     await loadContacts(o.id)
+    // reset transient UI state
+    setResults([])
+    setSearchError(null)
+    setContactRole('')
+    setContactName('')
+    setContactEmail('')
+    setContactPhone('')
+    setContactUrl('')
+    setContactNotes('')
   }
 
   async function saveToTargets() {
@@ -198,6 +222,54 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
       await loadOrgs()
     } finally {
       setDevBusy(false)
+    }
+  }
+
+  async function searchInApp() {
+    if (!selected) return
+    setSearching(true)
+    setSearchError(null)
+    try {
+      const { defaultQuery } = buildSearchLinks({
+        name: selected.name,
+        city: selected.city,
+        region: selected.region,
+        country: selected.country,
+        sport: selected.sport
+      })
+      const res = await searchContacts(defaultQuery)
+      setResults(res)
+    } catch (e: any) {
+      setSearchError('Search failed. Try the external links below.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function saveManualContact() {
+    if (!userId || !selected) return
+    setSavingContact(true)
+    try {
+      const payload = {
+        org_id: selected.id,
+        role: contactRole || null,
+        name: contactName || null,
+        email: contactEmail || null,
+        phone: contactPhone || null,
+        contact_url: contactUrl || null,
+        notes: contactNotes || null
+      } as any
+      const { error } = await supabase!.from('org_contacts').insert([payload])
+      if (error) throw error
+      await loadContacts(selected.id)
+      setContactRole('')
+      setContactName('')
+      setContactEmail('')
+      setContactPhone('')
+      setContactUrl('')
+      setContactNotes('')
+    } finally {
+      setSavingContact(false)
     }
   }
 
@@ -276,6 +348,84 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                   <Field label="Source URL" value={selected.source_url} kind="link" />
                 </div>
                 <Field label="Notes" value={selected.notes} />
+
+                {/* Find Contacts */}
+                <div className="border border-border rounded-lg p-3">
+                  <div className="font-medium mb-2">Find Contacts</div>
+                  {!cseReady && (
+                    <div className="text-xs mb-2 text-foreground/70">
+                      Google in-app search not configured. Use external search links below.
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {cseReady && (
+                      <Button onClick={searchInApp} disabled={searching}>
+                        {searching ? 'Searching…' : 'Search Google (in app)'}
+                      </Button>
+                    )}
+                    {(() => {
+                      const links = buildSearchLinks({
+                        name: selected.name,
+                        city: selected.city,
+                        region: selected.region,
+                        country: selected.country,
+                        sport: selected.sport
+                      })
+                      return (
+                        <>
+                          <Button variant="secondary" onClick={() => window.open(links.googleUrl, '_blank')}>Open Google Search</Button>
+                          <Button variant="secondary" onClick={() => window.open(links.linkedInUrl, '_blank')}>Open LinkedIn Search</Button>
+                          <Button variant="secondary" onClick={() => window.open(links.xUrl, '_blank')}>Open X Search</Button>
+                        </>
+                      )
+                    })()}
+                  </div>
+
+                  {searchError && <div className="mt-2 text-xs text-amber-300">{searchError}</div>}
+
+                  {results.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {results.map((r, i) => (
+                        <div key={`res-${i}`} className="border border-border rounded-md p-2">
+                          <div className="text-sm font-medium truncate">{r.title}</div>
+                          <div className="text-xs text-foreground/70 line-clamp-2">{r.snippet}</div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <a href={r.link} target="_blank" rel="noreferrer" className="text-blue-500 underline text-xs break-all">{r.link}</a>
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setContactUrl(r.link)
+                                setContactNotes(prev => prev ? `${prev}\n${r.title}: ${r.snippet}` : `${r.title}: ${r.snippet}`)
+                              }}
+                            >
+                              Save as Contact
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual Add Contact */}
+                <div className="border border-border rounded-lg p-3">
+                  <div className="font-medium mb-2">Manual Add Contact</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input placeholder="Role (e.g., Head Coach)" value={contactRole} onChange={e => setContactRole(e.target.value)} />
+                    <Input placeholder="Name" value={contactName} onChange={e => setContactName(e.target.value)} />
+                    <Input placeholder="Email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} />
+                    <Input placeholder="Phone" value={contactPhone} onChange={e => setContactPhone(e.target.value)} />
+                    <Input placeholder="Contact URL" value={contactUrl} onChange={e => setContactUrl(e.target.value)} />
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Notes</div>
+                    <Textarea rows={3} placeholder="Optional notes…" value={contactNotes} onChange={e => setContactNotes(e.target.value)} />
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    <Button onClick={saveManualContact} disabled={!userId || savingContact}>{savingContact ? 'Saving…' : 'Save'}</Button>
+                  </div>
+                </div>
+
                 <div>
                   <div className="font-medium mb-2">Contacts</div>
                   <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
