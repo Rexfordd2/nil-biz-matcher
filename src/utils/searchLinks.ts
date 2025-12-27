@@ -16,20 +16,17 @@ export function buildSearchLinks(org: OrgLike): {
   xUrl: string
   defaultQuery: string
 } {
-  const parts = [
-    org.name,
-    org.sport || '',
-    org.city || '',
-    org.region || '',
-    org.country || '',
-    'coach recruiting coordinator email phone',
-    'site:.edu OR site:.com'
-  ].filter(Boolean)
-  const query = parts.join(' ')
-  const googleUrl = `https://www.google.com/search?q=${encode(query)}`
-  const linkedInUrl = `https://www.linkedin.com/search/results/people/?keywords=${encode(`${org.name} ${org.sport || ''} coach recruiting`)}`
-  const xUrl = `https://x.com/search?q=${encode(`${org.name} ${org.sport || ''} coach recruiting email`)}&src=typed_query`
-  return { googleUrl, linkedInUrl, xUrl, defaultQuery: query }
+  // Deep-link queries per product requirements
+  const googleQuery = `${org.name} coach recruiting coordinator email phone`
+  const linkedInKeywords = `${org.name} coach`
+  const xQuery = `${org.name} coach email`
+
+  const googleUrl = `https://www.google.com/search?q=${encode(googleQuery)}`
+  const linkedInUrl = `https://www.linkedin.com/search/results/people/?keywords=${encode(linkedInKeywords)}`
+  const xUrl = `https://x.com/search?q=${encode(xQuery)}&src=typed_query`
+
+  // Use Google query as the default in-app search string if needed
+  return { googleUrl, linkedInUrl, xUrl, defaultQuery: googleQuery }
 }
 
 

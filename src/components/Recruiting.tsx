@@ -131,6 +131,8 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   const [contactUrl, setContactUrl] = useState('')
   const [contactNotes, setContactNotes] = useState('')
   const [savingContact, setSavingContact] = useState(false)
+  const [quickLinkUrl, setQuickLinkUrl] = useState('')
+  const [savingQuickLink, setSavingQuickLink] = useState(false)
 
   async function loadOrgs() {
     if (!canQuery) return
@@ -195,6 +197,25 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
     }
   }
 
+  async function saveLinkAsContact() {
+    if (!userId || !selected) return
+    const url = quickLinkUrl.trim()
+    if (!url) return
+    setSavingQuickLink(true)
+    try {
+      const payload = {
+        org_id: selected.id,
+        contact_url: url
+      }
+      const { error } = await supabase!.from('org_contacts').insert([payload as any])
+      if (error) throw error
+      await loadContacts(selected.id)
+      setQuickLinkUrl('')
+    } finally {
+      setSavingQuickLink(false)
+    }
+  }
+
   async function seedSample() {
     if (!userId) return
     setDevBusy(true)
@@ -256,8 +277,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
         name: contactName || null,
         email: contactEmail || null,
         phone: contactPhone || null,
-        contact_url: contactUrl || null,
-        notes: contactNotes || null
+        contact_url: contactUrl || null
       } as any
       const { error } = await supabase!.from('org_contacts').insert([payload])
       if (error) throw error
@@ -405,6 +425,18 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                       ))}
                     </div>
                   )}
+
+                  {/* Save link as contact (quick) */}
+                  <div className="mt-3 flex gap-2">
+                    <Input
+                      placeholder="Paste a profile or staff page URL"
+                      value={quickLinkUrl}
+                      onChange={e => setQuickLinkUrl(e.target.value)}
+                    />
+                    <Button onClick={saveLinkAsContact} disabled={!userId || savingQuickLink || !quickLinkUrl.trim()}>
+                      {savingQuickLink ? 'Saving…' : 'Save link as contact'}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Manual Add Contact */}
