@@ -73,7 +73,7 @@ export default function Recruiting() {
 
   return (
     <div className="space-y-6">
-      <div className="text-xs uppercase tracking-wide text-foreground/60">RECRUITING UI v1 ACTIVE</div>
+      <div className="text-xs uppercase tracking-wide text-black">RECRUITING UI v1 ACTIVE</div>
 
       <div className="flex items-center gap-2">
         <Button variant={tab === 'Directory' ? 'primary' : 'secondary'} onClick={() => setTab('Directory')}>Directory</Button>

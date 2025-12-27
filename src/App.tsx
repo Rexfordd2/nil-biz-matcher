@@ -38,7 +38,6 @@ import { getSession } from './lib/authSupabase'
 import { signOut } from './lib/authSupabase'
 import LoginPage from './components/LoginPage'
 import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseSessionContext'
-import { getBuildStamp } from './config/env'
 import SectionErrorBoundary from './components/ErrorBoundary'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
@@ -289,8 +288,8 @@ function MainApp() {
 									<span className="text-amber-300">Cloud sync unavailable</span>
 								)}
 							</div>
-							<div className="text-xs text-foreground/60">
-								{getBuildStamp()}
+							<div className="text-xs text-black">
+								{`Build: ${import.meta.env.VITE_BUILD_ID || 'dev'}`}
 							</div>
 							{currentUser ? (
 								<div className="flex items-center gap-3">
@@ -798,9 +797,21 @@ function MainApp() {
 function AppShell() {
 	const { user, loading } = useSupabaseSession()
 	if (!supabaseEnvConfigured) {
-		return <div>Cloud sync unavailable (missing Supabase env variables)</div>
+		return (
+			<div className="min-h-screen">
+				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${import.meta.env.VITE_BUILD_ID || 'dev'}`}</div>
+				<div>Cloud sync unavailable (missing Supabase env variables)</div>
+			</div>
+		)
 	}
-	if (loading) return <div>Loading auth…</div>
+	if (loading) {
+		return (
+			<div className="min-h-screen">
+				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${import.meta.env.VITE_BUILD_ID || 'dev'}`}</div>
+				<div>Loading auth…</div>
+			</div>
+		)
+	}
 	if (!user) return <LoginPage />
 	return <MainApp />
 }
