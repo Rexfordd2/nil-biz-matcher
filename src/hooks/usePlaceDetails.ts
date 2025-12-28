@@ -40,7 +40,7 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 				await new Promise<void>((resolve, reject) => {
 					svc.getDetails(
 						{
-							placeId,
+							placeId: placeId!,
 							fields: ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'international_phone_number', 'website', 'opening_hours', 'url']
 						},
 						(res: any, status: any) => {

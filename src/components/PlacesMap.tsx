@@ -6,7 +6,7 @@ type Props = {
 	places: NormalizedPlace[]
 	selectedPlaceId?: string | null
 	onSelect?: (placeId: string) => void
-	onIdle?: (state: { center: { lat: number, lng: number }, zoom: number, bounds?: google.maps.LatLngBoundsLiteral }) => void
+	onIdle?: (state: { center: { lat: number, lng: number }, zoom: number, bounds?: google.maps.LatLngBounds | google.maps.LatLngBoundsLiteral }) => void
 	className?: string
 	height?: number
 	initialZoom?: number
