@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Card from './ui/Card'
 import Input from './ui/Input'
 import Select from './ui/Select'
@@ -11,10 +11,16 @@ import { CsvOrgRow, normalizeColumns, parseContacts, validateRow } from '../util
 import Papa from 'papaparse'
 import { isGoogleCseConfigured, searchContacts, type CseResult } from '../services/googleCse'
 import { buildSearchLinks } from '../utils/searchLinks'
+import PlacesMap from './PlacesMap'
+import { loadGoogleMaps } from '../lib/googleMapsLoader'
+import type { NormalizedPlace } from '../hooks/usePlacesSearch'
+import { usePlaceDetails } from '../hooks/usePlaceDetails'
 
 type Org = {
   id: string
   name: string
+  place_id?: string | null
+  address?: string | null
   sport: string | null
   level: string | null
   org_type: string | null
@@ -26,6 +32,7 @@ type Org = {
   general_phone: string | null
   notes: string | null
   source_url: string | null
+  source?: string | null
 }
 
 type OrgContact = {
@@ -70,7 +77,7 @@ function useIsMobile(): boolean {
 export default function Recruiting() {
   const { user } = useSupabaseSession()
   const isMobile = useIsMobile()
-  const [tab, setTab] = useState<'Directory' | 'My Targets'>('Directory')
+  const [tab, setTab] = useState<'Explore' | 'My Targets'>('Explore')
   const cloudAvailable = supabaseEnvConfigured && Boolean(supabase)
 
   return (
@@ -78,7 +85,7 @@ export default function Recruiting() {
       <div className="text-xs uppercase tracking-wide text-black">RECRUITING UI v1 ACTIVE</div>
 
       <div className="flex items-center gap-2">
-        <Button variant={tab === 'Directory' ? 'primary' : 'secondary'} onClick={() => setTab('Directory')}>Directory</Button>
+        <Button variant={tab === 'Explore' ? 'primary' : 'secondary'} onClick={() => setTab('Explore')}>Explore (Map)</Button>
         <Button variant={tab === 'My Targets' ? 'primary' : 'secondary'} onClick={() => setTab('My Targets')}>My Targets</Button>
       </div>
 
@@ -90,11 +97,440 @@ export default function Recruiting() {
         </Card>
       ) : (
         <>
-          {tab === 'Directory' && <DirectoryPanel userId={user?.id ?? null} isMobile={isMobile} />}
+          {tab === 'Explore' && <ExplorePanel userId={user?.id ?? null} isMobile={isMobile} />}
           {tab === 'My Targets' && <TargetsPanel userId={user?.id ?? null} />}
         </>
       )}
     </div>
+  )
+}
+
+// Explore Panel (Map-based discovery via Google Places)
+function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: boolean }) {
+  const [sport, setSport] = useState<string>('')
+  const [level, setLevel] = useState<string>('')
+  const [orgType, setOrgType] = useState<string>('')
+  const [searchThisArea, setSearchThisArea] = useState<boolean>(true)
+  const [refreshToken, setRefreshToken] = useState<number>(0)
+
+  const [places, setPlaces] = useState<NormalizedPlace[]>([])
+  const [loading, setLoading] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
+
+  const latestCenterRef = useRef<{ lat: number, lng: number }>({ lat: 39.5, lng: -98.35 })
+  const latestZoomRef = useRef<number>(5)
+
+  const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
+
+  function computeRadiusMeters(zoom: number): number {
+    // Approx mapping; smaller zoom => larger radius
+    if (zoom >= 15) return 2000
+    if (zoom >= 13) return 5000
+    if (zoom >= 11) return 10000
+    if (zoom >= 9) return 20000
+    if (zoom >= 7) return 40000
+    return 60000
+  }
+
+  function buildKeyword(): string {
+    const parts: string[] = []
+    const sportMap: Record<string, string> = {
+      soccer: 'soccer',
+      basketball: 'basketball',
+      football: 'football',
+      baseball: 'baseball',
+      volleyball: 'volleyball',
+      softball: 'softball',
+      hockey: 'hockey',
+      'ice hockey': 'ice hockey',
+      lacrosse: 'lacrosse',
+      rugby: 'rugby',
+      tennis: 'tennis',
+      wrestling: 'wrestling',
+      'track & field': 'track and field',
+      'cross country': 'cross country',
+      swimming: 'swimming'
+    }
+    const levelMap: Record<string, string> = {
+      youth: 'youth',
+      hs: 'high school',
+      college: 'college',
+      'semi-pro': 'semi-pro',
+      pro: 'professional',
+      club: 'club'
+    }
+    const orgTypeMap: Record<string, string> = {
+      school: 'school athletics',
+      team: 'team',
+      club: 'club',
+      league: 'league',
+      association: 'association',
+      facility: 'facility'
+    }
+    if (sport && sportMap[sport]) parts.push(sportMap[sport])
+    if (level && levelMap[level]) parts.push(levelMap[level])
+    if (orgType && orgTypeMap[orgType]) parts.push(orgTypeMap[orgType])
+    // Sensible fallbacks
+    if (parts.length === 0) {
+      parts.push('sports club OR athletics')
+    }
+    return parts.join(' ').trim()
+  }
+
+  async function runPlacesSearch(center: { lat: number, lng: number }, zoom: number) {
+    setLoading(true)
+    setError(null)
+    try {
+      const google = await loadGoogleMaps()
+      const svc = new google.maps.places.PlacesService(document.createElement('div'))
+
+      const request: google.maps.places.TextSearchRequest = {
+        query: buildKeyword(),
+        location: new google.maps.LatLng(center.lat, center.lng),
+        radius: computeRadiusMeters(zoom)
+      }
+
+      const firstPage = await new Promise<google.maps.places.PlaceResult[]>((resolve, reject) => {
+        svc.textSearch(request, (res, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(res)) {
+            resolve(res)
+          } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            resolve([])
+          } else {
+            reject(new Error(`Places textSearch failed: ${status}`))
+          }
+        })
+      })
+
+      const normalized: NormalizedPlace[] = (firstPage || []).map((p) => {
+        const lat = typeof p.geometry?.location?.lat === 'function' ? p.geometry.location.lat() : undefined
+        const lng = typeof p.geometry?.location?.lng === 'function' ? p.geometry.location.lng() : undefined
+        const photoUrl = p.photos && p.photos[0] ? p.photos[0].getUrl({ maxWidth: 400, maxHeight: 400 }) : undefined
+        return {
+          placeId: p.place_id!,
+          name: p.name || '',
+          formattedAddress: p.formatted_address,
+          location: { lat: lat ?? 0, lng: lng ?? 0 },
+          rating: p.rating,
+          userRatingsTotal: p.user_ratings_total as number | undefined,
+          types: p.types,
+          photoUrl
+        }
+      }).filter(p => !!p.placeId && typeof p.location.lat === 'number' && typeof p.location.lng === 'number')
+
+      setPlaces(normalized)
+      if (normalized.length > 0) {
+        setSelectedPlaceId(normalized[0].placeId)
+      } else {
+        setSelectedPlaceId(null)
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Search failed')
+      setPlaces([])
+      setSelectedPlaceId(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleMapIdle(state: { center: { lat: number, lng: number }, zoom: number }) {
+    latestCenterRef.current = state.center
+    latestZoomRef.current = state.zoom
+    if (searchThisArea) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      runPlacesSearch(state.center, state.zoom)
+    }
+  }
+
+  function refresh() {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
+    setRefreshToken(v => v + 1) // force re-render for any dependent UI
+  }
+
+  // Save to My Targets
+  const [saving, setSaving] = useState(false)
+  const [savedOrgId, setSavedOrgId] = useState<string | null>(null)
+  const [contacts, setContacts] = useState<OrgContact[]>([])
+
+  async function ensureOrgForSelected(): Promise<string | null> {
+    if (!userId || !selectedPlaceId) return null
+    // 1) Check existing
+    const { data: existing, error: exErr } = await supabase!
+      .from('orgs')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('place_id', selectedPlaceId)
+      .limit(1)
+      .maybeSingle()
+    if (!exErr && existing?.id) return existing.id as string
+
+    const name = details?.name || (places.find(p => p.placeId === selectedPlaceId)?.name ?? '')
+    const formatted = details?.formattedAddress || (places.find(p => p.placeId === selectedPlaceId)?.formattedAddress ?? null)
+    const website = details?.website || null
+    const phone = details?.phone || null
+    const gmapsUrl = details?.googleMapsUrl || `https://www.google.com/maps/place/?q=place_id:${selectedPlaceId}`
+
+    const payload = {
+      name,
+      place_id: selectedPlaceId,
+      address: formatted,
+      website_url: website,
+      general_phone: phone,
+      source_url: gmapsUrl,
+      source: 'places',
+      owner_id: userId
+    } as any
+
+    const { data: ins, error: insErr } = await supabase!.from('orgs').insert([payload]).select('id').single()
+    if (insErr) {
+      // Try to recover if unique conflict (another tab saved)
+      const { data: again } = await supabase!
+        .from('orgs')
+        .select('id')
+        .eq('owner_id', userId)
+        .eq('place_id', selectedPlaceId)
+        .limit(1)
+        .maybeSingle()
+      return (again?.id as string) || null
+    }
+    return (ins?.id as string) || null
+  }
+
+  async function saveToTargets() {
+    if (!userId || !selectedPlaceId) return
+    setSaving(true)
+    try {
+      const orgId = (await ensureOrgForSelected()) as string | null
+      if (!orgId) return
+      setSavedOrgId(orgId)
+      await supabase!.from('user_targets').upsert({ user_id: userId, org_id: orgId }, { onConflict: 'user_id,org_id' })
+      // load contacts
+      const { data: c } = await supabase!.from('org_contacts').select('*').eq('org_id', orgId).order('created_at', { ascending: true })
+      setContacts(Array.isArray(c) ? (c as OrgContact[]) : [])
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Manual add contact (only when org saved)
+  const [contactRole, setContactRole] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [contactUrl, setContactUrl] = useState('')
+  const [contactNotes, setContactNotes] = useState('')
+  const [savingContact, setSavingContact] = useState(false)
+
+  async function saveManualContactExplore() {
+    if (!userId || !savedOrgId) return
+    setSavingContact(true)
+    try {
+      const payload = {
+        org_id: savedOrgId,
+        role: contactRole || null,
+        name: contactName || null,
+        email: contactEmail || null,
+        phone: contactPhone || null,
+        contact_url: contactUrl || null,
+        notes: contactNotes || null
+      } as any
+      const { error } = await supabase!.from('org_contacts').insert([payload])
+      if (!error) {
+        const { data: c } = await supabase!.from('org_contacts').select('*').eq('org_id', savedOrgId).order('created_at', { ascending: true })
+        setContacts(Array.isArray(c) ? (c as OrgContact[]) : [])
+        setContactRole(''); setContactName(''); setContactEmail(''); setContactPhone(''); setContactUrl(''); setContactNotes('')
+      }
+    } finally {
+      setSavingContact(false)
+    }
+  }
+
+  const sportsOptions = ['', 'soccer', 'basketball', 'football', 'baseball', 'volleyball', 'softball', 'hockey', 'ice hockey', 'lacrosse', 'rugby', 'tennis', 'wrestling', 'track & field', 'cross country', 'swimming']
+  const levelOptions = ['', 'youth', 'hs', 'college', 'semi-pro', 'pro', 'club']
+  const orgTypeOptions = ['', 'school', 'team', 'club', 'league', 'association', 'facility']
+
+  const selected = places.find(p => p.placeId === (selectedPlaceId || '')) || null
+
+  return (
+    <Card title="Explore Map">
+      <div className="grid grid-cols-1 md:grid-cols-[360px,1fr] gap-6">
+        {/* Filters Panel */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Sport</div>
+              <Select value={sport} onChange={e => setSport(e.target.value)}>
+                {sportsOptions.map(v => <option key={v} value={v}>{v ? v : 'All sports'}</option>)}
+              </Select>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Level</div>
+              <Select value={level} onChange={e => setLevel(e.target.value)}>
+                {levelOptions.map(v => <option key={v} value={v}>{v ? v : 'All levels'}</option>)}
+              </Select>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Org Type</div>
+              <Select value={orgType} onChange={e => setOrgType(e.target.value)}>
+                {orgTypeOptions.map(v => <option key={v} value={v}>{v ? v : 'All org types'}</option>)}
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 text-sm mt-1">
+              <input type="checkbox" checked={searchThisArea} onChange={e => setSearchThisArea(e.target.checked)} />
+              <span>Search this map area</span>
+            </label>
+            <div className="flex gap-2">
+              <Button onClick={refresh} disabled={loading || !userId}>{loading ? 'Searching…' : 'Refresh results'}</Button>
+              <Button variant="secondary" onClick={() => { setSport(''); setLevel(''); setOrgType(''); setRefreshToken(v => v + 1) }}>Clear</Button>
+            </div>
+            <div className="text-xs text-foreground/60">Results powered by Google</div>
+            {error && <div className="text-sm text-red-600">{error}</div>}
+          </div>
+
+          {/* Results List (optional) */}
+          <div className="border border-border rounded-md divide-y divide-border overflow-hidden">
+            {places.length === 0 && (
+              <div className="p-3 text-foreground/70">{loading ? 'Loading…' : 'No results yet. Pan/zoom the map and refresh.'}</div>
+            )}
+            {places.map(p => (
+              <button key={p.placeId} type="button" onClick={() => setSelectedPlaceId(p.placeId)} className={`w-full text-left p-3 hover:bg-mid/60 ${selectedPlaceId === p.placeId ? 'bg-mid/60' : ''}`}>
+                <div className="font-medium">{p.name}</div>
+                <div className="text-sm text-foreground/70">{p.formattedAddress}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Map + Drawer */}
+        <div className="space-y-3">
+          <PlacesMap
+            places={places}
+            selectedPlaceId={selectedPlaceId}
+            onSelect={(pid) => setSelectedPlaceId(pid)}
+            onIdle={handleMapIdle}
+            height={isMobile ? 280 : 460}
+          />
+
+          {/* Details drawer */}
+          {!!selected && (
+            <div className={isMobile ? 'border border-border rounded-lg p-3' : 'border border-border rounded-lg p-4'}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="headline text-lg">{details?.name || selected.name}</div>
+                  <div className="text-sm text-foreground/70">{details?.formattedAddress || selected.formattedAddress}</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => setSelectedPlaceId(null)}>Close</Button>
+                  <Button onClick={saveToTargets} disabled={!userId || saving}>{saving ? 'Saving…' : 'Save to My Targets'}</Button>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {details?.website && (
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-foreground/60">Website</div>
+                    <a href={details.website} target="_blank" rel="noreferrer" className="text-blue-500 underline break-all">{details.website}</a>
+                  </div>
+                )}
+                {details?.phone && (
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-foreground/60">Phone</div>
+                    <div className="break-all">{details.phone}</div>
+                  </div>
+                )}
+                {(details?.googleMapsUrl || selected.placeId) && (
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-foreground/60">Google Maps</div>
+                    <a
+                      href={details?.googleMapsUrl || `https://www.google.com/maps/place/?q=place_id:${selected.placeId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-500 underline break-all"
+                    >
+                      Open in Google Maps
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Find Contacts (external links only) */}
+              <div className="mt-4">
+                <div className="font-medium mb-2">Find Contacts</div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(`${details?.name || selected.name} coach recruiting coordinator email phone`)}`, '_blank')}
+                  >
+                    Google Search
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${details?.name || selected.name} coach recruiting`)}`, '_blank')}
+                  >
+                    LinkedIn People
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => window.open(`https://x.com/search?q=${encodeURIComponent(`${details?.name || selected.name} coach email`)}&src=typed_query`, '_blank')}
+                  >
+                    X Search
+                  </Button>
+                  {details?.website && (
+                    <Button variant="secondary" onClick={() => window.open(details.website!, '_blank')}>Open Website</Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Add Contact (requires saved org) */}
+              <div className="mt-4 border border-border rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">Add Contact</div>
+                  {!savedOrgId && <div className="text-xs text-foreground/60">Save to My Targets to enable</div>}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                  <Input placeholder="Role (e.g., Head Coach)" value={contactRole} onChange={e => setContactRole(e.target.value)} disabled={!savedOrgId} />
+                  <Input placeholder="Name" value={contactName} onChange={e => setContactName(e.target.value)} disabled={!savedOrgId} />
+                  <Input placeholder="Email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} disabled={!savedOrgId} />
+                  <Input placeholder="Phone" value={contactPhone} onChange={e => setContactPhone(e.target.value)} disabled={!savedOrgId} />
+                  <Input placeholder="Contact URL" value={contactUrl} onChange={e => setContactUrl(e.target.value)} disabled={!savedOrgId} />
+                </div>
+                <div className="mt-2">
+                  <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Notes</div>
+                  <Textarea rows={3} placeholder="Optional notes…" value={contactNotes} onChange={e => setContactNotes(e.target.value)} disabled={!savedOrgId} />
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <Button onClick={saveManualContactExplore} disabled={!savedOrgId || savingContact}>{savingContact ? 'Saving…' : 'Save'}</Button>
+                </div>
+
+                {/* Existing contacts */}
+                {savedOrgId && (
+                  <div className="mt-3">
+                    <div className="font-medium mb-2">Contacts</div>
+                    <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
+                      {contacts.length === 0 && <div className="p-3 text-foreground/70">No contacts yet.</div>}
+                      {contacts.map(c => (
+                        <div key={c.id} className="p-3">
+                          <div className="font-medium">{c.role || 'Contact'}</div>
+                          <div className="text-sm">{c.name}</div>
+                          <div className="text-sm text-foreground/70 flex flex-wrap gap-2">
+                            {c.email && <span>{c.email}</span>}
+                            {c.phone && <span>{c.phone}</span>}
+                            {c.contact_url && <a href={c.contact_url} target="_blank" rel="noreferrer" className="text-blue-500 underline">Profile</a>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 text-xs text-foreground/60">Powered by Google</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
   )
 }
 

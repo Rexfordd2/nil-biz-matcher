@@ -6,14 +6,17 @@ type Props = {
 	places: NormalizedPlace[]
 	selectedPlaceId?: string | null
 	onSelect?: (placeId: string) => void
+	onIdle?: (state: { center: { lat: number, lng: number }, zoom: number, bounds?: google.maps.LatLngBoundsLiteral }) => void
 	className?: string
 	height?: number
+	initialZoom?: number
 }
 
-export default function PlacesMap({ places, selectedPlaceId, onSelect, className, height = 420 }: Props) {
+export default function PlacesMap({ places, selectedPlaceId, onSelect, onIdle, className, height = 420, initialZoom = 12 }: Props) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const mapRef = useRef<google.maps.Map | null>(null)
 	const markersRef = useRef<Record<string, google.maps.Marker>>({})
+	const idleListenerRef = useRef<google.maps.MapsEventListener | null>(null)
 
 	const center = useMemo(() => {
 		if (!Array.isArray(places) || places.length === 0) return { lat: 39.5, lng: -98.35 } // USA approximate center
@@ -34,18 +37,41 @@ export default function PlacesMap({ places, selectedPlaceId, onSelect, className
 			if (!mapRef.current) {
 				mapRef.current = new google.maps.Map(containerRef.current, {
 					center,
-					zoom: 12,
+					zoom: initialZoom,
 					mapTypeControl: false,
 					streetViewControl: false,
 					fullscreenControl: false
 				})
+				// Attach idle listener
+				if (idleListenerRef.current) {
+					idleListenerRef.current.remove()
+					idleListenerRef.current = null
+				}
+				if (onIdle) {
+					idleListenerRef.current = mapRef.current.addListener('idle', () => {
+						if (!mapRef.current) return
+						const c = mapRef.current.getCenter()
+						const z = mapRef.current.getZoom() || initialZoom
+						const b = mapRef.current.getBounds()
+						onIdle({
+							center: { lat: c?.lat() ?? center.lat, lng: c?.lng() ?? center.lng },
+							zoom: z,
+							bounds: b ? {
+								north: b.getNorthEast().lat(),
+								east: b.getNorthEast().lng(),
+								south: b.getSouthWest().lat(),
+								west: b.getSouthWest().lng()
+							} : undefined
+						})
+					})
+				}
 			} else {
 				mapRef.current.setCenter(center)
 			}
 		}
 		init()
 		return () => { cancelled = true }
-	}, [center])
+	}, [center, onIdle, initialZoom])
 
 	// Render markers
 	useEffect(() => {
