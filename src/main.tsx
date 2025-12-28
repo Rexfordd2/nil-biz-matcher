@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
 import { AuthProvider } from './context/AuthContext'
+import { normalizeError } from './lib/normalizeError'
 
 function showBootError(error: unknown) {
 	const rootEl = document.getElementById('root')
@@ -18,31 +19,45 @@ function showBootError(error: unknown) {
 	console.error('Boot error:', error)
 }
 
+let appMounted = false
+
 window.addEventListener('error', (e) => {
-	showBootError(e.error || e.message)
-})
-window.addEventListener('unhandledrejection', (e) => {
-	showBootError((e as any)?.reason || e)
+	if (!appMounted) {
+		showBootError(normalizeError((e as any)?.error || (e as any)?.message))
+	} else {
+		// eslint-disable-next-line no-console
+		console.error('[window.error]', normalizeError((e as any)?.error || (e as any)?.message), e)
+	}
 })
 
-// Temporary crash logger (explicit console output for runtime errors)
-window.addEventListener('error', (e) => console.error('[window.error]', (e as any)?.error || (e as any)?.message, e))
-window.addEventListener('unhandledrejection', (e) => console.error('[unhandledrejection]', (e as any)?.reason, e))
+window.addEventListener('unhandledrejection', (e) => {
+	const reason = (e as any)?.reason
+	if (!appMounted) {
+		showBootError(normalizeError(reason))
+	} else {
+		// eslint-disable-next-line no-console
+		console.error('[unhandledrejection]', normalizeError(reason), e)
+	}
+})
 
 try {
 	const rootNode = document.getElementById('root')
 	if (!rootNode) {
 		throw new Error('Root element #root not found')
 	}
-	createRoot(rootNode).render(
+	const root = createRoot(rootNode)
+	root.render(
 		<StrictMode>
 			<AuthProvider>
 				<App />
 			</AuthProvider>
 		</StrictMode>
 	)
+	// Mark app as mounted only after successful render call
+	appMounted = true
 } catch (err) {
-	showBootError(err)
+	// During boot, show a friendly error screen
+	showBootError(normalizeError(err))
 }
 
 

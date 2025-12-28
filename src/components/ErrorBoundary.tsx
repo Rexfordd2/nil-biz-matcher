@@ -1,5 +1,6 @@
 import { Component, ReactNode } from 'react'
 import Card from './ui/Card'
+import { normalizeError } from '../lib/normalizeError'
 
 type ErrorBoundaryState = {
 	hasError: boolean
@@ -24,7 +25,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 	static getDerivedStateFromError(error: unknown): Partial<ErrorBoundaryState> {
 		return {
 			hasError: true,
-			errorMessage: error instanceof Error ? error.message : String(error ?? 'Unknown error')
+			errorMessage: normalizeError(error)
 		}
 	}
 
@@ -32,10 +33,9 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 		// eslint-disable-next-line no-console
 		console.error('ErrorBoundary:', error, errorInfo)
 		this.setState({
-			errorStack:
-				error instanceof Error
-					? error.stack || String(errorInfo?.componentStack || '')
-					: String(errorInfo?.componentStack || '')
+			errorStack: String(
+				(error instanceof Error && (error as Error).stack) ? (error as Error).stack : (errorInfo?.componentStack || '')
+			)
 		})
 	}
 
