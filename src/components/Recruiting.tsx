@@ -36,6 +36,8 @@ type OrgContact = {
   email: string | null
   phone: string | null
   contact_url: string | null
+  notes?: string | null
+  source_url?: string | null
 }
 
 type TargetRow = {
@@ -124,6 +126,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [results, setResults] = useState<CseResult[]>([])
+  const [queryText, setQueryText] = useState('')
   const [contactRole, setContactRole] = useState('')
   const [contactName, setContactName] = useState('')
   const [contactEmail, setContactEmail] = useState('')
@@ -133,6 +136,9 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   const [savingContact, setSavingContact] = useState(false)
   const [quickLinkUrl, setQuickLinkUrl] = useState('')
   const [savingQuickLink, setSavingQuickLink] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [saveContactSuccess, setSaveContactSuccess] = useState<string>('')
+  const [saveLinkSuccess, setSaveLinkSuccess] = useState<string>('')
 
   async function loadOrgs() {
     if (!canQuery) return
@@ -183,6 +189,16 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
     setContactPhone('')
     setContactUrl('')
     setContactNotes('')
+    setPasteText('')
+    // Seed default query
+    const { defaultQuery } = buildSearchLinks({
+      name: o.name,
+      city: o.city,
+      region: o.region,
+      country: o.country,
+      sport: o.sport
+    })
+    setQueryText(defaultQuery)
   }
 
   async function saveToTargets() {
@@ -211,6 +227,8 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
       if (error) throw error
       await loadContacts(selected.id)
       setQuickLinkUrl('')
+      setSaveLinkSuccess('Saved link')
+      setTimeout(() => setSaveLinkSuccess(''), 1500)
     } finally {
       setSavingQuickLink(false)
     }
@@ -251,14 +269,15 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
     setSearching(true)
     setSearchError(null)
     try {
-      const { defaultQuery } = buildSearchLinks({
+      const fallback = buildSearchLinks({
         name: selected.name,
         city: selected.city,
         region: selected.region,
         country: selected.country,
         sport: selected.sport
-      })
-      const res = await searchContacts(defaultQuery)
+      }).defaultQuery
+      const q = (queryText && queryText.trim()) ? queryText.trim() : fallback
+      const res = await searchContacts(q)
       setResults(res)
     } catch (e: any) {
       setSearchError('Search failed. Try the external links below.')
@@ -277,7 +296,8 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
         name: contactName || null,
         email: contactEmail || null,
         phone: contactPhone || null,
-        contact_url: contactUrl || null
+        contact_url: contactUrl || null,
+        notes: contactNotes || null
       } as any
       const { error } = await supabase!.from('org_contacts').insert([payload])
       if (error) throw error
@@ -288,9 +308,24 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
       setContactPhone('')
       setContactUrl('')
       setContactNotes('')
+      setSaveContactSuccess('Contact saved')
+      setTimeout(() => setSaveContactSuccess(''), 1500)
     } finally {
       setSavingContact(false)
     }
+  }
+
+  function parsePastedContact() {
+    const text = pasteText || ''
+    // First email
+    const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
+    if (emailMatch) setContactEmail(emailMatch[0])
+    // First phone (very permissive; captures international and various formats)
+    const phoneMatch = text.match(/(\+?\d[\d\s().-]{7,}\d)/)
+    if (phoneMatch) setContactPhone(phoneMatch[0].trim())
+    // First URL if present
+    const urlMatch = text.match(/https?:\/\/[^\s)]+/i)
+    if (urlMatch && !contactUrl) setContactUrl(urlMatch[0])
   }
 
   return (
@@ -372,53 +407,62 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                 {/* Find Contacts */}
                 <div className="border border-border rounded-lg p-3">
                   <div className="font-medium mb-2">Find Contacts</div>
-                  {!cseReady && (
-                    <div className="text-xs mb-2 text-foreground/70">
-                      Google in-app search not configured. Use external search links below.
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    {cseReady && (
-                      <Button onClick={searchInApp} disabled={searching}>
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-2">
+                    <Input placeholder="Edit search query…" value={queryText} onChange={e => setQueryText(e.target.value)} />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={searchInApp}
+                        disabled={!cseReady || searching || !queryText.trim()}
+                      >
                         {searching ? 'Searching…' : 'Search Google (in app)'}
                       </Button>
-                    )}
-                    {(() => {
-                      const links = buildSearchLinks({
-                        name: selected.name,
-                        city: selected.city,
-                        region: selected.region,
-                        country: selected.country,
-                        sport: selected.sport
-                      })
-                      return (
-                        <>
-                          <Button variant="secondary" onClick={() => window.open(links.googleUrl, '_blank')}>Open Google Search</Button>
-                          <Button variant="secondary" onClick={() => window.open(links.linkedInUrl, '_blank')}>Open LinkedIn Search</Button>
-                          <Button variant="secondary" onClick={() => window.open(links.xUrl, '_blank')}>Open X Search</Button>
-                        </>
-                      )
-                    })()}
+                      <Button variant="secondary" onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(queryText)}`, '_blank')}>
+                        Open Google
+                      </Button>
+                      <Button variant="secondary" onClick={() => window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(queryText)}`, '_blank')}>
+                        Open LinkedIn
+                      </Button>
+                      <Button variant="secondary" onClick={() => window.open(`https://x.com/search?q=${encodeURIComponent(queryText)}&src=typed_query`, '_blank')}>
+                        Open X
+                      </Button>
+                      {selected.website_url && (
+                        <Button variant="secondary" onClick={() => window.open(selected.website_url!, '_blank')}>
+                          Open Website
+                        </Button>
+                      )}
+                    </div>
                   </div>
+                  {!cseReady && (
+                    <div className="mt-1 text-xs text-foreground/60">
+                      In-app search unavailable (missing API key).
+                    </div>
+                  )}
 
-                  {searchError && <div className="mt-2 text-xs text-amber-300">{searchError}</div>}
-
+                  {/* In-app results */}
+                  {searchError && (
+                    <div className="mt-2 border border-red-500/40 bg-red-500/10 rounded-md p-2 text-sm">
+                      {searchError}
+                    </div>
+                  )}
                   {results.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {results.map((r, i) => (
-                        <div key={`res-${i}`} className="border border-border rounded-md p-2">
-                          <div className="text-sm font-medium truncate">{r.title}</div>
-                          <div className="text-xs text-foreground/70 line-clamp-2">{r.snippet}</div>
-                          <div className="mt-1 flex items-center gap-2">
-                            <a href={r.link} target="_blank" rel="noreferrer" className="text-blue-500 underline text-xs break-all">{r.link}</a>
+                    <div className="mt-3 border border-border rounded-md divide-y divide-border overflow-hidden">
+                      {results.map((r, idx) => (
+                        <div key={`r-${idx}`} className="p-3">
+                          <div className="font-medium break-all">
+                            <a href={r.link} target="_blank" rel="noreferrer" className="text-blue-600 underline">{r.title}</a>
+                          </div>
+                          <div className="text-sm text-foreground/70 mt-1 break-words">{r.snippet}</div>
+                          <div className="mt-2">
                             <Button
                               variant="secondary"
                               onClick={() => {
-                                setContactUrl(r.link)
-                                setContactNotes(prev => prev ? `${prev}\n${r.title}: ${r.snippet}` : `${r.title}: ${r.snippet}`)
+                                setContactUrl(r.link || '')
+                                setContactNotes(r.snippet || '')
+                                setContactRole(v => v || 'Lead')
+                                setContactName('')
                               }}
                             >
-                              Save as Contact
+                              Save as Lead
                             </Button>
                           </div>
                         </div>
@@ -436,6 +480,23 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                     <Button onClick={saveLinkAsContact} disabled={!userId || savingQuickLink || !quickLinkUrl.trim()}>
                       {savingQuickLink ? 'Saving…' : 'Save link as contact'}
                     </Button>
+                  </div>
+                  {saveLinkSuccess && (
+                    <div className="mt-1 text-green-600 text-sm" aria-live="polite">{saveLinkSuccess}</div>
+                  )}
+
+                  {/* Paste Contact Info */}
+                  <div className="mt-3">
+                    <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Paste Contact Info</div>
+                    <Textarea
+                      rows={3}
+                      placeholder="Paste any text from a web page…"
+                      value={pasteText}
+                      onChange={e => setPasteText(e.target.value)}
+                    />
+                    <div className="mt-2">
+                      <Button variant="secondary" onClick={parsePastedContact}>Parse</Button>
+                    </div>
                   </div>
                 </div>
 
@@ -456,6 +517,9 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                   <div className="mt-2 flex justify-end">
                     <Button onClick={saveManualContact} disabled={!userId || savingContact}>{savingContact ? 'Saving…' : 'Save'}</Button>
                   </div>
+                  {saveContactSuccess && (
+                    <div className="mt-1 text-green-600 text-sm" aria-live="polite">{saveContactSuccess}</div>
+                  )}
                 </div>
 
                 <div>
