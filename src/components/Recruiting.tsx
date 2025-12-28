@@ -342,6 +342,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
         </div>
       )}
     >
+      <div className="text-xs uppercase tracking-wide text-black">Directory Search Active</div>
       <div className="grid grid-cols-1 md:grid-cols-[1fr,360px] gap-6">
         <div className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
