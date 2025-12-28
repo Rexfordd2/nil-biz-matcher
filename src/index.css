@@ -32,12 +32,12 @@ body {
 
 /* Card primitive */
 .card {
-  @apply bg-white border border-slate-200 rounded-2xl shadow-sm p-6;
+  @apply bg-white text-black border border-slate-200 rounded-2xl shadow-sm p-6;
 }
 
 /* Button primitives */
 .btn {
-  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition;
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 min-h-10 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
 }
 .btn-primary {
 	@apply bg-slate-900 text-white hover:bg-slate-800;
@@ -95,6 +95,10 @@ body {
 .light-theme .text-gray-400 {
   color: #475569; /* slate-600 */
 }
+/* Ensure dark buttons keep white text even in light theme override contexts */
+.light-theme .btn-primary {
+  color: #fff;
+}
 
 /* Forms */
 .ui-input,
@@ -107,7 +111,7 @@ textarea.ui-input {
 
 /* Tables */
 .table thead th {
-  @apply text-xs font-semibold text-slate-700;
+  @apply text-xs font-semibold uppercase tracking-wide text-black/70;
 }
 .table th,
 .table td {

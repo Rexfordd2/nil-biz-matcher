@@ -48,16 +48,16 @@ export default function Resources({ onGoVendors }: { onGoVendors?: () => void })
 		<div className="space-y-6">
 			<header className="space-y-2">
 				<h2 className="headline text-2xl">NIL Resource Hub</h2>
-				<p className="text-gray-300">Curated links to help you learn fast, stay compliant, and build your brand.</p>
+				<p className="text-black/70">Curated links to help you learn fast, stay compliant, and build your brand.</p>
 			</header>
 
 			{onGoVendors && (
-				<Card className="bg-mid/50">
+				<Card>
 					<div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
 						<div>
-							<div className="text-white font-semibold">Need help executing your plan?</div>
-							<p className="text-gray-300 text-sm">Browse our informational directory of trusted partners and service providers.</p>
-							<p className="text-xs text-gray-400 mt-1">Informational only — you must vet and hire your own providers.</p>
+							<div className="text-black font-semibold">Need help executing your plan?</div>
+							<p className="text-black/70 text-sm">Browse our informational directory of trusted partners and service providers.</p>
+							<p className="text-xs text-black/70 mt-1">Informational only — you must vet and hire your own providers.</p>
 						</div>
 						<div className="shrink-0">
 							<Button onClick={onGoVendors} className="red-glow">Open Vendor Directory</Button>
@@ -67,13 +67,13 @@ export default function Resources({ onGoVendors }: { onGoVendors?: () => void })
 			)}
 			{CATEGORIES.map((cat) => (
 				<section key={cat.name} className="space-y-3">
-					<h3 className="text-white font-semibold text-lg">{cat.name}</h3>
+					<h3 className="text-black font-semibold text-lg">{cat.name}</h3>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 						{cat.items.map((item) => (
 							<Card key={item.title} className="h-full flex flex-col">
 								<div className="flex-1">
-									<div className="text-white font-semibold mb-1">{item.title}</div>
-									<p className="text-gray-300 text-sm">{item.description}</p>
+									<div className="text-black font-semibold mb-1">{item.title}</div>
+									<p className="text-black/70 text-sm">{item.description}</p>
 								</div>
 								<div className="pt-3">
 									<a href={item.url} target="_blank" rel="noreferrer">

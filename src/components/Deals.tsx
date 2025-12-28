@@ -135,11 +135,11 @@ export default function Deals({ athlete, businesses }: Props) {
 			<Card title="NIL Deals">
 				<div className="space-y-3">
 					<div className="flex items-center gap-2">
-						<select value={filterStatus} onChange={e => setFilterStatus((e.target.value as any) || 'all')} className="bg-mid border border-border rounded-md px-2 py-1 text-sm text-white">
+						<select value={filterStatus} onChange={e => setFilterStatus((e.target.value as any) || 'all')} className="ui-input max-w-xs">
 							<option value="all">All status</option>
 							{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 						</select>
-						<select value={filterType} onChange={e => setFilterType((e.target.value as any) || 'all')} className="bg-mid border border-border rounded-md px-2 py-1 text-sm text-white">
+						<select value={filterType} onChange={e => setFilterType((e.target.value as any) || 'all')} className="ui-input max-w-xs">
 							<option value="all">All types</option>
 							{TYPES.map(t => <option key={t} value={t}>{t.replaceAll('_',' ')}</option>)}
 						</select>
@@ -147,16 +147,16 @@ export default function Deals({ athlete, businesses }: Props) {
 						<Button onClick={addNewDeal}>Add Deal</Button>
 					</div>
 
-					<div className="overflow-auto">
-						<table className="min-w-full text-left text-sm">
+					<div className="overflow-x-auto">
+						<table className="min-w-full text-sm">
 							<thead>
-								<tr className="text-gray-400">
-									<th className="py-2 pr-2">Title</th>
-									<th className="py-2 pr-2">Brand</th>
-									<th className="py-2 pr-2">Type</th>
-									<th className="py-2 pr-2">Status</th>
-									<th className="py-2 pr-2">Value</th>
-									<th className="py-2 pr-2">Flags</th>
+								<tr>
+									<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Title</th>
+									<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Brand</th>
+									<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Type</th>
+									<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Status</th>
+									<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Value</th>
+									<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Flags</th>
 									<th />
 								</tr>
 							</thead>
@@ -164,26 +164,26 @@ export default function Deals({ athlete, businesses }: Props) {
 								{dealsForAthlete.map(d => {
 									const flags = computeRiskFlags(d)
 									return (
-										<tr key={d.id} className={`border-t border-border ${selectedId === d.id ? 'bg-mid/50' : ''}`}>
-											<td className="py-2 pr-2 text-white">
+										<tr key={d.id} className={`border-b border-black/10 ${selectedId === d.id ? 'bg-slate-50' : ''}`}>
+											<td className="px-3 py-2 text-black">
 												<button className="underline" onClick={() => setSelectedId(d.id)}>{d.title || '(untitled deal)'}</button>
 											</td>
-											<td className="py-2 pr-2 text-gray-200">{d.brandName || '—'}</td>
-											<td className="py-2 pr-2 text-gray-300">{d.dealType.replaceAll('_',' ')}</td>
-											<td className="py-2 pr-2">
-												<select value={d.status} onChange={e => upsertDeal({ ...d, status: e.target.value as DealStatus })} className="bg-background border border-border rounded-md px-2 py-1 text-xs text-white">
+											<td className="px-3 py-2 text-black">{d.brandName || '—'}</td>
+											<td className="px-3 py-2 text-black/80">{d.dealType.replaceAll('_',' ')}</td>
+											<td className="px-3 py-2">
+												<select value={d.status} onChange={e => upsertDeal({ ...d, status: e.target.value as DealStatus })} className="ui-input text-xs max-w-[160px]">
 													{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 												</select>
 											</td>
-											<td className="py-2 pr-2 text-gray-200">{d.valueEstimate ? `${d.currency || 'USD'} ${d.valueEstimate}` : '—'}</td>
-											<td className="py-2 pr-2">
+											<td className="px-3 py-2 text-black">{d.valueEstimate ? `${d.currency || 'USD'} ${d.valueEstimate}` : '—'}</td>
+											<td className="px-3 py-2">
 												<div className="flex flex-wrap gap-1">
-													{d.licensing?.usesSchoolMarks && <span className="inline-block text-xs bg-mid border border-border rounded px-2 py-0.5 text-amber-300">Licensing</span>}
-													{d.reportedToSchool && <span className="inline-block text-xs bg-mid border border-border rounded px-2 py-0.5 text-green-300">Reported</span>}
-													{flags.length > 0 && <span className="inline-block text-xs bg-mid border border-border rounded px-2 py-0.5 text-red-300">Risk</span>}
+													{d.licensing?.usesSchoolMarks && <span className="inline-block text-xs bg-black/5 border border-black/10 rounded px-2 py-0.5 text-black">Licensing</span>}
+													{d.reportedToSchool && <span className="inline-block text-xs bg-black/5 border border-black/10 rounded px-2 py-0.5 text-black">Reported</span>}
+													{flags.length > 0 && <span className="inline-block text-xs bg-black/5 border border-black/10 rounded px-2 py-0.5 text-black">Risk</span>}
 												</div>
 											</td>
-											<td className="py-2 pr-2 text-right">
+											<td className="px-3 py-2 text-right">
 												<Button variant="ghost" onClick={() => removeDeal(d.id)}>Remove</Button>
 											</td>
 										</tr>
@@ -191,7 +191,7 @@ export default function Deals({ athlete, businesses }: Props) {
 								})}
 								{dealsForAthlete.length === 0 && (
 									<tr>
-										<td colSpan={7} className="py-6 text-center text-gray-400">No deals yet — click “Add Deal” to start your log.</td>
+										<td colSpan={7} className="px-3 py-6 text-center text-black/70">No deals yet — click “Add Deal” to start your log.</td>
 									</tr>
 								)}
 							</tbody>
@@ -266,59 +266,59 @@ function DealEditor({ deal, onChange, businesses }: { deal: DealLogEntry; onChan
 				</div>
 			)}
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<input value={deal.title} onChange={e => onChange({ ...deal, title: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Deal title" />
-				<input value={deal.brandName} onChange={e => onChange({ ...deal, brandName: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Brand name" />
-				<select value={deal.dealType} onChange={e => onChange({ ...deal, dealType: e.target.value as DealType })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<input value={deal.title} onChange={e => onChange({ ...deal, title: e.target.value })} className="ui-input" placeholder="Deal title" />
+				<input value={deal.brandName} onChange={e => onChange({ ...deal, brandName: e.target.value })} className="ui-input" placeholder="Brand name" />
+				<select value={deal.dealType} onChange={e => onChange({ ...deal, dealType: e.target.value as DealType })} className="ui-input">
 					{TYPES.map(t => <option key={t} value={t}>{t.replaceAll('_',' ')}</option>)}
 				</select>
-				<select value={deal.status} onChange={e => onChange({ ...deal, status: e.target.value as DealStatus })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<select value={deal.status} onChange={e => onChange({ ...deal, status: e.target.value as DealStatus })} className="ui-input">
 					{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 				</select>
 				<div className="grid grid-cols-2 gap-2">
-					<input type="number" min={0} value={deal.valueEstimate ?? ''} onChange={e => onChange({ ...deal, valueEstimate: e.target.value === '' ? undefined : Number(e.target.value) })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Value estimate" />
-					<input value={deal.currency || 'USD'} onChange={e => onChange({ ...deal, currency: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Currency (e.g., USD)" />
+					<input type="number" min={0} value={deal.valueEstimate ?? ''} onChange={e => onChange({ ...deal, valueEstimate: e.target.value === '' ? undefined : Number(e.target.value) })} className="ui-input" placeholder="Value estimate" />
+					<input value={deal.currency || 'USD'} onChange={e => onChange({ ...deal, currency: e.target.value })} className="ui-input" placeholder="Currency (e.g., USD)" />
 				</div>
 				<div className="grid grid-cols-2 gap-2">
-					<input type="date" value={deal.startDate || ''} onChange={e => onChange({ ...deal, startDate: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
-					<input type="date" value={deal.endDate || ''} onChange={e => onChange({ ...deal, endDate: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
+					<input type="date" value={deal.startDate || ''} onChange={e => onChange({ ...deal, startDate: e.target.value })} className="ui-input" />
+					<input type="date" value={deal.endDate || ''} onChange={e => onChange({ ...deal, endDate: e.target.value })} className="ui-input" />
 				</div>
-				<select value={deal.businessId || ''} onChange={e => onChange({ ...deal, businessId: e.target.value || undefined })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<select value={deal.businessId || ''} onChange={e => onChange({ ...deal, businessId: e.target.value || undefined })} className="ui-input">
 					<option value="">Link business (optional)</option>
 					{bizOptions.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
 				</select>
-				<input value={deal.exclusivityNotes || ''} onChange={e => onChange({ ...deal, exclusivityNotes: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Exclusivity notes (if any)" />
+				<input value={deal.exclusivityNotes || ''} onChange={e => onChange({ ...deal, exclusivityNotes: e.target.value })} className="ui-input" placeholder="Exclusivity notes (if any)" />
 			</div>
 
 			<div>
 				<div className="flex items-center justify-between mb-2">
-					<div className="subtle text-sm">Deliverables</div>
+					<div className="text-black/70 text-sm">Deliverables</div>
 					<Button variant="ghost" onClick={() => addDeliverable(deal)}>Add</Button>
 				</div>
 				<div className="space-y-2">
 					{(deal.deliverables || []).map((item, idx) => (
 						<div key={`del-${idx}`} className="grid grid-cols-12 gap-2">
-							<input value={item} onChange={e => updateDeliverable(deal, idx, e.target.value)} className="col-span-10 bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Deliverable description" />
+							<input value={item} onChange={e => updateDeliverable(deal, idx, e.target.value)} className="col-span-10 ui-input" placeholder="Deliverable description" />
 							<div className="col-span-2 flex justify-end">
 								<Button variant="ghost" onClick={() => removeDeliverable(deal, idx)}>Remove</Button>
 							</div>
 						</div>
 					))}
-					{(deal.deliverables || []).length === 0 && <div className="subtle text-sm">Add what you’ll do (posts, appearances, etc.)</div>}
+					{(deal.deliverables || []).length === 0 && <div className="text-black/70 text-sm">Add what you’ll do (posts, appearances, etc.)</div>}
 				</div>
 			</div>
 
 			<div>
 				<div className="flex items-center justify-between mb-2">
-					<div className="subtle text-sm">Payments</div>
+					<div className="text-black/70 text-sm">Payments</div>
 					<Button variant="ghost" onClick={() => addPayment(deal)}>Add Payment</Button>
 				</div>
 				<div className="space-y-2">
 					{(deal.payments || []).map((p, idx) => (
 						<div key={`pay-${idx}`} className="grid grid-cols-12 gap-2">
-							<input type="date" value={p.date} onChange={e => updatePayment(deal, idx, { date: e.target.value })} className="col-span-3 bg-background border border-border rounded-md px-3 py-2 text-white" />
-							<input type="number" min={0} value={p.amount} onChange={e => updatePayment(deal, idx, { amount: Number(e.target.value) })} className="col-span-2 bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Amount" />
-							<input value={p.currency} onChange={e => updatePayment(deal, idx, { currency: e.target.value })} className="col-span-2 bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Currency" />
-							<select value={p.method || ''} onChange={e => updatePayment(deal, idx, { method: (e.target.value || undefined) as any })} className="col-span-3 bg-background border border-border rounded-md px-3 py-2 text-white">
+							<input type="date" value={p.date} onChange={e => updatePayment(deal, idx, { date: e.target.value })} className="col-span-3 ui-input" />
+							<input type="number" min={0} value={p.amount} onChange={e => updatePayment(deal, idx, { amount: Number(e.target.value) })} className="col-span-2 ui-input" placeholder="Amount" />
+							<input value={p.currency} onChange={e => updatePayment(deal, idx, { currency: e.target.value })} className="col-span-2 ui-input" placeholder="Currency" />
+							<select value={p.method || ''} onChange={e => updatePayment(deal, idx, { method: (e.target.value || undefined) as any })} className="col-span-3 ui-input">
 								<option value="">Method</option>
 								<option value="cash">Cash</option>
 								<option value="check">Check</option>
@@ -329,19 +329,19 @@ function DealEditor({ deal, onChange, businesses }: { deal: DealLogEntry; onChan
 							<Button variant="ghost" onClick={() => removePayment(deal, idx)}>Remove</Button>
 						</div>
 					))}
-					{(deal.payments || []).length === 0 && <div className="subtle text-sm">Record payments as you receive them.</div>}
+					{(deal.payments || []).length === 0 && <div className="text-black/70 text-sm">Record payments as you receive them.</div>}
 				</div>
 			</div>
 
 			<div>
 				<div className="flex items-center justify-between mb-2">
-					<div className="subtle text-sm">Documents (links to contracts/releases)</div>
+					<div className="text-black/70 text-sm">Documents (links to contracts/releases)</div>
 					<div className="flex gap-2">
-						<input value={docUrl} onChange={e => setDocUrl(e.target.value)} placeholder="https://…" className="bg-background border border-border rounded-md px-3 py-2 text-white" />
+						<input value={docUrl} onChange={e => setDocUrl(e.target.value)} placeholder="https://…" className="ui-input" />
 						<Button variant="ghost" onClick={() => { if (docUrl.trim()) { onChange({ ...deal, documents: [ ...(deal.documents || []), docUrl.trim() ] }); setDocUrl('') } }}>Add</Button>
 					</div>
 				</div>
-				<ul className="list-disc pl-6 space-y-1 text-gray-200 text-sm">
+				<ul className="list-disc pl-6 space-y-1 text-black text-sm">
 					{(deal.documents || []).map((u, idx) => (
 						<li key={`doc-${idx}`}>
 							<a href={u} className="underline" target="_blank" rel="noreferrer">{u}</a>
@@ -363,41 +363,41 @@ function DealCompliance({ deal, onChange }: { deal: DealLogEntry; onChange: (d: 
 	}, [notes])
 	return (
 		<div className="space-y-4">
-			<div className="bg-mid border border-border rounded-md p-3">
-				<div className="text-white font-semibold mb-2">Licensing</div>
-				<label className="inline-flex items-center gap-2 text-sm text-gray-300">
+			<div className="bg-white border border-black/10 rounded-md p-3">
+				<div className="text-black font-semibold mb-2">Licensing</div>
+				<label className="inline-flex items-center gap-2 text-sm text-black/70">
 					<input type="checkbox" checked={!!licensing.usesSchoolMarks} onChange={e => onChange({ ...deal, licensing: { ...licensing, usesSchoolMarks: e.target.checked } })} />
 					<span>Uses school marks (logos, uniforms, facilities)?</span>
 				</label>
 				<textarea
 					value={licensing.notes || ''}
 					onChange={e => onChange({ ...deal, licensing: { ...licensing, notes: e.target.value } })}
-					className="w-full bg-background border border-border rounded-md px-3 py-2 text-white mt-2"
+					className="w-full ui-input mt-2"
 					placeholder="Notes about permissions or usage"
 				/>
 			</div>
-			<div className="bg-mid border border-border rounded-md p-3">
-				<div className="text-white font-semibold mb-2">Reporting</div>
-				<label className="inline-flex items-center gap-2 text-sm text-gray-300">
+			<div className="bg-white border border-black/10 rounded-md p-3">
+				<div className="text-black font-semibold mb-2">Reporting</div>
+				<label className="inline-flex items-center gap-2 text-sm text-black/70">
 					<input type="checkbox" checked={!!deal.reportedToSchool} onChange={e => onChange({ ...deal, reportedToSchool: e.target.checked })} />
 					<span>Reported to school?</span>
 				</label>
 				<br />
-				<label className="inline-flex items-center gap-2 text-sm text-gray-300">
+				<label className="inline-flex items-center gap-2 text-sm text-black/70">
 					<input type="checkbox" checked={!!deal.reportedToCollective} onChange={e => onChange({ ...deal, reportedToCollective: e.target.checked })} />
 					<span>Reported to collective?</span>
 				</label>
 			</div>
-			<div className="bg-mid border border-border rounded-md p-3">
-				<div className="text-white font-semibold mb-2">Compliance Notes</div>
+			<div className="bg-white border border-black/10 rounded-md p-3">
+				<div className="text-black font-semibold mb-2">Compliance Notes</div>
 				<textarea
 					value={notes}
 					onChange={e => setNotes(e.target.value)}
-					className="w-full bg-background border border-border rounded-md px-3 py-2 text-white"
+					className="w-full ui-input"
 					placeholder="Any compliance considerations, limits, or approvals"
 				/>
 			</div>
-			<p className="text-xs text-gray-400">This is educational only, not legal/financial advice.</p>
+			<p className="text-xs text-black/70">This is educational only, not legal/financial advice.</p>
 		</div>
 	)
 }

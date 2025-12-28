@@ -1033,30 +1033,30 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                       </ul>
                     </div>
                   )}
-                  <div className="overflow-auto border border-border rounded-md">
+                  <div className="overflow-x-auto border border-black/10 rounded-md">
                     <table className="min-w-full text-sm">
-                      <thead className="bg-surface">
+                      <thead>
                         <tr>
                           {['org_name','sport','level','org_type','country','region','city','website_url','general_email','general_phone','source_url','contacts_json'].map(h => (
-                            <th key={h} className="px-2 py-2 text-left font-medium border-b border-border">{h}</th>
+                            <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70 border-b border-black/10">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {importRows.slice(0, 10).map((r, i) => (
-                          <tr key={`row-${i}`} className="border-b border-border">
-                            <td className="px-2 py-2">{r.org_name}</td>
-                            <td className="px-2 py-2">{r.sport}</td>
-                            <td className="px-2 py-2">{r.level}</td>
-                            <td className="px-2 py-2">{r.org_type}</td>
-                            <td className="px-2 py-2">{r.country}</td>
-                            <td className="px-2 py-2">{r.region}</td>
-                            <td className="px-2 py-2">{r.city}</td>
-                            <td className="px-2 py-2 break-all">{r.website_url}</td>
-                            <td className="px-2 py-2 break-all">{r.general_email}</td>
-                            <td className="px-2 py-2 break-all">{r.general_phone}</td>
-                            <td className="px-2 py-2 break-all">{r.source_url}</td>
-                            <td className="px-2 py-2"><span className="text-foreground/60">{r.contacts_json ? 'yes' : ''}</span></td>
+                          <tr key={`row-${i}`} className="border-b border-black/10">
+                            <td className="px-3 py-2 text-sm text-black">{r.org_name}</td>
+                            <td className="px-3 py-2 text-sm text-black">{r.sport}</td>
+                            <td className="px-3 py-2 text-sm text-black">{r.level}</td>
+                            <td className="px-3 py-2 text-sm text-black">{r.org_type}</td>
+                            <td className="px-3 py-2 text-sm text-black">{r.country}</td>
+                            <td className="px-3 py-2 text-sm text-black">{r.region}</td>
+                            <td className="px-3 py-2 text-sm text-black">{r.city}</td>
+                            <td className="px-3 py-2 text-sm text-black break-all">{r.website_url}</td>
+                            <td className="px-3 py-2 text-sm text-black break-all">{r.general_email}</td>
+                            <td className="px-3 py-2 text-sm text-black break-all">{r.general_phone}</td>
+                            <td className="px-3 py-2 text-sm text-black break-all">{r.source_url}</td>
+                            <td className="px-3 py-2 text-sm"><span className="text-black/70">{r.contacts_json ? 'yes' : ''}</span></td>
                           </tr>
                         ))}
                       </tbody>

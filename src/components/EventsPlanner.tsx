@@ -65,38 +65,38 @@ export default function EventsPlanner({ athlete }: Props) {
 	return (
 		<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 			<Card title="Events & Camps" actions={<Button onClick={addNew}>New</Button>}>
-				<div className="overflow-auto">
-					<table className="table min-w-full text-left text-sm">
+				<div className="overflow-x-auto">
+					<table className="table min-w-full text-sm">
 						<thead>
-							<tr className="text-gray-400">
-								<th className="py-2 pr-2">Date</th>
-								<th className="py-2 pr-2">Name</th>
-								<th className="py-2 pr-2">Type</th>
-								<th className="py-2 pr-2">Location</th>
-								<th className="py-2 pr-2">Linked Deal</th>
+							<tr>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Date</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Name</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Type</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Location</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Linked Deal</th>
 								<th />
 							</tr>
 						</thead>
 						<tbody>
 							{list.map(evt => (
-								<tr key={evt.id} className={`border-t border-border ${selectedId === evt.id ? 'bg-mid/50' : ''}`}>
-									<td className="py-2 pr-2 text-gray-300">{evt.date}</td>
-									<td className="py-2 pr-2 text-white">
+								<tr key={evt.id} className={`border-b border-black/10 ${selectedId === evt.id ? 'bg-slate-50' : ''}`}>
+									<td className="px-3 py-2 text-black/80">{evt.date}</td>
+									<td className="px-3 py-2 text-black">
 										<button className="underline" onClick={() => setSelectedId(evt.id)}>{evt.name || '(untitled event)'}</button>
 									</td>
-									<td className="py-2 pr-2 text-gray-300">{evt.type.replaceAll('_',' ')}</td>
-									<td className="py-2 pr-2 text-gray-200">{evt.location || '—'}</td>
-									<td className="py-2 pr-2 text-gray-300">
+									<td className="px-3 py-2 text-black/80">{evt.type.replaceAll('_',' ')}</td>
+									<td className="px-3 py-2 text-black">{evt.location || '—'}</td>
+									<td className="px-3 py-2 text-black/80">
 										{evt.linkedDealId ? (dealsForAthlete.find(d => d.id === evt.linkedDealId)?.label || evt.linkedDealId) : '—'}
 									</td>
-									<td className="py-2 pr-2 text-right">
+									<td className="px-3 py-2 text-right">
 										<Button variant="ghost" onClick={() => remove(evt.id)}>Remove</Button>
 									</td>
 								</tr>
 							))}
 							{list.length === 0 && (
 								<tr>
-									<td colSpan={6} className="py-6 text-center text-gray-400">No events planned yet — click “New” to add one.</td>
+									<td colSpan={6} className="px-3 py-6 text-center text-black/70">No events planned yet — click “New” to add one.</td>
 								</tr>
 							)}
 						</tbody>

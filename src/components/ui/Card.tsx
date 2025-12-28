@@ -12,7 +12,7 @@ export default function Card({ title, actions, className, children }: Props) {
 		<section className={clsx('card', className)}>
 			{(title || actions) && (
 				<header className="mb-4 flex items-center justify-between">
-					{title && <h3 className="headline text-xl">{title}</h3>}
+					{title && <h3 className="text-black font-semibold text-xl">{title}</h3>}
 					{actions}
 				</header>
 			)}
