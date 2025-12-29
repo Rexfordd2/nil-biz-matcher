@@ -36,6 +36,7 @@ export default function OpportunityBoard({ athlete }: Props) {
 	const [store, setStore] = useState<Store>(() => load<Store>('opps.store', {}))
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [statusFilter, setStatusFilter] = useState<OpportunityStatus | 'all'>('all')
+	const [activeTab, setActiveTab] = useState<'board' | 'details' | 'notes'>('board')
 
 	useEffect(() => save('opps.store', store), [store])
 
@@ -70,18 +71,30 @@ export default function OpportunityBoard({ athlete }: Props) {
 		const o = createEmpty(athlete.id)
 		upsert(o)
 		setSelectedId(o.id)
+		setActiveTab('details')
 	}
 
 	return (
-		<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-			<Card title="Opportunity Board" actions={<Button onClick={addNew}>New</Button>}>
-				<div className="space-y-3">
-					<div className="flex items-center gap-2">
+		<Card title="Opportunities">
+			<div className="mb-4 flex items-center gap-2">
+				<nav className="flex items-center gap-2">
+					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'board' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('board')}>Board</button>
+					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'details' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('details')}>Details</button>
+					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'notes' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('notes')}>Notes</button>
+				</nav>
+				{activeTab === 'board' && (
+					<div className="ml-auto flex items-center gap-2">
 						<select value={statusFilter} onChange={e => setStatusFilter((e.target.value as any) || 'all')} className="bg-mid border border-border rounded-md px-2 py-1 text-sm text-white">
 							<option value="all">All status</option>
 							{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 						</select>
+						<Button onClick={addNew}>New</Button>
 					</div>
+				)}
+			</div>
+
+			{activeTab === 'board' && (
+				<div className="space-y-4">
 					{statusFilter === 'all' ? (
 						<div className="space-y-6">
 							{STATUSES.map(s => {
@@ -89,22 +102,22 @@ export default function OpportunityBoard({ athlete }: Props) {
 								return (
 									<div key={`grp-${s}`}>
 										<div className="text-white font-semibold mb-2">{s.replaceAll('_',' ')}</div>
-										<div className="overflow-auto">
-											<table className="min-w-full text-left text-sm">
+										<div className="overflow-x-auto">
+											<table className="min-w-[720px] text-left text-sm">
 												<thead>
 													<tr className="text-gray-400">
-														<th className="py-2 pr-2">Title</th>
-														<th className="py-2 pr-2">Category</th>
-														<th className="py-2 pr-2">Target brand</th>
-														<th className="py-2 pr-2">Status</th>
-														<th />
+														<th className="py-2 pr-2 w-[35%]">Title</th>
+														<th className="py-2 pr-2 w-[20%]">Category</th>
+														<th className="py-2 pr-2 w-[25%]">Target brand</th>
+														<th className="py-2 pr-2 w-[15%]">Status</th>
+														<th className="w-[5%]" />
 													</tr>
 												</thead>
 												<tbody>
 													{rows.map(o => (
 														<tr key={o.id} className={`border-t border-border ${selectedId === o.id ? 'bg-mid/50' : ''}`}>
-															<td className="py-2 pr-2 text-white"><button className="underline" onClick={() => setSelectedId(o.id)}>{o.title || '(untitled)'}</button></td>
-															<td className="py-2 pr-2 text-gray-300">{o.category.replaceAll('_',' ')}</td>
+															<td className="py-2 pr-2 text-white whitespace-nowrap"><button className="underline" onClick={() => { setSelectedId(o.id); setActiveTab('details') }}>{o.title || '(untitled)'}</button></td>
+															<td className="py-2 pr-2 text-gray-300 whitespace-nowrap">{o.category.replaceAll('_',' ')}</td>
 															<td className="py-2 pr-2 text-gray-200">{o.targetBrandName || '—'}</td>
 															<td className="py-2 pr-2">
 																<select value={o.status} onChange={e => upsert({ ...o, status: e.target.value as OpportunityStatus })} className="bg-background border border-border rounded-md px-2 py-1 text-xs text-white">
@@ -112,7 +125,7 @@ export default function OpportunityBoard({ athlete }: Props) {
 																</select>
 															</td>
 															<td className="py-2 pr-2 text-right">
-																<Button variant="ghost" onClick={() => remove(o.id)}>Remove</Button>
+																<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => remove(o.id)}>Remove</Button>
 															</td>
 														</tr>
 													))}
@@ -129,22 +142,22 @@ export default function OpportunityBoard({ athlete }: Props) {
 							})}
 						</div>
 					) : (
-						<div className="overflow-auto">
-							<table className="min-w-full text-left text-sm">
+						<div className="overflow-x-auto">
+							<table className="min-w-[720px] text-left text-sm">
 								<thead>
 									<tr className="text-gray-400">
-										<th className="py-2 pr-2">Title</th>
-										<th className="py-2 pr-2">Category</th>
-										<th className="py-2 pr-2">Target brand</th>
-										<th className="py-2 pr-2">Status</th>
-										<th />
+										<th className="py-2 pr-2 w-[35%]">Title</th>
+										<th className="py-2 pr-2 w-[20%]">Category</th>
+										<th className="py-2 pr-2 w-[25%]">Target brand</th>
+										<th className="py-2 pr-2 w-[15%]">Status</th>
+										<th className="w-[5%]" />
 									</tr>
 								</thead>
 								<tbody>
 									{list.map(o => (
 										<tr key={o.id} className={`border-t border-border ${selectedId === o.id ? 'bg-mid/50' : ''}`}>
-											<td className="py-2 pr-2 text-white"><button className="underline" onClick={() => setSelectedId(o.id)}>{o.title || '(untitled)'}</button></td>
-											<td className="py-2 pr-2 text-gray-300">{o.category.replaceAll('_',' ')}</td>
+											<td className="py-2 pr-2 text-white whitespace-nowrap"><button className="underline" onClick={() => { setSelectedId(o.id); setActiveTab('details') }}>{o.title || '(untitled)'}</button></td>
+											<td className="py-2 pr-2 text-gray-300 whitespace-nowrap">{o.category.replaceAll('_',' ')}</td>
 											<td className="py-2 pr-2 text-gray-200">{o.targetBrandName || '—'}</td>
 											<td className="py-2 pr-2">
 												<select value={o.status} onChange={e => upsert({ ...o, status: e.target.value as OpportunityStatus })} className="bg-background border border-border rounded-md px-2 py-1 text-xs text-white">
@@ -152,7 +165,7 @@ export default function OpportunityBoard({ athlete }: Props) {
 												</select>
 											</td>
 											<td className="py-2 pr-2 text-right">
-												<Button variant="ghost" onClick={() => remove(o.id)}>Remove</Button>
+												<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => remove(o.id)}>Remove</Button>
 											</td>
 										</tr>
 									))}
@@ -166,33 +179,37 @@ export default function OpportunityBoard({ athlete }: Props) {
 						</div>
 					)}
 				</div>
-			</Card>
+			)}
 
-			<Card title="Details">
-				{!selected ? (
-					<div className="subtle">Select an opportunity to edit.</div>
-				) : (
-					<OpportunityEditor
-						value={selected}
-						onChange={upsert}
-						deals={dealsForAthlete}
-					/>
-				)}
-			</Card>
+			{activeTab === 'details' && (
+				<div>
+					{!selected ? (
+						<div className="subtle">Select an opportunity to edit.</div>
+					) : (
+						<OpportunityEditor
+							value={selected}
+							onChange={upsert}
+							deals={dealsForAthlete}
+						/>
+					)}
+				</div>
+			)}
 
-			<Card title="Notes">
-				{!selected ? (
-					<div className="subtle">Notes for the selected opportunity will appear here.</div>
-				) : (
-					<textarea
-						value={selected.notes || ''}
-						onChange={e => upsert({ ...selected, notes: e.target.value })}
-						className="w-full bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[200px]"
-						placeholder="Freeform notes (meeting summaries, next steps)…"
-					/>
-				)}
-			</Card>
-		</div>
+			{activeTab === 'notes' && (
+				<div>
+					{!selected ? (
+						<div className="subtle">Notes for the selected opportunity will appear here.</div>
+					) : (
+						<textarea
+							value={selected.notes || ''}
+							onChange={e => upsert({ ...selected, notes: e.target.value })}
+							className="w-full bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[200px]"
+							placeholder="Freeform notes (meeting summaries, next steps)…"
+						/>
+					)}
+				</div>
+			)}
+		</Card>
 	)
 }
 

@@ -5,20 +5,18 @@ import Input from './ui/Input'
 import Textarea from './ui/Textarea'
 import { useToast } from './ui/Toast'
 import type { AthleteProfile } from '../types'
-import type { CoachOutreach, HighlightClip, RecruitingCoach } from '../recruiting/blastTypes'
+import type { CoachOutreach, HighlightClip } from '../recruiting/blastTypes'
 import { useAuth } from '../context/AuthContext'
 import {
 	createOutreach,
-	deleteCoach,
 	deleteClip,
 	getClips,
-	getCoaches,
 	getOutreach,
 	recordClickByToken,
 	recordOpenByToken,
-	upsertCoach,
 	upsertClip
 } from '../recruiting/blastStorage'
+import { supabase } from '../lib/supabaseClient'
 
 type Props = {
 	athlete: AthleteProfile | null
@@ -27,17 +25,12 @@ type Props = {
 export default function RecruitingBlast({ athlete }: Props) {
 	const { show } = useToast()
 	const { user } = useAuth()
-	const [coaches, setCoaches] = useState<RecruitingCoach[]>([])
+
+	type Recipient = { id: string; name: string; email: string; orgId: string; orgName: string }
+	const [recipients, setRecipients] = useState<Recipient[]>([])
 	const [clips, setClips] = useState<HighlightClip[]>([])
 	const [outreach, setOutreach] = useState<CoachOutreach[]>([])
 
-	const [coachForm, setCoachForm] = useState<Omit<RecruitingCoach, 'id' | 'createdAt' | 'updatedAt'>>({
-		name: '',
-		email: '',
-		school: '',
-		sport: '',
-		level: ''
-	})
 	const [clipForm, setClipForm] = useState<Omit<HighlightClip, 'id' | 'createdAt'>>({
 		athleteId: athlete?.id || '',
 		title: '',
@@ -45,47 +38,120 @@ export default function RecruitingBlast({ athlete }: Props) {
 		description: ''
 	})
 
-	const [selectedCoachIds, setSelectedCoachIds] = useState<string[]>([])
+	const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
 	const [selectedClipId, setSelectedClipId] = useState<string>('')
 	const [subject, setSubject] = useState<string>('')
 	const [body, setBody] = useState<string>('')
 
+	function generateTemplate() {
+		const name = (user as any)?.fullName || '[Your Name]'
+		const position = '[Position]'
+		const grad = '[Grad Year]'
+		const stats = '[Key stats/accolades]'
+		const hudl = '[HUDL link]'
+		const highlights = '[Highlights video link]'
+		const profile = '[Profile/Resume link]'
+		return [
+			'Hi Coach [Last Name],',
+			'',
+			`My name is ${name}, a ${position} in the class of ${grad}.`,
+			`Quick highlights: ${stats}.`,
+			'',
+			'Why I’m reaching out:',
+			'- Briefly share fit/interest in your program (1–2 sentences).',
+			'',
+			'Links:',
+			`- HUDL: ${hudl}`,
+			`- Highlights: ${highlights}`,
+			`- Profile: ${profile}`,
+			'',
+			'Next step:',
+			'- I’d appreciate any feedback and the chance to connect.',
+			'- Happy to share transcripts, schedule, and references upon request.',
+			'',
+			'Thank you for your time,',
+			`${name}`,
+			'[High School / Club]',
+			'[City, State]',
+			'[Phone] • [Email]'
+		].join('\n')
+	}
+
+	// Insert default template on first load if body is empty
 	useEffect(() => {
-		setCoaches(getCoaches())
+		if (!body) {
+			setBody(generateTemplate())
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
+
+	useEffect(() => {
 		setClips(getClips(athlete?.id))
 		setOutreach(getOutreach(athlete?.id))
 	}, [athlete?.id])
+
+	// Load recipients from My Targets' org contacts (with email)
+	useEffect(() => {
+		let cancelled = false
+		async function loadRecipients() {
+			if (!supabase || !user) {
+				if (!cancelled) setRecipients([])
+				return
+			}
+			// 1) Get user's target org IDs
+			const { data: targets, error: tErr } = await supabase
+				.from('user_targets')
+				.select('org_id')
+				.eq('user_id', user.id)
+			if (cancelled) return
+			if (tErr || !Array.isArray(targets) || targets.length === 0) {
+				setRecipients([])
+				return
+			}
+			const orgIds = Array.from(new Set((targets as any[]).map(r => r.org_id as string))).filter(Boolean)
+			// 2) Map org_id -> org_name
+			const { data: orgsData } = await supabase
+				.from('orgs')
+				.select('id, name')
+				.in('id', orgIds)
+			const orgNameById = new Map<string, string>((orgsData || []).map((o: any) => [String(o.id), String(o.name || 'Org')]))
+			// 3) Load contacts with emails
+			const { data: contactsData } = await supabase
+				.from('org_contacts')
+				.select('id, org_id, name, email')
+				.in('org_id', orgIds)
+			const next: Recipient[] = (contactsData || [])
+				.filter((c: any) => typeof c?.email === 'string' && c.email.trim())
+				.map((c: any) => ({
+					id: String(c.id),
+					name: String(c.name || 'Coach'),
+					email: String(c.email),
+					orgId: String(c.org_id),
+					orgName: orgNameById.get(String(c.org_id)) || 'Org'
+				}))
+			if (!cancelled) setRecipients(next)
+		}
+		// eslint-disable-next-line @typescript-eslint/no-floating-promises
+		loadRecipients()
+		return () => { cancelled = true }
+	}, [user])
 
 	useEffect(() => {
 		// Keep athleteId in clip form in sync
 		setClipForm(prev => ({ ...prev, athleteId: athlete?.id || '' }))
 	}, [athlete?.id])
 
-	const allSelected = useMemo(() => selectedCoachIds.length > 0 && selectedCoachIds.length === coaches.length, [selectedCoachIds, coaches.length])
+	const allSelected = useMemo(
+		() => selectedRecipientIds.length > 0 && selectedRecipientIds.length === recipients.length,
+		[selectedRecipientIds, recipients.length]
+	)
 
 	function toggleAllCoaches() {
 		if (allSelected) {
-			setSelectedCoachIds([])
+			setSelectedRecipientIds([])
 		} else {
-			setSelectedCoachIds(coaches.map(c => c.id))
+			setSelectedRecipientIds(recipients.map(r => r.id))
 		}
-	}
-
-	function onAddCoach() {
-		if (!coachForm.name || !coachForm.email) {
-			show('Name and email are required')
-			return
-		}
-		const created = upsertCoach(coachForm)
-		setCoaches(getCoaches())
-		setCoachForm({ name: '', email: '', school: '', sport: '', level: '' })
-		show(`Added ${created.name}`)
-	}
-
-	function onDeleteCoach(id: string) {
-		deleteCoach(id)
-		setCoaches(getCoaches())
-		setSelectedCoachIds(curr => curr.filter(cid => cid !== id))
 	}
 
 	function onAddClip() {
@@ -127,12 +193,12 @@ export default function RecruitingBlast({ athlete }: Props) {
 			show('Subject and body are required')
 			return
 		}
-		if (selectedCoachIds.length === 0) {
+		if (selectedRecipientIds.length === 0) {
 			show('Select at least one coach')
 			return
 		}
-		const selectedCoaches = coaches.filter(c => selectedCoachIds.includes(c.id) && !!c.email)
-		if (selectedCoaches.length === 0) {
+		const selected = recipients.filter(r => selectedRecipientIds.includes(r.id) && !!r.email)
+		if (selected.length === 0) {
 			show('Selected coaches have no emails')
 			return
 		}
@@ -149,7 +215,7 @@ export default function RecruitingBlast({ athlete }: Props) {
 				body: JSON.stringify({
 					athlete: { fullName: user.fullName, email: user.email, id: user.id },
 					clipUrl: clip.videoUrl,
-					coaches: selectedCoaches.map(c => ({ name: c.name, email: c.email })),
+					coaches: selected.map(r => ({ name: r.name || r.orgName, email: r.email })),
 					subject,
 					body
 				})
@@ -170,17 +236,17 @@ export default function RecruitingBlast({ athlete }: Props) {
 			}
 
 			// Mirror locally for user-facing history
-			for (const coachId of selectedCoachIds) {
+			for (const recipientId of selectedRecipientIds) {
 				createOutreach({
 					athleteId: athlete.id,
-					coachId,
+					coachId: recipientId,
 					clipId: selectedClipId,
 					subject,
 					body
 				})
 			}
 			setOutreach(getOutreach(athlete.id))
-			show(`Sent to ${selectedCoachIds.length} coach${selectedCoachIds.length > 1 ? 'es' : ''}`)
+			show(`Sent to ${selectedRecipientIds.length} recipient${selectedRecipientIds.length > 1 ? 's' : ''}`)
 		} catch {
 			show('Email service unavailable in local dev. Configure SMTP/server to send.')
 		}
@@ -198,20 +264,10 @@ export default function RecruitingBlast({ athlete }: Props) {
 
 	return (
 		<div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-			<Card title="Coaches">
+			<Card title="Recipients (from My Targets)">
 				<div className="space-y-3">
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-						<Input placeholder="Name" value={coachForm.name} onChange={e => setCoachForm({ ...coachForm, name: e.target.value })} />
-						<Input placeholder="Email" value={coachForm.email} onChange={e => setCoachForm({ ...coachForm, email: e.target.value })} />
-						<Input placeholder="School" value={coachForm.school} onChange={e => setCoachForm({ ...coachForm, school: e.target.value })} />
-						<Input placeholder="Sport" value={coachForm.sport} onChange={e => setCoachForm({ ...coachForm, sport: e.target.value })} />
-						<Input placeholder="Level (e.g., D1, NAIA)" value={coachForm.level} onChange={e => setCoachForm({ ...coachForm, level: e.target.value })} />
-					</div>
-					<div className="flex justify-end">
-						<Button onClick={onAddCoach}>Add Coach</Button>
-					</div>
-					{coaches.length === 0 ? (
-						<div className="subtle text-sm">No coaches yet.</div>
+					{recipients.length === 0 ? (
+						<div className="subtle text-sm">No contacts found in My Targets.</div>
 					) : (
 						<div className="space-y-2">
 							<div className="flex items-center justify-between">
@@ -221,24 +277,23 @@ export default function RecruitingBlast({ athlete }: Props) {
 								</label>
 							</div>
 							<ul className="space-y-2">
-								{coaches.map(c => (
-									<li key={c.id} className="bg-surface border border-border rounded-md p-3">
+								{recipients.map(r => (
+									<li key={r.id} className="bg-surface border border-border rounded-md p-3">
 										<div className="flex items-center justify-between gap-3">
 											<label className="flex items-center gap-2">
 												<input
 													type="checkbox"
-													checked={selectedCoachIds.includes(c.id)}
+													checked={selectedRecipientIds.includes(r.id)}
 													onChange={(e) => {
-														if (e.target.checked) setSelectedCoachIds(prev => [...prev, c.id])
-														else setSelectedCoachIds(prev => prev.filter(id => id !== c.id))
+														if (e.target.checked) setSelectedRecipientIds(prev => [...prev, r.id])
+														else setSelectedRecipientIds(prev => prev.filter(id => id !== r.id))
 													}}
 												/>
 												<div>
-													<div className="text-white font-semibold">{c.name}</div>
-													<div className="text-xs text-gray-400">{[c.email, c.school, c.level].filter(Boolean).join(' • ')}</div>
+													<div className="text-white font-semibold">{r.name || 'Coach'}</div>
+													<div className="text-xs text-gray-400">{[r.email, r.orgName].filter(Boolean).join(' • ')}</div>
 												</div>
 											</label>
-											<Button variant="ghost" onClick={() => onDeleteCoach(c.id)}>Remove</Button>
 										</div>
 									</li>
 								))}
@@ -283,8 +338,11 @@ export default function RecruitingBlast({ athlete }: Props) {
 
 			<Card title="Compose & Send">
 				<div className="space-y-3">
-					<Input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} />
-					<Textarea className="min-h-[160px]" placeholder="Body" value={body} onChange={e => setBody(e.target.value)} />
+					<div className="flex items-center gap-2">
+						<Input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} />
+						<Button variant="ghost" className="whitespace-nowrap" onClick={() => setBody(generateTemplate())}>Insert Template</Button>
+					</div>
+					<Textarea className="min-h-[200px]" placeholder="Body" value={body} onChange={e => setBody(e.target.value)} />
 					<div className="flex justify-end">
 						<Button onClick={onSendBlast}>Send Blast</Button>
 					</div>
@@ -295,7 +353,7 @@ export default function RecruitingBlast({ athlete }: Props) {
 						) : (
 							<ul className="space-y-2">
 								{outreach.slice(0, 10).map(o => {
-									const coach = coaches.find(c => c.id === o.coachId)
+									const coach = recipients.find(c => c.id === o.coachId)
 									const clip = clips.find(c => c.id === o.clipId)
 									return (
 										<li key={o.id} className="bg-surface border border-border rounded-md p-3">

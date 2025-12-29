@@ -5,10 +5,11 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 	variant?: 'primary' | 'secondary' | 'ghost'
 }
 
-export default function Button({ className, variant = 'primary', ...props }: Props) {
+export default function Button({ className, variant = 'primary', type, ...props }: Props) {
 	return (
 		<button
 			{...props}
+			type={type ?? 'button'}
 			className={clsx(
 				'btn',
 				variant === 'primary' ? 'btn-primary' : variant === 'secondary' ? 'btn-secondary' : 'btn-ghost',

@@ -61,7 +61,7 @@ type TargetRow = {
 }
 
 const LEVEL_OPTIONS = ['', 'club', 'college', 'semi-pro', 'pro', 'other']
-const ORG_TYPE_OPTIONS = ['', 'school', 'team', 'club', 'league', 'association', 'other']
+const ORG_TYPE_OPTIONS = ['', 'school', 'club', 'league', 'association', 'other']
 
 function useIsMobile(): boolean {
   const [isMobile, set] = useState<boolean>(false)
@@ -108,6 +108,7 @@ export default function Recruiting() {
 // Explore Panel (Map-based discovery via Google Places)
 function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: boolean }) {
   const [sport, setSport] = useState<string>('')
+  const [sportOther, setSportOther] = useState<string>('')
   const [level, setLevel] = useState<string>('')
   const [orgType, setOrgType] = useState<string>('')
   const [searchThisArea, setSearchThisArea] = useState<boolean>(true)
@@ -120,6 +121,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 
   const latestCenterRef = useRef<{ lat: number, lng: number }>({ lat: 39.5, lng: -98.35 })
   const latestZoomRef = useRef<number>(5)
+  const searchTokenRef = useRef<number>(0)
 
   const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
 
@@ -150,7 +152,18 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       wrestling: 'wrestling',
       'track & field': 'track and field',
       'cross country': 'cross country',
-      swimming: 'swimming'
+      swimming: 'swimming',
+      mma: 'mma',
+      equestrian: 'equestrian',
+      shooting: 'shooting',
+      weightlifting: 'weightlifting',
+      gymnastics: 'gymnastics',
+      rowing: 'rowing',
+      fencing: 'fencing',
+      cricket: 'cricket',
+      badminton: 'badminton',
+      handball: 'handball',
+      waterpolo: 'water polo'
     }
     const levelMap: Record<string, string> = {
       youth: 'youth',
@@ -162,13 +175,15 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     }
     const orgTypeMap: Record<string, string> = {
       school: 'school athletics',
-      team: 'team',
       club: 'club',
       league: 'league',
-      association: 'association',
-      facility: 'facility'
+      association: 'association'
     }
-    if (sport && sportMap[sport]) parts.push(sportMap[sport])
+    if (sport === 'other' && sportOther.trim()) {
+      parts.push(sportOther.trim())
+    } else if (sport && sportMap[sport]) {
+      parts.push(sportMap[sport])
+    }
     if (level && levelMap[level]) parts.push(levelMap[level])
     if (orgType && orgTypeMap[orgType]) parts.push(orgTypeMap[orgType])
     // Sensible fallbacks
@@ -179,10 +194,14 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
   }
 
   async function runPlacesSearch(center: { lat: number, lng: number }, zoom: number) {
+    const token = ++searchTokenRef.current
     setLoading(true)
     setError(null)
     try {
       const google = await loadGoogleMaps()
+      if (!google?.maps?.places) {
+        throw new Error('Google Places not available')
+      }
       const svc = new google.maps.places.PlacesService(document.createElement('div'))
 
       const request: google.maps.places.TextSearchRequest = {
@@ -219,6 +238,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
         }
       }).filter(p => !!p.placeId && typeof p.location.lat === 'number' && typeof p.location.lng === 'number')
 
+      if (token !== searchTokenRef.current) return
       setPlaces(normalized)
       if (normalized.length > 0) {
         setSelectedPlaceId(normalized[0].placeId)
@@ -226,11 +246,14 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
         setSelectedPlaceId(null)
       }
     } catch (e: any) {
-      setError(e?.message || 'Search failed')
+      if (token !== searchTokenRef.current) return
+      setError(typeof e?.message === 'string' ? e.message : String(e || 'Search failed'))
       setPlaces([])
       setSelectedPlaceId(null)
     } finally {
-      setLoading(false)
+      if (token === searchTokenRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -347,9 +370,9 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     }
   }
 
-  const sportsOptions = ['', 'soccer', 'basketball', 'football', 'baseball', 'volleyball', 'softball', 'hockey', 'ice hockey', 'lacrosse', 'rugby', 'tennis', 'wrestling', 'track & field', 'cross country', 'swimming']
+  const sportsOptions = ['', 'soccer', 'basketball', 'football', 'baseball', 'volleyball', 'softball', 'hockey', 'ice hockey', 'lacrosse', 'rugby', 'tennis', 'wrestling', 'track & field', 'cross country', 'swimming', 'mma', 'equestrian', 'shooting', 'weightlifting', 'gymnastics', 'rowing', 'fencing', 'cricket', 'badminton', 'handball', 'waterpolo', 'other']
   const levelOptions = ['', 'youth', 'hs', 'college', 'semi-pro', 'pro', 'club']
-  const orgTypeOptions = ['', 'school', 'team', 'club', 'league', 'association', 'facility']
+  const orgTypeOptions = ['', 'school', 'club', 'league', 'association', 'other']
 
   const selected = places.find(p => p.placeId === (selectedPlaceId || '')) || null
 
@@ -361,9 +384,14 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
           <div className="grid grid-cols-1 gap-3">
             <div>
               <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Sport</div>
-              <Select value={sport} onChange={e => setSport(e.target.value)}>
+              <Select value={sport} onChange={e => { setSport(e.target.value); if (e.target.value !== 'other') setSportOther('') }}>
                 {sportsOptions.map(v => <option key={v} value={v}>{v ? v : 'All sports'}</option>)}
               </Select>
+              {sport === 'other' && (
+                <div className="mt-2">
+                  <Input placeholder="Specify sport…" value={sportOther} onChange={e => setSportOther(e.target.value)} />
+                </div>
+              )}
             </div>
             <div>
               <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Level</div>
@@ -383,7 +411,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
             </label>
             <div className="flex gap-2">
               <Button onClick={refresh} disabled={loading || !userId}>{loading ? 'Searching…' : 'Refresh results'}</Button>
-              <Button variant="secondary" onClick={() => { setSport(''); setLevel(''); setOrgType(''); setRefreshToken(v => v + 1) }}>Clear</Button>
+              <Button variant="secondary" onClick={() => { setSport(''); setSportOther(''); setLevel(''); setOrgType(''); setRefreshToken(v => v + 1) }}>Clear</Button>
             </div>
             <div className="text-xs text-foreground/60">Results powered by Google</div>
             {error && <div className="text-sm text-red-600">{error}</div>}

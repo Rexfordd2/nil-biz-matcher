@@ -1,28 +1,28 @@
 import Card from './ui/Card'
 import Button from './ui/Button'
 import { useEffect, useMemo, useState } from 'react'
-import { CollegeProgram } from '../recruiting/programTypes'
-import { getTargetsFor, RecruitingStatus, upsertTarget } from '../recruiting/pipeline'
-import { SAMPLE_PROGRAMS } from '../recruiting/programData'
-import { load } from '../utils/storage'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
-type Row = {
-	targetId: string
-	program: CollegeProgram
-	status: RecruitingStatus
+type Org = {
+	id: string
+	name: string
+	sport: string | null
+	level: string | null
+	org_type: string | null
+	city: string | null
+	region: string | null
+	country: string | null
+	website_url: string | null
 }
 
-const COLUMNS: RecruitingStatus[] = [
-	'not_contacted',
-	'researching',
-	'contacted',
-	'in_conversation',
-	'offer_received',
-	'committed',
-	'archived'
-]
+type Row = {
+	targetId: string
+	org: Org
+	status: string
+}
+
+const STATUS_COLUMNS: string[] = ['To Contact', 'Contacted', 'In Progress', 'Offer/Visit', 'Closed']
 
 export default function RecruitingBoard() {
 	const [rows, setRows] = useState<Row[]>([])
@@ -31,73 +31,76 @@ export default function RecruitingBoard() {
 	useEffect(() => {
 		let cancelled = false
 		async function loadData() {
-			// Prefer Supabase when configured and logged in
-			if (supabase && user) {
-				const { data, error } = await supabase
-					.from('recruiting_targets')
-					.select('id, program, status')
-					.eq('user_id', user.id)
-					.order('created_at', { ascending: false })
-				if (!cancelled && !error && Array.isArray(data)) {
-					const mapped: Row[] = data
-						.map((r: any) => ({ targetId: r.id, program: r.program as CollegeProgram, status: r.status as RecruitingStatus }))
-					setRows(mapped)
-					return
-				}
+			if (!supabase || !user) {
+				setRows([])
+				return
 			}
-			// Fallback to localStorage pipeline
-			const athlete = load<any>('athlete', null)
-			const athleteId: string | null = athlete?.id || null
-			const targets = getTargetsFor(athleteId || undefined)
-			const byId: Record<string, CollegeProgram> = Object.fromEntries(SAMPLE_PROGRAMS.map(p => [p.id, p]))
-			const mapped: Row[] = targets
-				.map(t => (byId[t.programId] ? { targetId: t.id, program: byId[t.programId], status: t.status } : null))
-				.filter(Boolean) as Row[]
-			if (!cancelled) setRows(mapped)
+			const { data, error } = await supabase
+				.from('user_targets')
+				.select('id, status, orgs:org_id(*)')
+				.eq('user_id', user.id)
+				.order('updated_at', { ascending: false })
+			if (cancelled) return
+			if (error || !Array.isArray(data)) {
+				setRows([])
+				return
+			}
+			const mapped: Row[] = (data as any[])
+				.filter(r => r.orgs && r.orgs.id)
+				.map(r => ({
+					targetId: String(r.id),
+					status: String(r.status || 'To Contact'),
+					org: {
+						id: String(r.orgs.id),
+						name: String(r.orgs.name || 'Org'),
+						sport: r.orgs.sport ?? null,
+						level: r.orgs.level ?? null,
+						org_type: r.orgs.org_type ?? null,
+						city: r.orgs.city ?? null,
+						region: r.orgs.region ?? null,
+						country: r.orgs.country ?? null,
+						website_url: r.orgs.website_url ?? null
+					}
+				}))
+			setRows(mapped)
 		}
+		// eslint-disable-next-line @typescript-eslint/no-floating-promises
 		loadData()
 		return () => { cancelled = true }
 	}, [user])
 
 	const byColumn = useMemo(() => {
-		const m: Record<RecruitingStatus, Row[]> = {
-			not_contacted: [], researching: [], contacted: [], in_conversation: [], offer_received: [], committed: [], archived: []
+		const m: Record<string, Row[]> = Object.fromEntries(STATUS_COLUMNS.map(s => [s, [] as Row[]]))
+		for (const r of rows) {
+			const col = STATUS_COLUMNS.includes(r.status) ? r.status : 'To Contact'
+			m[col].push(r)
 		}
-		for (const r of rows) m[r.status].push(r)
 		return m
 	}, [rows])
 
-	async function updateStatus(targetId: string, status: RecruitingStatus) {
-		// Try cloud update first
-		if (supabase && user) {
-			const { error } = await supabase.from('recruiting_targets').update({ status }).eq('id', targetId)
-			if (!error) {
-				setRows(curr => curr.map(r => (r.targetId === targetId ? { ...r, status } : r)))
-				return
-			}
+	async function updateStatus(targetId: string, status: string) {
+		if (!supabase || !user) return
+		const { error } = await supabase.from('user_targets').update({ status }).eq('id', targetId).eq('user_id', user.id)
+		if (!error) {
+			setRows(curr => curr.map(r => (r.targetId === targetId ? { ...r, status } : r)))
 		}
-		// Fallback local
-		const athlete = load<any>('athlete', null)
-		const athleteId: string | null = athlete?.id || null
-		const t = getTargetsFor(athleteId || undefined).find(x => x.id === targetId)
-		if (!t) return
-		upsertTarget({ ...t, status })
-		setRows(curr => curr.map(r => (r.targetId === targetId ? { ...r, status } : r)))
 	}
 
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-4">
-			{COLUMNS.map(col => (
-				<Card key={col} title={col.replaceAll('_',' ')}>
-					<div className="space-y-3">
+		<div className="grid grid-cols-1 md:grid-cols-5 xl:grid-cols-5 gap-4">
+			{STATUS_COLUMNS.map(col => (
+				<Card key={col} title={col}>
+					<div className="space-y-2">
 						{byColumn[col].length === 0 && <div className="subtle text-sm">—</div>}
 						{byColumn[col].map(r => (
-							<div key={r.targetId} className="bg-mid border border-border rounded-md p-3">
-								<div className="text-white font-semibold truncate">{r.program.name}</div>
-								<div className="text-xs text-gray-400 truncate">{[r.program.sport, r.program.level, r.program.conference].filter(Boolean).join(' • ')}</div>
-								<div className="mt-2 flex flex-wrap gap-2">
-									{(['not_contacted','researching','contacted','in_conversation','offer_received','committed','archived'] as RecruitingStatus[]).map(s => (
-										<Button key={s} variant="ghost" onClick={() => updateStatus(r.targetId, s)}>{s.replaceAll('_',' ')}</Button>
+							<div key={r.targetId} className="bg-mid border border-border rounded-md p-2">
+								<div className="text-white font-semibold text-sm truncate">{r.org.name}</div>
+								<div className="text-xs text-gray-400 truncate">
+									{[r.org.level, r.org.sport, r.org.org_type].filter(Boolean).join(' • ')}
+								</div>
+								<div className="mt-2 flex flex-wrap gap-1">
+									{STATUS_COLUMNS.map(s => (
+										<Button key={s} variant="ghost" className="text-xs px-2 py-1" onClick={() => updateStatus(r.targetId, s)}>{s}</Button>
 									))}
 								</div>
 							</div>

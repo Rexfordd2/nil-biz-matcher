@@ -28,6 +28,7 @@ export default function EventsPlanner({ athlete }: Props) {
 	const athleteId = athlete?.id || 'anonymous'
 	const [store, setStore] = useState<Store>(() => load<Store>('events.store', {}))
 	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [activeTab, setActiveTab] = useState<'list' | 'details' | 'notes'>('list')
 
 	useEffect(() => save('events.store', store), [store])
 
@@ -60,37 +61,51 @@ export default function EventsPlanner({ athlete }: Props) {
 		const e = createEmpty(athlete.id)
 		upsert(e)
 		setSelectedId(e.id)
+		setActiveTab('details')
 	}
 
 	return (
-		<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-			<Card title="Events & Camps" actions={<Button onClick={addNew}>New</Button>}>
+		<Card title="Events & Camps">
+			<div className="mb-4 flex items-center gap-2">
+				<nav className="flex items-center gap-2">
+					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'list' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('list')}>Events & Camps</button>
+					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'details' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('details')}>Details</button>
+					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'notes' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('notes')}>Notes</button>
+				</nav>
+				{activeTab === 'list' && (
+					<div className="ml-auto">
+						<Button onClick={addNew}>New</Button>
+					</div>
+				)}
+			</div>
+
+			{activeTab === 'list' && (
 				<div className="overflow-x-auto">
-					<table className="table min-w-full text-sm">
+					<table className="table min-w-[720px] text-sm">
 						<thead>
 							<tr>
-								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Date</th>
-								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Name</th>
-								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Type</th>
-								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Location</th>
-								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70">Linked Deal</th>
-								<th />
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70 w-[15%]">Date</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70 w-[30%]">Name</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70 w-[15%]">Type</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70 w-[20%]">Location</th>
+								<th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-black/70 w-[15%]">Linked Deal</th>
+								<th className="w-[5%]" />
 							</tr>
 						</thead>
 						<tbody>
 							{list.map(evt => (
 								<tr key={evt.id} className={`border-b border-black/10 ${selectedId === evt.id ? 'bg-slate-50' : ''}`}>
-									<td className="px-3 py-2 text-black/80">{evt.date}</td>
+									<td className="px-3 py-2 text-black/80 whitespace-nowrap">{evt.date}</td>
 									<td className="px-3 py-2 text-black">
-										<button className="underline" onClick={() => setSelectedId(evt.id)}>{evt.name || '(untitled event)'}</button>
+										<button className="underline" onClick={() => { setSelectedId(evt.id); setActiveTab('details') }}>{evt.name || '(untitled event)'}</button>
 									</td>
-									<td className="px-3 py-2 text-black/80">{evt.type.replaceAll('_',' ')}</td>
+									<td className="px-3 py-2 text-black/80 whitespace-nowrap">{evt.type.replaceAll('_',' ')}</td>
 									<td className="px-3 py-2 text-black">{evt.location || '—'}</td>
 									<td className="px-3 py-2 text-black/80">
 										{evt.linkedDealId ? (dealsForAthlete.find(d => d.id === evt.linkedDealId)?.label || evt.linkedDealId) : '—'}
 									</td>
 									<td className="px-3 py-2 text-right">
-										<Button variant="ghost" onClick={() => remove(evt.id)}>Remove</Button>
+										<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => remove(evt.id)}>Remove</Button>
 									</td>
 								</tr>
 							))}
@@ -102,33 +117,37 @@ export default function EventsPlanner({ athlete }: Props) {
 						</tbody>
 					</table>
 				</div>
-			</Card>
+			)}
 
-			<Card title="Details">
-				{!selected ? (
-					<div className="subtle">Select an event to view/edit details.</div>
-				) : (
-					<EventEditor
-						value={selected}
-						onChange={upsert}
-						deals={dealsForAthlete}
-					/>
-				)}
-			</Card>
+			{activeTab === 'details' && (
+				<div>
+					{!selected ? (
+						<div className="subtle">Select an event to view/edit details.</div>
+					) : (
+						<EventEditor
+							value={selected}
+							onChange={upsert}
+							deals={dealsForAthlete}
+						/>
+					)}
+				</div>
+			)}
 
-			<Card title="Notes">
-				{!selected ? (
-					<div className="subtle">Notes and planning details will appear here.</div>
-				) : (
-					<Textarea
-						value={selected.notes || ''}
-						onChange={e => upsert({ ...selected, notes: e.target.value })}
-						className="min-h-[200px]"
-						placeholder="Agenda, action items, logistics…"
-					/>
-				)}
-			</Card>
-		</div>
+			{activeTab === 'notes' && (
+				<div>
+					{!selected ? (
+						<div className="subtle">Notes and planning details will appear here.</div>
+					) : (
+						<Textarea
+							value={selected.notes || ''}
+							onChange={e => upsert({ ...selected, notes: e.target.value })}
+							className="min-h-[200px]"
+							placeholder="Agenda, action items, logistics…"
+						/>
+					)}
+				</div>
+			)}
+		</Card>
 	)
 }
 
