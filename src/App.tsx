@@ -417,7 +417,10 @@ function MainApp() {
 								value={autosave.initialProfile ?? undefined}
 								onSave={async (a) => {
 									setAthlete(a)
-									if (currentUser) autosave.onDraftChange(a)
+									if (currentUser) {
+										autosave.onDraftChange(a)
+										await autosave.saveNow()
+									}
 								}}
 								onChange={(draft) => {
 									setAthlete(draft)
@@ -630,7 +633,7 @@ function MainApp() {
 						</>
 					)}
 
-					{tab === 'Profile Preview' && <PublicProfile athlete={athlete} />}
+					{tab === 'Profile Preview' && <PublicProfile athlete={(autosave.initialProfile || athlete) ?? null} />}
 
 					{tab === 'Recruiting' && (
 						<SectionErrorBoundary>

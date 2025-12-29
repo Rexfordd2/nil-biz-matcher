@@ -15,6 +15,7 @@ export function useAutosaveProfile(params: {
 	lastSavedAt: number | null
 	error: string | null
 	onDraftChange: (draft: AthleteProfile) => void
+	saveNow: () => Promise<void>
 	refresh: () => void
 } {
 	const userId = params.user?.id || null
@@ -195,6 +196,15 @@ export function useAutosaveProfile(params: {
 		loadFromServer()
 	}, [loadFromServer])
 
+	const saveNow = useCallback(async () => {
+		// Cancel any pending debounce, then flush immediately
+		if (timerRef.current) {
+			window.clearTimeout(timerRef.current)
+			timerRef.current = null
+		}
+		await flushSave()
+	}, [flushSave])
+
 	return {
 		initialProfile,
 		status,
@@ -202,6 +212,7 @@ export function useAutosaveProfile(params: {
 		lastSavedAt,
 		error,
 		onDraftChange,
+		saveNow,
 		refresh
 	}
 }
