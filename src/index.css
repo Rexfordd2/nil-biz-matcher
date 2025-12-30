@@ -117,3 +117,43 @@ textarea.ui-input {
 .table td {
   @apply px-3 py-2 align-top;
 }
+
+/* Print styles */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  html,
+  body,
+  #root {
+    height: auto !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt;
+  }
+  /* Hide app chrome and interactive UI */
+  .no-print,
+  nav,
+  .sidebar,
+  .tabs,
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost {
+    display: none !important;
+  }
+  /* Ensure clean, unclipped sections */
+  .card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+    border-color: #e5e7eb !important; /* slate-200 */
+    color: #000 !important;
+  }
+  a {
+    color: #000 !important;
+    text-decoration: underline;
+  }
+}

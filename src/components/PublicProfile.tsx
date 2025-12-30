@@ -1,4 +1,7 @@
+import { useMemo, useRef } from 'react'
+import { useReactToPrint } from 'react-to-print'
 import Card from './ui/Card'
+import Button from './ui/Button'
 import { AthleteProfile } from '../types'
 
 export default function PublicProfile({ athlete }: { athlete: AthleteProfile | null }) {
@@ -8,8 +11,34 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 			<div className="text-slate-600">Create your profile first in the Athlete tab.</div>
 		)
 	}
+
+	const profilePrintRef = useRef<HTMLDivElement>(null)
+	const sportAndPositions = useMemo(() => {
+		return a.sports.map(s => `${s.sportName}${s.positions?.length ? ' — ' + s.positions.join('/') : ''}`).join(' • ')
+	}, [a.sports])
+	const exportedOn = useMemo(() => new Date().toLocaleDateString(), [])
+
+	const handlePrint = useReactToPrint({
+		contentRef: profilePrintRef,
+		documentTitle: `${a.name} - Athlete Profile`
+	})
+
 	return (
-		<div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+		<>
+			<div className="mb-4 flex items-center gap-3 no-print">
+				<Button onClick={handlePrint}>Export PDF</Button>
+				<span className="text-sm text-slate-600">Opens print dialog. Choose ‘Save as PDF’ to download.</span>
+			</div>
+
+			<div ref={profilePrintRef}>
+				{/* Print-only header */}
+				<div className="hidden print:block mb-4 text-black">
+					<div className="text-2xl font-semibold">{a.name}</div>
+					{sportAndPositions && <div className="text-base">{sportAndPositions}</div>}
+					<div className="text-sm">Exported: {exportedOn}</div>
+				</div>
+
+				<div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
 			<Card title="Profile">
 				<div className="space-y-2">
 					<div className="headline text-2xl">{a.name}</div>
@@ -270,7 +299,9 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 					</ul>
 				)}
 			</Card>
-		</div>
+				</div>
+			</div>
+		</>
 	)
 }
 

@@ -30,7 +30,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
-    "react-tinder-card": "^1.6.4"
+    "react-tinder-card": "^1.6.4",
+    "react-to-print": "^3.2.0"
   },
   "devDependencies": {
     "@types/google.maps": "^3.58.1",
