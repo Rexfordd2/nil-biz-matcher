@@ -181,11 +181,13 @@ with check (auth.uid() = user_id);
 
 -- === App additions: profiles extensions and recruiting_targets ===
 
--- Extend profiles to hold app profile JSON and contact
+-- Ensure required profiles columns for auth trigger alignment
 alter table public.profiles
+  add column if not exists email text,
   add column if not exists full_name text,
-  add column if not exists phone text,
-  add column if not exists profile jsonb not null default '{}'::jsonb;
+  add column if not exists guardian_required boolean default false,
+  add column if not exists terms_version text,
+  add column if not exists terms_accepted_at timestamptz;
 
 -- Recruiting targets per user
 create table if not exists public.recruiting_targets (
@@ -215,6 +217,41 @@ using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
 
+
+-- Insert profile row on new auth user
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public as $$
+begin
+  insert into public.profiles (
+    id,
+    email,
+    full_name,
+    role,
+    guardian_required,
+    terms_version,
+    terms_accepted_at
+  )
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    coalesce(new.raw_user_meta_data->>'role', ''),
+    coalesce((new.raw_user_meta_data->>'guardianRequired')::boolean, false),
+    new.raw_user_meta_data->>'termsVersion',
+    (new.raw_user_meta_data->>'termsAcceptedAt')::timestamptz
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
 
 drop policy if exists "athlete_update_own" on public.athlete_profile;
 
