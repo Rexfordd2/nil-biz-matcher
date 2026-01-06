@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Button from './ui/Button'
 import { friendlyMessageForProfilesError } from '../lib/supabaseErrors'
+import type { ProfileRow } from '../types'
 
 type Props = {
 	onEditProfile?: () => void
@@ -40,26 +41,21 @@ export default function AppHome({ onEditProfile, onLogout }: Props) {
 				.from('profiles')
 				.select('display_name, role')
 				.eq('id', u.id)
-				.single()
+				.maybeSingle<ProfileRow>()
 
 			if (!mounted) return
 			if (profErr) {
 				const friendly = friendlyMessageForProfilesError(profErr)
-				if (friendly) {
-					setError(friendly)
-					// Fallback to auth user metadata
-					setDisplayName((u.user_metadata as any)?.full_name ?? (u.email || null))
-					setRole((u.user_metadata as any)?.role ?? null)
-				} else if (profErr.code !== 'PGRST116') {
-					setError(profErr.message)
-				} else {
-					setDisplayName(profile?.display_name ?? null)
-					setRole(profile?.role ?? null)
-				}
-			} else {
-				setDisplayName(profile?.display_name ?? null)
-				setRole(profile?.role ?? null)
+				setError(friendly ?? profErr.message)
 			}
+
+			// Type-safe normalizer: prefer profiles table, then auth user metadata, then email/null
+			const normalizedDisplayName =
+				profile?.display_name ?? (u.user_metadata as any)?.full_name ?? (u.email || null)
+			const normalizedRole = profile?.role ?? (u.user_metadata as any)?.role ?? null
+
+			setDisplayName(normalizedDisplayName)
+			setRole(normalizedRole)
 			setLoading(false)
 		})()
 		return () => {

@@ -468,3 +468,11 @@ export type AthleteProfileWithNIL = AthleteProfile & {
 	nil?: AthleteNILProfile
 }
 
+// Supabase: public.profiles row (selected fields used in the app)
+export type ProfileRow = {
+	id?: string
+	display_name?: string | null
+	role?: string | null
+	full_name?: string | null
+}
+
