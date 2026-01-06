@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Button from './ui/Button'
+import { friendlyMessageForProfilesError } from '../lib/supabaseErrors'
 
 type Props = {
 	onEditProfile?: () => void
@@ -42,8 +43,19 @@ export default function AppHome({ onEditProfile, onLogout }: Props) {
 				.single()
 
 			if (!mounted) return
-			if (profErr && profErr.code !== 'PGRST116') {
-				setError(profErr.message)
+			if (profErr) {
+				const friendly = friendlyMessageForProfilesError(profErr)
+				if (friendly) {
+					setError(friendly)
+					// Fallback to auth user metadata
+					setDisplayName((u.user_metadata as any)?.full_name ?? (u.email || null))
+					setRole((u.user_metadata as any)?.role ?? null)
+				} else if (profErr.code !== 'PGRST116') {
+					setError(profErr.message)
+				} else {
+					setDisplayName(profile?.display_name ?? null)
+					setRole(profile?.role ?? null)
+				}
 			} else {
 				setDisplayName(profile?.display_name ?? null)
 				setRole(profile?.role ?? null)

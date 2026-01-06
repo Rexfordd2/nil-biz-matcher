@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { supabaseServer } from '../_lib/supabaseServer.js'
+import { friendlyMessageForProfilesError } from '../_lib/supabaseErrors.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
 	try {
@@ -16,9 +17,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			.eq('id', user.id)
 			.single()
 
-		if (profileErr && profileErr.code !== 'PGRST116') {
-			// If not found, allow null; otherwise, return error
-			return res.status(500).json({ error: profileErr.message })
+		if (profileErr) {
+			const friendly = friendlyMessageForProfilesError(profileErr)
+			if (friendly) {
+				res.setHeader('Cache-Control', 'no-store')
+				return res.status(200).json({
+					user: {
+						id: user.id,
+						email: user.email,
+					},
+					profile: {
+						display_name: (user.user_metadata as any)?.full_name ?? user.email ?? null,
+						role: (user.user_metadata as any)?.role ?? null
+					},
+					warning: friendly
+				})
+			}
+			if (profileErr.code !== 'PGRST116') {
+				// If not found, allow null; otherwise, return error
+				return res.status(500).json({ error: profileErr.message })
+			}
 		}
 
 		res.setHeader('Cache-Control', 'no-store')

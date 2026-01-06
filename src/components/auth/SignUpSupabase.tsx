@@ -6,6 +6,7 @@ import Card from '../ui/Card'
 import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
 import { signUp } from '../../lib/authSupabase'
+import { friendlyMessageForProfilesError } from '../../lib/supabaseErrors'
 
 type Role = 'athlete' | 'parent' | 'coach'
 
@@ -80,8 +81,14 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 
 		setLoading(false)
 		if (profileErr) {
-			setErr(profileErr.message)
-			return
+			const friendly = friendlyMessageForProfilesError(profileErr)
+			if (friendly) {
+				// Show friendly warning but allow the app to continue
+				setErr(friendly)
+			} else {
+				setErr(profileErr.message)
+				return
+			}
 		}
 
 		const current: CurrentUser = {
