@@ -40,6 +40,7 @@ import { signOut } from './lib/authSupabase'
 import LoginPage from './components/LoginPage'
 import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseSessionContext'
 import SectionErrorBoundary from './components/ErrorBoundary'
+import { BUILD_ID } from './constants/build'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -291,7 +292,7 @@ function MainApp() {
 								)}
 							</div>
 							<div className="text-xs text-black">
-								{`Build: ${import.meta.env.VITE_BUILD_ID || 'dev'}`}
+								{`Build: ${BUILD_ID}`}
 							</div>
 							{currentUser ? (
 								<div className="flex items-center gap-3">
@@ -807,7 +808,7 @@ function AppShell() {
 	if (!supabaseEnvConfigured) {
 		return (
 			<div className="min-h-screen">
-				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${import.meta.env.VITE_BUILD_ID || 'dev'}`}</div>
+				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${BUILD_ID}`}</div>
 				<div>Cloud sync unavailable (missing Supabase env variables)</div>
 			</div>
 		)
@@ -815,7 +816,7 @@ function AppShell() {
 	if (loading) {
 		return (
 			<div className="min-h-screen">
-				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${import.meta.env.VITE_BUILD_ID || 'dev'}`}</div>
+				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${BUILD_ID}`}</div>
 				<div>Loading auth…</div>
 			</div>
 		)
