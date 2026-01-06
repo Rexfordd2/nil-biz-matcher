@@ -17,12 +17,17 @@ export default function SignUp({ onSignedIn }: Props) {
 	const [email, setEmail] = useState('')
 	const [phone, setPhone] = useState('')
 	const [marketingConsent, setMarketingConsent] = useState(false)
+	const [termsAccepted, setTermsAccepted] = useState(false)
 	const [loading, setLoading] = useState(false)
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
 		if (!email || !fullName) {
 			show('Please enter your name and email')
+			return
+		}
+		if (!termsAccepted) {
+			show('You must accept the Terms of Use and Privacy Policy')
 			return
 		}
 		setLoading(true)
@@ -71,10 +76,17 @@ export default function SignUp({ onSignedIn }: Props) {
 						<input type="checkbox" checked={marketingConsent} onChange={e => setMarketingConsent(e.target.checked)} />
 						<span>I consent to receive educational messages and offers related to Athlete Ledger and NIL opportunities.</span>
 					</label>
+					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
+						<input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />
+						<span>I agree to the <a href="/terms" className="underline">Terms of Use</a> and <a href="/privacy" className="underline">Privacy Policy</a>.</span>
+					</label>
 					<div className="pt-2">
 						<Button type="submit" className="red-glow" disabled={loading}>{loading ? 'Creating…' : 'Create my Athlete Ledger account'}</Button>
 					</div>
 				</form>
+				<div className="text-xs text-gray-400 mt-3">
+					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
+				</div>
 			</Card>
 		</div>
 	)

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
+import RootRouter from './routes/RootRouter'
 import './index.css'
 import { AuthProvider } from './context/AuthContext'
 import { normalizeError } from './lib/normalizeError'
@@ -49,7 +49,7 @@ try {
 	root.render(
 		<StrictMode>
 			<AuthProvider>
-				<App />
+				<RootRouter />
 			</AuthProvider>
 		</StrictMode>
 	)

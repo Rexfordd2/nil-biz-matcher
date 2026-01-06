@@ -28,6 +28,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const [password, setPassword] = useState('')
 	const [err, setErr] = useState<string | null>(null)
 	const [loading, setLoading] = useState(false)
+	const [sendingReset, setSendingReset] = useState(false)
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
@@ -51,6 +52,22 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 			marketingConsent: Boolean(u.user_metadata?.marketingConsent)
 		}
 		onLoggedIn(current)
+	}
+
+	async function handleForgotPassword() {
+		if (!email) {
+			setErr('Enter your email to reset password')
+			return
+		}
+		setErr(null)
+		setSendingReset(true)
+		try {
+			await supabase!.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth/reset` })
+		} catch (e: any) {
+			setErr(e?.message || 'Failed to send reset email')
+		} finally {
+			setSendingReset(false)
+		}
 	}
 
 	return (
@@ -82,7 +99,15 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 							<button type="button" onClick={onNeedAccount} className="text-sm text-gray-300 hover:text-white">Need an account? Sign up</button>
 						)}
 					</div>
+					<div className="flex items-center justify-between">
+						<button type="button" onClick={handleForgotPassword} className="text-xs text-gray-300 underline hover:text-white" disabled={sendingReset}>
+							{sendingReset ? 'Sending reset…' : 'Forgot password?'}
+						</button>
+					</div>
 				</form>
+				<div className="text-xs text-gray-400 mt-3">
+					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
+				</div>
 			</Card>
 		</div>
 	)

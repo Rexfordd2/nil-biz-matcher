@@ -1,4 +1,5 @@
 import React from 'react';
+import DisclaimerBanner from '../components/DisclaimerBanner'
 
 /** The NIL Hub page introduces NIL basics and links to deeper resources,
  *  including the Skool community, NIL education articles, and rules/guidelines.
@@ -6,6 +7,9 @@ import React from 'react';
 export default function NILHub() {
   return (
     <main className="container py-8 px-4 mx-auto">
+      <div className="mb-4">
+        <DisclaimerBanner />
+      </div>
       <h1 className="text-3xl font-bold mb-4">NIL Hub</h1>
       <p className="mb-6">
         Welcome to your NIL Hub – a curated set of resources to help you understand

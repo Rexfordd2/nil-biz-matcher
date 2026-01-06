@@ -31,6 +31,7 @@ import SignUp from './components/auth/SignUp'
 import SignUpSupabase from './components/auth/SignUpSupabase'
 import Login from './components/auth/Login'
 import LoginSupabase from './components/auth/LoginSupabase'
+import Extras from './pages/Extras'
 import { type CurrentUser } from './utils/auth'
 import { useAutosaveProfile } from './hooks/useAutosaveProfile'
 import { supabase, supabaseEnvConfigured } from './lib/supabaseClient'
@@ -86,6 +87,7 @@ type Tab =
 	| 'Recruiting Blast'
 	| 'Sign Up'
 	| 'Log In'
+	| 'Extras'
 
 function MainApp() {
 	const [tab, setTab] = useState<Tab>('Welcome')
@@ -387,7 +389,8 @@ function MainApp() {
 											{ key: 'NIL Hub', label: 'NIL Hub' },
 											{ key: 'Resources', label: 'Resources' },
 											{ key: 'Guidelines', label: 'Guidelines' },
-											{ key: 'Vendor Directory', label: 'Vendors' }
+											{ key: 'Vendor Directory', label: 'Vendors' },
+											{ key: 'Extras', label: 'Extras' }
 										]
 									}
 								]}
@@ -674,6 +677,8 @@ function MainApp() {
 					{tab === 'NIL Hub' && <NILHub />}
 
 					{tab === 'Vendor Directory' && <VendorDirectory />}
+
+					{tab === 'Extras' && <Extras />}
 						</div>
 					</div>
 				</main>

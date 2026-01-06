@@ -30,15 +30,43 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 	const [role, setRole] = useState<Role>('athlete')
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
+	const [confirmPassword, setConfirmPassword] = useState('')
+	const [showPassword, setShowPassword] = useState(false)
+	const [termsAccepted, setTermsAccepted] = useState(false)
 	const [err, setErr] = useState<string | null>(null)
 	const [loading, setLoading] = useState(false)
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
 		setErr(null)
+		if (!termsAccepted) {
+			setErr('You must accept the Terms of Use and Privacy Policy')
+			return
+		}
+		if (password.length < 8) {
+			setErr('Password must be at least 8 characters')
+			return
+		}
+		if (password !== confirmPassword) {
+			setErr('Passwords do not match')
+			return
+		}
 		setLoading(true)
 
-		const result = await signUp({ email, password, fullName: displayName })
+		// centralized in src/constants/legal.ts
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		const { TERMS_VERSION } = await import('../../constants/legal')
+		const result = await signUp({
+			email,
+			password,
+			fullName: displayName,
+			metadata: {
+				full_name: displayName,
+				role,
+				termsAcceptedAt: new Date().toISOString(),
+				termsVersion: TERMS_VERSION
+			}
+		})
 		if (result.error || !result.data) {
 			setLoading(false)
 			setErr(result.error ?? 'Signup failed')
@@ -101,18 +129,41 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 					</label>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Password</span>
+						<div className="flex gap-2">
+							<Input
+								type={showPassword ? 'text' : 'password'}
+								value={password}
+								onChange={e => setPassword(e.target.value)}
+								placeholder="••••••••"
+							/>
+							<button type="button" className="text-xs text-gray-300 hover:text-white px-2" onClick={() => setShowPassword(v => !v)}>
+								{showPassword ? 'Hide' : 'Show'}
+							</button>
+						</div>
+					</label>
+					<label className="flex flex-col gap-2">
+						<span className="subtle text-sm">Confirm Password</span>
 						<Input
-							type="password"
-							value={password}
-							onChange={e => setPassword(e.target.value)}
+							type={showPassword ? 'text' : 'password'}
+							value={confirmPassword}
+							onChange={e => setConfirmPassword(e.target.value)}
 							placeholder="••••••••"
 						/>
+					</label>
+					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
+						<input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />
+						<span>
+							I agree to the <a href="/terms" className="underline">Terms of Use</a> and <a href="/privacy" className="underline">Privacy Policy</a>.
+						</span>
 					</label>
 					{err && <div className="text-red-400 text-sm">{err}</div>}
 					<div className="pt-2">
 						<Button type="submit" className="red-glow" disabled={loading}>{loading ? 'Creating…' : 'Create my Athlete Ledger account'}</Button>
 					</div>
 				</form>
+				<div className="text-xs text-gray-400 mt-3">
+					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
+				</div>
 			</Card>
 		</div>
 	)

@@ -86,7 +86,7 @@ export type PhysicalAttributes = {
 	weightLbs?: number
 	wingspanInches?: number
 	handSizeInches?: number
-	dominantHand?: 'left' | 'right' | 'ambi'
+	dominantHand?: 'left' | 'right' | 'both'
 }
 
 export type SportMetricEntry = {

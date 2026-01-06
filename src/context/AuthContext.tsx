@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 
 type AuthContextValue = {
 	user: CurrentUser | null
+	initializing: boolean
 	login: (email: string) => Promise<CurrentUser>
 	signup: (input: { fullName: string; email: string; phone?: string; marketingConsent?: boolean }) => Promise<CurrentUser>
 	logout: () => Promise<void>
@@ -15,12 +16,15 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<CurrentUser | null>(null)
+	const [initializing, setInitializing] = useState(true)
 
 	const refresh = useCallback(async () => {
+		setInitializing(true)
 		// Try server-based session
 		const u = await authMe()
 		if (u) {
 			setUser(u)
+			setInitializing(false)
 			return
 		}
 		// Fallback to Supabase session if configured
@@ -36,14 +40,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					marketingConsent: Boolean(su.user_metadata?.marketingConsent)
 				}
 				setUser(mapped)
+				setInitializing(false)
 				return
 			}
 		}
 		setUser(null)
+		setInitializing(false)
 	}, [])
 
 	useEffect(() => {
-		refresh()
+		// Ensure refresh completion toggles initializing off
+		refresh().catch(() => setInitializing(false))
 	}, [refresh])
 
 	const login = useCallback(async (email: string) => {
@@ -63,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		setUser(null)
 	}, [])
 
-	const value = useMemo<AuthContextValue>(() => ({ user, login, signup, logout, refresh }), [user, login, signup, logout, refresh])
+	const value = useMemo<AuthContextValue>(() => ({ user, initializing, login, signup, logout, refresh }), [user, initializing, login, signup, logout, refresh])
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

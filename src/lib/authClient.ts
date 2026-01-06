@@ -5,6 +5,8 @@ export type AuthUser = {
 	phone?: string | null
 	marketingConsent?: boolean
 	role?: string
+	termsAcceptedAt?: string
+	termsVersion?: string
 	createdAt: string
 }
 
@@ -49,6 +51,8 @@ export function getCurrentUser(): AuthUser | null {
 	return users.find(u => u.id === id) || null
 }
 
+import { TERMS_VERSION } from '../constants/legal'
+
 export function createLocalUser(input: { fullName: string; email: string; phone?: string; marketingConsent?: boolean }): AuthUser {
 	const normalizedEmail = input.email.trim().toLowerCase()
 	const normalizedName = input.fullName.trim()
@@ -69,6 +73,8 @@ export function createLocalUser(input: { fullName: string; email: string; phone?
 		phone: input.phone || null,
 		marketingConsent: !!input.marketingConsent,
 		role: 'athlete',
+		termsAcceptedAt: new Date().toISOString(),
+		termsVersion: TERMS_VERSION,
 		createdAt: new Date().toISOString()
 	}
 	users.push(user)

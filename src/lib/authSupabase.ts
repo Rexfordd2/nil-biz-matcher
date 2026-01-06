@@ -11,15 +11,16 @@ export async function signUp(input: {
   password: string
   fullName?: string
   phone?: string
+  metadata?: Record<string, any>
 }): Promise<AuthResult<User>> {
   if (!supabase) {
     return { data: null, error: 'Cloud auth not configured' }
   }
-  const { email, password, fullName, phone } = input
+  const { email, password, fullName, phone, metadata } = input
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName, phone } }
+    options: { data: { full_name: fullName, phone, ...(metadata || {}) } }
   })
   if (error) return { data: null, error: error.message }
   return { data: data.user, error: null }

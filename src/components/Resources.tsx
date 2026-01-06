@@ -51,6 +51,20 @@ export default function Resources({ onGoVendors }: { onGoVendors?: () => void })
 				<p className="text-black/70">Curated links to help you learn fast, stay compliant, and build your brand.</p>
 			</header>
 
+			<Card>
+				<div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+					<div>
+						<div className="text-black font-semibold">New here?</div>
+						<p className="text-black/70 text-sm">Open the 2‑step Getting Started checklist anytime.</p>
+					</div>
+					<div className="shrink-0">
+						<a href="/onboarding">
+							<Button className="red-glow">Open Getting Started</Button>
+						</a>
+					</div>
+				</div>
+			</Card>
+
 			{onGoVendors && (
 				<Card>
 					<div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">

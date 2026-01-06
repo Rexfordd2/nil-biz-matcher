@@ -91,6 +91,7 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 	)
 	const [followers, setFollowers] = useState<number | ''>(value?.social?.followers ?? '')
 	const [contentStyles, setContentStyles] = useState<string[]>(value?.contentStyles || [])
+	const [customStyle, setCustomStyle] = useState<string>('')
 	const [personality, setPersonality] = useState(value?.personality || '')
 	const [values, setValues] = useState<string>((value?.values || []).join(', '))
 	const [timePerWeekHours, setTimePerWeekHours] = useState<number | ''>(value?.timePerWeekHours ?? 3)
@@ -124,7 +125,7 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 	const [weightLbs, setWeightLbs] = useState<number | ''>(pa?.weightLbs ?? '')
 	const [wingspanInches, setWingspanInches] = useState<number | ''>(pa?.wingspanInches ?? '')
 	const [handSizeInches, setHandSizeInches] = useState<number | ''>(pa?.handSizeInches ?? '')
-	const [dominantHand, setDominantHand] = useState<'left' | 'right' | 'ambi' | ''>(pa?.dominantHand || '')
+	const [dominantHand, setDominantHand] = useState<'left' | 'right' | 'both' | ''>(pa?.dominantHand || '')
 
 	type Metric = { sport: string; position?: string; metricName: string; value: string; dateRecorded?: string; verifiedBy?: string }
 	const [sportMetrics, setSportMetrics] = useState<Metric[]>(value?.sportMetrics || [])
@@ -546,6 +547,15 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 								</button>
 							))}
 						</div>
+						<div className="mt-2 flex gap-2 items-center">
+							<input
+								value={customStyle}
+								onChange={e => setCustomStyle(e.target.value)}
+								className="flex-1 bg-mid border border-border rounded-md px-3 py-2 text-white"
+								placeholder='Other (write your own)…'
+							/>
+							<Button variant="ghost" onClick={() => { const t = customStyle.trim(); if (t) { toggleStyle(t); setCustomStyle('') } }}>Add</Button>
+						</div>
 					</label>
 					<label className="md:col-span-2 flex flex-col gap-2">
 						<span className="subtle text-sm">Personality & Values</span>
@@ -792,9 +802,9 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 						</div>
 					</div>
 
-					{/* E) Performance Story */}
+					{/* E) My Story */}
 					<div className="md:col-span-2">
-						<div className="subtle text-sm mb-2">Performance Story</div>
+						<div className="subtle text-sm mb-2">My Story</div>
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 							<textarea
 								value={(performanceStory.keyMilestones || []).join('\n')}
@@ -819,36 +829,11 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 						</div>
 					</div>
 
-					{/* F) Training & Recovery Log */}
+					{/* F) Training & Recovery Log moved to Extras */}
 					<div className="md:col-span-2">
-						<div className="flex items-center justify-between mb-2">
-							<span className="subtle text-sm">Training & Recovery Log (optional)</span>
-							<Button variant="ghost" onClick={addTrainingEntry}>Add Entry</Button>
-						</div>
-						<div className="space-y-3">
-							{trainingEntries.slice().reverse().map((e, revIdx) => {
-								const idx = trainingEntries.length - 1 - revIdx
-								return (
-									<div key={`tl-${idx}`} className="bg-mid border border-border rounded-md p-3">
-										<div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-											<input type="date" value={e.date} onChange={ev => updateTrainingEntry(idx, { date: ev.target.value })} className="bg-background border border-border rounded-md px-3 py-2 text-white" />
-											<select value={e.type} onChange={ev => updateTrainingEntry(idx, { type: ev.target.value as TrainingLogEntry['type'] })} className="bg-background border border-border rounded-md px-3 py-2 text-white">
-												{TRAINING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-											</select>
-											<input value={e.description} onChange={ev => updateTrainingEntry(idx, { description: ev.target.value })} className="bg-background border border-border rounded-md px-3 py-2 text-white md:col-span-2" placeholder="Description" />
-											<input type="number" min={0} value={e.durationMinutes ?? ''} onChange={ev => updateTrainingEntry(idx, { durationMinutes: ev.target.value === '' ? undefined : Number(ev.target.value) })} className="bg-background border border-border rounded-md px-3 py-2 text-white" placeholder="Minutes" />
-											<select value={e.perceivedIntensity || ''} onChange={ev => updateTrainingEntry(idx, { perceivedIntensity: (ev.target.value || undefined) as any })} className="bg-background border border-border rounded-md px-3 py-2 text-white">
-												<option value="">Intensity</option>
-												{INTENSITIES.map(i => <option key={i} value={i}>{i}</option>)}
-											</select>
-										</div>
-										<div className="mt-2 flex justify-end">
-											<Button variant="ghost" onClick={() => removeTrainingEntry(idx)}>Remove</Button>
-										</div>
-									</div>
-								)
-							})}
-							{trainingEntries.length === 0 && <div className="subtle text-sm">Log a few recent sessions. Keep it simple.</div>}
+						<div className="subtle text-sm mb-2">Extras</div>
+						<div className="bg-mid border border-border rounded-md p-3 text-gray-300 text-sm">
+							Training & Recovery Log has moved to the Extras section.
 						</div>
 					</div>
 
@@ -901,7 +886,7 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 										<option value="">Dominant hand</option>
 										<option value="left">left</option>
 										<option value="right">right</option>
-										<option value="ambi">ambi</option>
+										<option value="both">both</option>
 									</select>
 								</div>
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
@@ -981,12 +966,12 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 					<p className="subtle">Share this snapshot when pitching new partners.</p>
 				</div>
 			</Card>
-			<Card title="Brand & Performance Story">
+			<Card title="Brand & My Story">
 				<div className="space-y-4">
 					{/* Performance Story */}
 					{(performanceStory.keyMilestones.length || performanceStory.currentFocus || (performanceStory.futureGoals || []).length) ? (
 						<div>
-							<div className="text-white font-semibold mb-1">Performance Story</div>
+							<div className="text-white font-semibold mb-1">My Story</div>
 							{performanceStory.currentFocus && <div className="text-gray-200 text-sm mb-1">Current focus: {performanceStory.currentFocus}</div>}
 							{performanceStory.keyMilestones.length > 0 && (
 								<div className="text-gray-300 text-sm">

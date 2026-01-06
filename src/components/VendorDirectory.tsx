@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import { VENDORS, VENDOR_CATEGORIES, VendorCategory, VendorProfile } from '../data/vendors'
+import DisclaimerBanner from './DisclaimerBanner'
 
 export default function VendorDirectory() {
 	const [selectedCategory, setSelectedCategory] = useState<'all' | VendorCategory>('all')
@@ -15,9 +16,7 @@ export default function VendorDirectory() {
 		<div className="space-y-6">
 			<header className="space-y-2">
 				<h2 className="headline text-2xl">Trusted Partners / Vendor Directory</h2>
-				<p className="text-gray-300">
-					Informational only. You are responsible for vetting and hiring any providers.
-				</p>
+				<DisclaimerBanner />
 			</header>
 
 			<Card className="space-y-4">
@@ -36,9 +35,7 @@ export default function VendorDirectory() {
 						</select>
 					</label>
 				</div>
-				<p className="text-xs text-gray-400">
-					Athlete Ledger does not endorse or guarantee results. Do your own diligence.
-				</p>
+				<p className="text-xs text-gray-400">Use discretion and verify credentials before engaging.</p>
 			</Card>
 
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -74,6 +71,13 @@ export default function VendorDirectory() {
                                     <Button variant="ghost">Email</Button>
 								</a>
 							)}
+							<button
+								type="button"
+								className="text-xs text-gray-300 underline hover:text-white"
+								onClick={() => window.open(`mailto:support@athleteledger.com?subject=Report%20Listing:%20${encodeURIComponent(v.name)}&body=Please%20describe%20the%20issue%20with%20this%20listing.`, '_blank')}
+							>
+								Report listing
+							</button>
 						</div>
 					</Card>
 				))}

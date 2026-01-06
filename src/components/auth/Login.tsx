@@ -54,6 +54,12 @@ export default function Login({ onLoggedIn, onNeedAccount }: Props) {
 						)}
 					</div>
 				</form>
+				<div className="mt-2">
+					<span className="text-xs text-gray-400">Forgot password? Use the cloud login option if available.</span>
+				</div>
+				<div className="text-xs text-gray-400 mt-3">
+					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
+				</div>
 			</Card>
 		</div>
 	)
