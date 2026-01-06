@@ -6,7 +6,6 @@ import Card from '../ui/Card'
 import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
 import { signUp } from '../../lib/authSupabase'
-import { friendlyMessageForProfilesError } from '../../lib/supabaseErrors'
 
 type Role = 'athlete' | 'parent' | 'coach'
 
@@ -26,7 +25,6 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 			</div>
 		)
 	}
-	const sb = supabase!
 	const [displayName, setDisplayName] = useState('')
 	const [role, setRole] = useState<Role>('athlete')
 	const [email, setEmail] = useState('')
@@ -74,22 +72,10 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 			return
 		}
 		const userId = result.data.id
-		// Ensure a profiles row exists with minimal fields for app usage
-		const { error: profileErr } = await sb
-			.from('profiles')
-			.upsert({ id: userId, full_name: displayName, phone: null, profile: {} }, { onConflict: 'id' })
 
+		// Rely on DB trigger public.handle_new_user() to create profiles row.
+		// Do not block signup success on client-side profiles writes.
 		setLoading(false)
-		if (profileErr) {
-			const friendly = friendlyMessageForProfilesError(profileErr)
-			if (friendly) {
-				// Show friendly warning but allow the app to continue
-				setErr(friendly)
-			} else {
-				setErr(profileErr.message)
-				return
-			}
-		}
 
 		const current: CurrentUser = {
 			id: userId,
