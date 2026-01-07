@@ -5,6 +5,7 @@ import Card from '../ui/Card'
 import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
 import { signIn } from '../../lib/authSupabase'
+import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 
 type Props = {
 	onLoggedIn: (user: CurrentUser) => void
@@ -34,24 +35,29 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		e.preventDefault()
 		setErr(null)
 		setLoading(true)
-		const { data: u, error } = await signIn({ email, password })
-		setLoading(false)
-		if (error) {
-			setErr(error)
-			return
+		try {
+			const { data: u, error } = await signIn({ email, password })
+			if (error) {
+				setErr(friendlyAuthErrorMessage(error))
+				return
+			}
+			if (!u) {
+				setErr('Unable to load user after login')
+				return
+			}
+			const current: CurrentUser = {
+				id: u.id,
+				email: u.email || email,
+				fullName: (u.user_metadata?.full_name as string) || u.email || 'User',
+				role: (u.user_metadata?.role as string) || 'athlete',
+				marketingConsent: Boolean(u.user_metadata?.marketingConsent)
+			}
+			onLoggedIn(current)
+		} catch (e: any) {
+			setErr(friendlyAuthErrorMessage(e) || 'Login failed')
+		} finally {
+			setLoading(false)
 		}
-		if (!u) {
-			setErr('Unable to load user after login')
-			return
-		}
-		const current: CurrentUser = {
-			id: u.id,
-			email: u.email || email,
-			fullName: (u.user_metadata?.full_name as string) || u.email || 'User',
-			role: (u.user_metadata?.role as string) || 'athlete',
-			marketingConsent: Boolean(u.user_metadata?.marketingConsent)
-		}
-		onLoggedIn(current)
 	}
 
 	async function handleForgotPassword() {

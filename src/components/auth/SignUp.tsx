@@ -5,6 +5,7 @@ import Card from '../ui/Card'
 import { type CurrentUser } from '../../utils/auth'
 import { useToast } from '../ui/Toast'
 import { useAuth } from '../../context/AuthContext'
+import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 
 type Props = {
 	onSignedIn: (user: CurrentUser) => void
@@ -35,7 +36,7 @@ export default function SignUp({ onSignedIn }: Props) {
 			const user = await signup({ email, fullName, phone: phone || undefined, marketingConsent })
 			onSignedIn(user)
 		} catch (err: any) {
-			show(err?.message || 'Sign up failed')
+			show(friendlyAuthErrorMessage(err) || 'Sign up failed')
 		} finally {
 			setLoading(false)
 		}

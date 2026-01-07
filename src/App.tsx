@@ -210,7 +210,7 @@ function MainApp() {
 			const sess = await getSession()
 			if (sess.error) {
 				next.sessionOk = false
-				next.sessionError = sess.error
+				next.sessionError = sess.error?.message || null
 			} else {
 				next.sessionOk = Boolean(sess.data)
 				next.sessionError = null

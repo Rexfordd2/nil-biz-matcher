@@ -6,6 +6,7 @@ import Card from '../ui/Card'
 import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
 import { signUp } from '../../lib/authSupabase'
+import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 
 type Role = 'athlete' | 'parent' | 'coach'
 
@@ -52,39 +53,44 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 		}
 		setLoading(true)
 
-		// centralized in src/constants/legal.ts
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const { TERMS_VERSION } = await import('../../constants/legal')
-		const result = await signUp({
-			email,
-			password,
-			fullName: displayName,
-			metadata: {
-				full_name: displayName,
-				role,
-				termsAcceptedAt: new Date().toISOString(),
-				termsVersion: TERMS_VERSION
+		try {
+			// centralized in src/constants/legal.ts
+			// eslint-disable-next-line @typescript-eslint/no-var-requires
+			const { TERMS_VERSION } = await import('../../constants/legal')
+			const result = await signUp({
+				email,
+				password,
+				fullName: displayName,
+				metadata: {
+					full_name: displayName,
+					role,
+					termsAcceptedAt: new Date().toISOString(),
+					termsVersion: TERMS_VERSION
+				}
+			})
+			if (result.error || !result.data) {
+				const message = friendlyAuthErrorMessage(result.error) || 'Signup failed'
+				setErr(message)
+				return
 			}
-		})
-		if (result.error || !result.data) {
+			const userId = result.data.id
+
+			// Rely on DB trigger public.handle_new_user() to create profiles row.
+			// Do not block signup success on client-side profiles writes.
+			const current: CurrentUser = {
+				id: userId,
+				email: result.data.email || email,
+				fullName: displayName || result.data.email || 'User',
+				role,
+				marketingConsent: false
+			}
+			onSignedIn(current)
+		} catch (e: any) {
+			const message = friendlyAuthErrorMessage(e) || 'Signup failed'
+			setErr(message)
+		} finally {
 			setLoading(false)
-			setErr(result.error ?? 'Signup failed')
-			return
 		}
-		const userId = result.data.id
-
-		// Rely on DB trigger public.handle_new_user() to create profiles row.
-		// Do not block signup success on client-side profiles writes.
-		setLoading(false)
-
-		const current: CurrentUser = {
-			id: userId,
-			email: result.data.email || email,
-			fullName: displayName || result.data.email || 'User',
-			role,
-			marketingConsent: false
-		}
-		onSignedIn(current)
 	}
 
 	return (
