@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { supabaseServer } from '../_lib/supabaseServer.js'
-import { friendlyMessageForProfilesError } from '../_lib/supabaseErrors.js'
+import { supabaseServer } from '../_lib/supabaseServer'
+import { friendlyMessageForProfilesError } from '../_lib/supabaseErrors'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
 	try {

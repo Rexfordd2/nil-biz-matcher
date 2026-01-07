@@ -36,6 +36,9 @@ function parseLocation(pathname: string): RouteEntry {
 }
 
 export function navigate(to: string, replace: boolean = false) {
+	// Debug navigation is noisy; restrict to explicit auth debugging
+	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
+	if (DEBUG_AUTH) console.log('[router] navigate', { to, replace })
 	if (replace) {
 		window.history.replaceState({}, '', to)
 	} else {
@@ -47,6 +50,7 @@ export function navigate(to: string, replace: boolean = false) {
 export default function RootRouter() {
 	const [loc, setLoc] = useState<RouteEntry>(() => parseLocation(window.location.pathname))
 	const { user, initializing } = useAuth()
+	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
 
 	useEffect(() => {
 		function onPop() {
@@ -58,8 +62,13 @@ export default function RootRouter() {
 
 	// Auth guard for /app/*
 	useEffect(() => {
-		if ((loc.key === 'app' || loc.key === 'onboarding') && !initializing && !user) {
+		if (DEBUG_AUTH) console.log('[router] guard check', { route: loc.key, initializing, hasUser: Boolean(user) })
+		// Do not redirect while initializing
+		if (initializing) return
+		// Only guard app or onboarding sections
+		if ((loc.key === 'app' || loc.key === 'onboarding') && !user) {
 			const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
+			if (DEBUG_AUTH) console.log('[router] redirect -> /auth/login', { returnTo })
 			navigate(`/auth/login?returnTo=${returnTo}`, true)
 		}
 	}, [loc, user, initializing])

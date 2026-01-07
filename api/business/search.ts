@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { searchBusinessesWithGooglePlaces } from '../_lib/googlePlaces.js'
-import { searchBusinessesWithMock } from '../_lib/mockBusinesses.js'
+import { searchBusinessesWithGooglePlaces } from '../_lib/googlePlaces'
+import { searchBusinessesWithMock } from '../_lib/mockBusinesses'
 
 /**
  * UI → /api/business/search → provider (Google Places if configured, else mock)

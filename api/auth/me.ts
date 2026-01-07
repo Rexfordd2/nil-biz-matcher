@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getCurrentUser } from '../_lib/auth.js'
+import { getCurrentUser } from '../_lib/auth'
 import fs from 'node:fs'
 import path from 'node:path'
 

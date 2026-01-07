@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Card from '../ui/Card'
@@ -6,6 +6,7 @@ import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
 import { signIn } from '../../lib/authSupabase'
 import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
+import { navigate } from '../../routes/RootRouter'
 
 type Props = {
 	onLoggedIn: (user: CurrentUser) => void
@@ -30,14 +31,27 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const [err, setErr] = useState<string | null>(null)
 	const [loading, setLoading] = useState(false)
 	const [sendingReset, setSendingReset] = useState(false)
+	const [slow, setSlow] = useState(false)
+	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
+
+	useEffect(() => {
+		if (!loading) {
+			setSlow(false)
+			return
+		}
+		const t = window.setTimeout(() => setSlow(true), 8000)
+		return () => window.clearTimeout(t)
+	}, [loading])
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
 		setErr(null)
 		setLoading(true)
 		try {
+			if (DEBUG_AUTH) console.log('[login] submit', { email })
 			const { data: u, error } = await signIn({ email, password })
 			if (error) {
+				if (DEBUG_AUTH) console.log('[login] error', error)
 				setErr(friendlyAuthErrorMessage(error, { context: 'login' }))
 				return
 			}
@@ -52,9 +66,20 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 				role: (u.user_metadata?.role as string) || 'athlete',
 				marketingConsent: Boolean(u.user_metadata?.marketingConsent)
 			}
-			onLoggedIn(current)
+			if (DEBUG_AUTH) console.log('[login] success', { userId: current.id })
+			try {
+				onLoggedIn(current)
+			} catch (cbErr) {
+				// eslint-disable-next-line no-console
+				console.warn('[login] onLoggedIn error', cbErr)
+			}
+			// Redirect immediately after success
+			const url = new URL(window.location.href)
+			const returnTo = url.searchParams.get('returnTo')
+			navigate(returnTo || '/app', true)
 		} catch (e: any) {
-			setErr(friendlyAuthErrorMessage(e, { context: 'login' }) || 'Login failed')
+			if (DEBUG_AUTH) console.log('[login] exception', e)
+			setErr(friendlyAuthErrorMessage(e, { context: 'login' }) || 'We could not sign you in. Please try again.')
 		} finally {
 			setLoading(false)
 		}
@@ -99,6 +124,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 						/>
 					</label>
 					{err && <div className="text-red-400 text-sm">{err}</div>}
+					{slow && !err && <div className="text-amber-300 text-xs">Login is taking longer than expected. Refresh and try again.</div>}
 					<div className="flex items-center justify-between">
 						<Button className="red-glow" disabled={loading} onClick={() => {}}>{loading ? 'Logging in…' : 'Log in'}</Button>
 						{onNeedAccount && (

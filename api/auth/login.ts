@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import prisma from '../_lib/prisma.js'
-import { setSessionCookie, signSession } from '../_lib/auth.js'
+import prisma from '../_lib/prisma'
+import { setSessionCookie, signSession } from '../_lib/auth'
 import fs from 'node:fs'
 import path from 'node:path'
 

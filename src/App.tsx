@@ -821,7 +821,21 @@ function AppShell() {
 			</div>
 		)
 	}
-	if (!user) return <LoginPage />
+	if (!user) {
+		const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
+		return (
+			<div className="min-h-screen">
+				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${BUILD_ID}`}</div>
+				<div className="p-3 text-sm text-gray-300">
+					You are not signed in.{' '}
+					<a href={`/auth/login?returnTo=${returnTo}`} className="underline">
+						Log in
+					</a>
+				</div>
+				<LoginPage />
+			</div>
+		)
+	}
 	return <MainApp />
 }
 

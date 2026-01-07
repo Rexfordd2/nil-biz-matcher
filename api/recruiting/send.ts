@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'crypto'
-import { prisma } from '../_lib/prisma.js'
-import { sendMail, getEmailTransporter } from '../_lib/email.js'
+import { prisma } from '../_lib/prisma'
+import { sendMail, getEmailTransporter } from '../_lib/email'
 
 type CoachInput = { name: string; email: string; id?: string }
 type AthleteInput = { fullName: string; email: string; id?: string }

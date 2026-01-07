@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import prisma from '../_lib/prisma.js'
-import { setSessionCookie, signSession } from '../_lib/auth.js'
+import prisma from '../_lib/prisma'
+import { setSessionCookie, signSession } from '../_lib/auth'
 
 function isValidEmail(email: string) {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)

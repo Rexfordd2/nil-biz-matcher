@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import prisma from '../_lib/prisma.js'
-import { getCurrentUser, requireUser } from '../_lib/auth.js'
+import prisma from '../_lib/prisma'
+import { getCurrentUser, requireUser } from '../_lib/auth'
 
 type JsonValue = any
 
