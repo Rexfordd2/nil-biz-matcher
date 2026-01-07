@@ -36,7 +36,7 @@ export default function SignUp({ onSignedIn }: Props) {
 			const user = await signup({ email, fullName, phone: phone || undefined, marketingConsent })
 			onSignedIn(user)
 		} catch (err: any) {
-			show(friendlyAuthErrorMessage(err) || 'Sign up failed')
+			show(friendlyAuthErrorMessage(err, { context: 'signup' }) || "We couldn't create your account. Please try again shortly.")
 		} finally {
 			setLoading(false)
 		}

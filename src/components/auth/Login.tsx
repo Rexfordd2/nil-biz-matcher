@@ -29,7 +29,7 @@ export default function Login({ onLoggedIn, onNeedAccount }: Props) {
 			const user = await login(email)
 			onLoggedIn(user)
 		} catch (err: any) {
-			show(friendlyAuthErrorMessage(err) || 'Login failed')
+			show(friendlyAuthErrorMessage(err, { context: 'login' }) || 'Login failed')
 		} finally {
 			setLoading(false)
 		}

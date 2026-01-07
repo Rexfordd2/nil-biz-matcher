@@ -38,7 +38,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		try {
 			const { data: u, error } = await signIn({ email, password })
 			if (error) {
-				setErr(friendlyAuthErrorMessage(error))
+				setErr(friendlyAuthErrorMessage(error, { context: 'login' }))
 				return
 			}
 			if (!u) {
@@ -54,7 +54,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 			}
 			onLoggedIn(current)
 		} catch (e: any) {
-			setErr(friendlyAuthErrorMessage(e) || 'Login failed')
+			setErr(friendlyAuthErrorMessage(e, { context: 'login' }) || 'Login failed')
 		} finally {
 			setLoading(false)
 		}

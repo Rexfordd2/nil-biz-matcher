@@ -69,7 +69,7 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 				}
 			})
 			if (result.error || !result.data) {
-				const message = friendlyAuthErrorMessage(result.error) || 'Signup failed'
+				const message = friendlyAuthErrorMessage(result.error, { context: 'signup' }) || "We couldn't create your account. Please try again shortly."
 				setErr(message)
 				return
 			}
@@ -86,7 +86,7 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 			}
 			onSignedIn(current)
 		} catch (e: any) {
-			const message = friendlyAuthErrorMessage(e) || 'Signup failed'
+			const message = friendlyAuthErrorMessage(e, { context: 'signup' }) || "We couldn't create your account. Please try again shortly."
 			setErr(message)
 		} finally {
 			setLoading(false)
