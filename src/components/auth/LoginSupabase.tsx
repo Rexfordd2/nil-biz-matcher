@@ -126,7 +126,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					{err && <div className="text-red-400 text-sm">{err}</div>}
 					{slow && !err && <div className="text-amber-300 text-xs">Login is taking longer than expected. Refresh and try again.</div>}
 					<div className="flex items-center justify-between">
-						<Button className="red-glow" disabled={loading} onClick={() => {}}>{loading ? 'Logging in…' : 'Log in'}</Button>
+						<Button className="red-glow" type="submit" disabled={loading}>{loading ? 'Logging in…' : 'Log in'}</Button>
 						{onNeedAccount && (
 							<button type="button" onClick={onNeedAccount} className="text-sm text-gray-300 hover:text-white">Need an account? Sign up</button>
 						)}

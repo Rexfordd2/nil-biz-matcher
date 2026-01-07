@@ -652,8 +652,12 @@ function MainApp() {
 					{tab === 'Sign Up' && (
 						import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? (
 							<SignUpSupabase onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
-						) : (
+						) : import.meta.env.DEV ? (
 							<SignUp onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
+						) : (
+							<div className="rounded-md border border-border bg-surface p-4 text-sm text-gray-300">
+								Supabase not configured. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
+							</div>
 						)
 					)}
 
@@ -663,11 +667,15 @@ function MainApp() {
 								onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
 								onNeedAccount={() => setTab('Sign Up')}
 							/>
-						) : (
+						) : import.meta.env.DEV ? (
 							<Login
 								onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
 								onNeedAccount={() => setTab('Sign Up')}
 							/>
+						) : (
+							<div className="rounded-md border border-border bg-surface p-4 text-sm text-gray-300">
+								Supabase not configured. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
+							</div>
 						)
 					)}
 

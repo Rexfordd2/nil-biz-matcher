@@ -17,8 +17,12 @@ export default function LoginRoute() {
 		<div className="mx-auto max-w-3xl px-4 md:px-6 py-10">
 			{supabaseEnvConfigured ? (
 				<LoginSupabase onLoggedIn={onLoggedIn} onNeedAccount={() => navigate('/auth/signup')} />
-			) : (
+			) : import.meta.env.DEV ? (
 				<Login onLoggedIn={onLoggedIn} onNeedAccount={() => navigate('/auth/signup')} />
+			) : (
+				<div className="rounded-md border border-border bg-surface p-4 text-sm text-gray-300">
+					Supabase not configured. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
+				</div>
 			)}
 		</div>
 	)

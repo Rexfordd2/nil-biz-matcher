@@ -28,6 +28,14 @@ const KNOWN_LIMITATIONS: string[] = [
 export default function Status() {
 	const [profilesHealth, setProfilesHealth] = useState<'unknown' | 'present' | 'missing' | 'not_configured' | 'error'>('unknown')
 	const [profilesDetail, setProfilesDetail] = useState<string>('')
+	const [sessionPresent, setSessionPresent] = useState<boolean | null>(null)
+	const [routeInfo] = useState<{ path: string; search: string; returnTo: string | null }>(() => {
+		const path = window.location.pathname
+		const search = window.location.search
+		const sp = new URLSearchParams(search)
+		const rt = sp.get('returnTo')
+		return { path, search, returnTo: rt }
+	})
 
 	useEffect(() => {
 		let mounted = true
@@ -35,7 +43,18 @@ export default function Status() {
 			if (!supabaseEnvConfigured || !supabase) {
 				if (!mounted) return
 				setProfilesHealth('not_configured')
+				setSessionPresent(null)
 				return
+			} else {
+				// Session presence
+				try {
+					const { data } = await supabase.auth.getSession()
+					if (!mounted) return
+					setSessionPresent(Boolean(data?.session))
+				} catch {
+					if (!mounted) return
+					setSessionPresent(false)
+				}
 			}
 			const { error } = await supabase
 				.from('profiles')
@@ -68,6 +87,17 @@ export default function Status() {
 				<p className="text-sm text-foreground/70">
 					Build <span className="font-mono">{BUILD_ID}</span> • {BUILD_TIME} • Terms {TERMS_VERSION} • Env {ENV_MODE}
 				</p>
+				<div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+					<div className="rounded-md border border-border bg-surface px-3 py-2">
+						<div>Supabase configured: <span className={supabaseEnvConfigured ? 'text-green-300' : 'text-amber-300'}>{supabaseEnvConfigured ? '✅' : '❌'}</span></div>
+						<div>Session present: <span className={sessionPresent ? 'text-green-300' : 'text-amber-300'}>{sessionPresent ? '✅' : sessionPresent === null ? '—' : '❌'}</span></div>
+					</div>
+					<div className="rounded-md border border-border bg-surface px-3 py-2">
+						<div>Route: <span className="font-mono text-white">{routeInfo.path || '/'}</span></div>
+						<div>Query: <span className="font-mono text-white">{routeInfo.search || '—'}</span></div>
+						<div>returnTo: <span className="font-mono text-white">{routeInfo.returnTo || '—'}</span></div>
+					</div>
+				</div>
 				<div className="mt-3 text-sm">
 					{profilesHealth === 'not_configured' ? (
 						<div className="rounded-md border border-border bg-surface px-3 py-2 text-gray-300">

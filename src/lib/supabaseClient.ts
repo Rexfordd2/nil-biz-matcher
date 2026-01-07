@@ -58,7 +58,7 @@ if (isValidHttpUrl(supabaseUrl) && typeof supabaseAnonKey === 'string' && supaba
 	}).catch(() => {})
 	// #endregion
 } else {
-	warnOnce('[Athlete Ledger] Supabase not configured, using local fallback')
+	warnOnce('[Athlete Ledger] Supabase not configured')
 }
 
 export const supabase: SupabaseClient | null = client

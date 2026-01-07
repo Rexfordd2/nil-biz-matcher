@@ -9,6 +9,7 @@ import LoginRoute from '../pages/auth/LoginRoute'
 import SignupRoute from '../pages/auth/SignupRoute'
 import ResetRoute from '../pages/auth/ResetRoute'
 import { useAuth } from '../context/AuthContext'
+import { supabaseEnvConfigured } from '../lib/supabaseClient'
 
 type RouteEntry =
 	| { key: 'home' }
@@ -107,6 +108,11 @@ export default function RootRouter() {
 
 	return (
 		<div className="min-h-screen bg-background text-foreground">
+			{import.meta.env.DEV && !supabaseEnvConfigured && (
+				<div className="fixed top-0 left-0 right-0 z-50 bg-amber-500/10 border-b border-amber-400/40 text-amber-200 text-xs px-3 py-2">
+					<span className="font-semibold">Supabase not configured</span> — set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> (DEV only banner)
+				</div>
+			)}
 			{outlet}
 		</div>
 	)
