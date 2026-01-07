@@ -36,10 +36,10 @@ export default function Home() {
 			</header>
 			<main className="mx-auto max-w-6xl px-4 md:px-6 py-10 space-y-10">
 				<section className="text-center space-y-4">
-					<h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+					<h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900">
 						Athlete Ledger: Turn Your Hustle into a Real NIL Game Plan
 					</h2>
-					<p className="text-gray-200 text-lg max-w-3xl mx-auto">
+					<p className="text-gray-700 text-lg max-w-3xl mx-auto">
 						Build your athlete profile, find the right businesses, and communicate professionally—with safety for teens and clarity for parents.
 					</p>
 					<div className="aspect-video w-full max-w-3xl mx-auto rounded-lg overflow-hidden border border-border bg-mid">
@@ -66,27 +66,64 @@ export default function Home() {
 				</section>
 
 				<section className="space-y-4">
-					<h3 className="headline text-xl text-white text-center">How it works</h3>
+					<h3 className="headline text-xl text-gray-900 text-center">How it works</h3>
 					<ol className="grid grid-cols-1 md:grid-cols-3 gap-4">
 						<li className="card p-4">
-							<div className="text-white font-semibold mb-1">1) Create your profile</div>
-							<p className="text-gray-300 text-sm">Add sports, film, and your “My Story” so brands and coaches quickly understand you.</p>
+							<div className="text-gray-900 font-semibold mb-1">1) Learn NIL 101</div>
+							<p className="text-gray-700 text-sm">
+								Understand what Name, Image, and Likeness actually means, what’s allowed vs. not,
+								basics of eligibility, disclosures, and taxes. We give plain‑language guides,
+								short videos, and checklists so you stay compliant from day one.
+							</p>
+							<p className="text-gray-600 text-sm mt-1">
+								We highlight key concepts like pay‑for‑play bans, school policy differences, consent for minors,
+								and why clear ad disclosures matter—so you avoid mistakes that could affect eligibility.
+							</p>
 						</li>
 						<li className="card p-4">
-							<div className="text-white font-semibold mb-1">2) Discover businesses</div>
-							<p className="text-gray-300 text-sm">Use our discovery tools to find good‑fit local businesses and plan simple outreach.</p>
+							<div className="text-gray-900 font-semibold mb-1">2) Build a standout profile</div>
+							<p className="text-gray-700 text-sm">
+								Showcase your sport, highlights, and story in a brand‑safe way parents and coaches
+								appreciate. Our prompts help you express value clearly so businesses see why you’re
+								a great partner.
+							</p>
+							<p className="text-gray-600 text-sm mt-1">
+								We coach you on content pillars, photos/video, and tone. Add audience stats and strengths so
+								local brands can quickly see fit—and parents/coaches can comfortably support your outreach.
+							</p>
 						</li>
 						<li className="card p-4">
-							<div className="text-white font-semibold mb-1">3) Talk like a pro</div>
-							<p className="text-gray-300 text-sm">Use respectful scripts and checklists (teen/parent‑safe) to start conversations the right way.</p>
+							<div className="text-gray-900 font-semibold mb-1">3) Discover the right partners</div>
+							<p className="text-gray-700 text-sm">
+								Match with local businesses that fit your audience and goals. Learn what brands look
+								for and how to present a simple, realistic NIL plan that respects school and state rules.
+							</p>
+							<p className="text-gray-600 text-sm mt-1">
+								We teach evaluation basics: brand safety, audience overlap, seasonality, and category norms.
+								Save notes and reasons to believe—so every pitch feels tailored and professional.
+							</p>
 						</li>
 						<li className="card p-4">
-							<div className="text-white font-semibold mb-1">4) Track deals & events</div>
-							<p className="text-gray-300 text-sm">Keep everything organized and school‑friendly, with simple compliance notes.</p>
+							<div className="text-gray-900 font-semibold mb-1">4) Outreach like a pro</div>
+							<p className="text-gray-700 text-sm">
+								Use respectful scripts, email/text templates, and do/don’t checklists to start the
+								conversation the right way—coach and parent‑friendly, compliance‑first, and easy to follow.
+							</p>
+							<p className="text-gray-600 text-sm mt-1">
+								We cover expectations, rates, and scope. For minors, include a parent/guardian. Use clear,
+								honest messaging and keep records of what you sent, promised, and delivered.
+							</p>
 						</li>
 						<li className="card p-4">
-							<div className="text-white font-semibold mb-1">5) Learn as you go</div>
-							<p className="text-gray-300 text-sm">NIL education and safety guidance are built‑in—parents and coaches welcome.</p>
+							<div className="text-gray-900 font-semibold mb-1">5) Track deals, compliance, and growth</div>
+							<p className="text-gray-700 text-sm">
+								Organize offers, tasks, and events with simple notes and disclosures. Our built‑in
+								micro‑lessons help you improve each step so your NIL activity stays smart, safe, and effective.
+							</p>
+							<p className="text-gray-600 text-sm mt-1">
+								Track deliverables, due dates, and consideration (cash/gear/services), plus usage rights and exclusivity.
+								Export a clean log for school reporting and share updates with parents/coaches anytime.
+							</p>
 						</li>
 					</ol>
 				</section>
