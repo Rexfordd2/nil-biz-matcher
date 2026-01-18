@@ -2,10 +2,23 @@
   "version": 2,
   "framework": "vite",
   "installCommand": "npm ci",
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+    { "source": "/healthz", "destination": "/api/healthz" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/api/healthz",
+      "headers": [
+        { "key": "CDN-Cache-Control", "value": "no-store" }
+      ]
+    }
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
 }
