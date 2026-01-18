@@ -5,8 +5,7 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/healthz", "destination": "/api/healthz" },
-    { "source": "/((?!api).*)", "destination": "/index.html" }
+    { "source": "/healthz", "destination": "/api/healthz" }
   ],
   "headers": [
     {
