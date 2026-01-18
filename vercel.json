@@ -6,7 +6,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/healthz", "destination": "/api/healthz" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
