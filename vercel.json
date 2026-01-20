@@ -2,21 +2,28 @@
   "version": 2,
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/healthz", "destination": "/api/healthz" },
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    {
+      "src": "/healthz",
+      "dest": "/api/healthz"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/api/healthz",
       "headers": [
-        { "key": "CDN-Cache-Control", "value": "no-store" }
+        {
+          "key": "CDN-Cache-Control",
+          "value": "no-store"
+        }
       ]
     }
-  ],
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  }
+  ]
 }
