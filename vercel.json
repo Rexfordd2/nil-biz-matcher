@@ -8,27 +8,8 @@
     }
   },
   "routes": [
-    {
-      "src": "/healthz",
-      "dest": "/api/healthz"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/api/healthz",
-      "headers": [
-        {
-          "key": "CDN-Cache-Control",
-          "value": "no-store"
-        }
-      ]
-    }
+    { "src": "/healthz", "dest": "/api/healthz" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
