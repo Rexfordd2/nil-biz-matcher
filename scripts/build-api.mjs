@@ -100,23 +100,6 @@ async function buildApiFiles() {
   await Promise.all(buildPromises)
   
   console.log(`[build-api] Successfully compiled ${tsFiles.length} files to ${apiDestDir}`)
-  
-  // Verify critical files exist
-  const pingPath = resolve(apiDestDir, 'ping.js')
-  const healthzPath = resolve(apiDestDir, 'healthz.js')
-  
-  if (!existsSync(pingPath)) {
-    console.error(`[build-api] ERROR: dist/api/ping.js does not exist after build`)
-    process.exit(1)
-  }
-  
-  if (!existsSync(healthzPath)) {
-    console.error(`[build-api] ERROR: dist/api/healthz.js does not exist after build`)
-    process.exit(1)
-  }
-  
-  console.log(`[build-api] ✓ Verified dist/api/ping.js exists`)
-  console.log(`[build-api] ✓ Verified dist/api/healthz.js exists`)
 }
 
 buildApiFiles().catch((error) => {

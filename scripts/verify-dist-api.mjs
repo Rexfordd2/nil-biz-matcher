@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 
 const distApiDir = resolve(process.cwd(), 'dist', 'api')
 
-console.log('\n=== BUILD PROOF: dist/api contents ===')
+console.log('\nBUILD PROOF dist/api:')
 
 if (!existsSync(distApiDir)) {
   console.error('❌ ERROR: dist/api directory does not exist!')
