@@ -1,44 +1,16 @@
 #!/usr/bin/env node
 /**
  * Build API TypeScript files to JavaScript for Vercel deployment
- * Compiles api/*.ts into dist/api/*.js using esbuild targeting node20
+ * Compiles ONLY api/ping.ts and api/healthz.ts into dist/api/*.js
  */
 import { build } from 'esbuild'
-import { readdir, stat, mkdir, writeFile } from 'node:fs/promises'
-import { resolve, dirname, relative, extname } from 'node:path'
+import { rm, mkdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 
 const rootDir = process.cwd()
 const apiSrcDir = resolve(rootDir, 'api')
 const apiDestDir = resolve(rootDir, 'dist', 'api')
-
-async function getAllTsFiles(dir, baseDir = dir) {
-  const files = []
-  const entries = await readdir(dir, { withFileTypes: true })
-  
-  for (const entry of entries) {
-    const fullPath = resolve(dir, entry.name)
-    const relativePath = relative(baseDir, fullPath)
-    
-    if (entry.isDirectory()) {
-      // Skip node_modules and other common directories
-      if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
-        continue
-      }
-      files.push(...await getAllTsFiles(fullPath, baseDir))
-    } else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
-      files.push({ fullPath, relativePath })
-    }
-  }
-  
-  return files
-}
-
-async function ensureDir(dir) {
-  if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true })
-  }
-}
 
 async function buildApiFiles() {
   if (!existsSync(apiSrcDir)) {
@@ -51,26 +23,32 @@ async function buildApiFiles() {
     process.exit(1)
   }
 
-  await ensureDir(apiDestDir)
-
-  const tsFiles = await getAllTsFiles(apiSrcDir)
-  
-  if (tsFiles.length === 0) {
-    console.warn(`[build-api] No TypeScript files found in ${apiSrcDir}`)
-    return
+  // Clean dist/api before building
+  if (existsSync(apiDestDir)) {
+    await rm(apiDestDir, { recursive: true, force: true })
+    console.log(`[build-api] Cleaned dist/api`)
   }
+  await mkdir(apiDestDir, { recursive: true })
 
-  console.log(`[build-api] Found ${tsFiles.length} TypeScript files to compile`)
+  // Only compile these two files
+  const filesToBuild = [
+    { src: resolve(apiSrcDir, 'ping.ts'), dest: 'ping.js' },
+    { src: resolve(apiSrcDir, 'healthz.ts'), dest: 'healthz.js' },
+  ]
 
-  const buildPromises = tsFiles.map(async ({ fullPath, relativePath }) => {
-    const outputPath = resolve(apiDestDir, relativePath.replace(/\.ts$/, '.js'))
-    const outputDir = dirname(outputPath)
-    
-    await ensureDir(outputDir)
+  console.log(`[build-api] Compiling ${filesToBuild.length} endpoint files`)
+
+  const buildPromises = filesToBuild.map(async ({ src, dest }) => {
+    const outputPath = resolve(apiDestDir, dest)
+
+    if (!existsSync(src)) {
+      console.error(`[build-api] ✗ Source file missing: ${src}`)
+      process.exit(1)
+    }
 
     try {
       await build({
-        entryPoints: [fullPath],
+        entryPoints: [src],
         bundle: true,
         platform: 'node',
         target: 'node20',
@@ -90,16 +68,16 @@ async function buildApiFiles() {
         logLevel: 'silent',
       })
       
-      console.log(`[build-api] ✓ ${relativePath} → ${relative(outputDir, outputPath)}`)
+      console.log(`[build-api] ✓ ${dest}`)
     } catch (error) {
-      console.error(`[build-api] ✗ Failed to build ${relativePath}:`, error.message)
+      console.error(`[build-api] ✗ Failed to build ${dest}:`, error.message)
       throw error
     }
   })
 
   await Promise.all(buildPromises)
   
-  console.log(`[build-api] Successfully compiled ${tsFiles.length} files to ${apiDestDir}`)
+  console.log(`[build-api] Successfully compiled ${filesToBuild.length} files to ${apiDestDir}`)
 }
 
 buildApiFiles().catch((error) => {
