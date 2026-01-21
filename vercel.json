@@ -3,6 +3,10 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
+  "functions": {
+    "dist/api/ping.js": {},
+    "dist/api/healthz.js": {}
+  },
   "routes": [
     { "src": "/healthz", "dest": "/api/healthz" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
