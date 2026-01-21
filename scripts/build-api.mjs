@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Build API TypeScript files to JavaScript for Vercel deployment
- * Compiles ONLY api/ping.ts and api/healthz.ts into dist/api/*.js
+ * Compiles ONLY serverless_src/ping.ts and serverless_src/healthz.ts into dist/api/*.js
  */
 import { build } from 'esbuild'
 import { rm, mkdir } from 'node:fs/promises'
@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 
 const rootDir = process.cwd()
-const apiSrcDir = resolve(rootDir, 'api')
+const apiSrcDir = resolve(rootDir, 'serverless_src')
 const apiDestDir = resolve(rootDir, 'dist', 'api')
 
 async function buildApiFiles() {
