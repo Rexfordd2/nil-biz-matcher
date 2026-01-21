@@ -8,7 +8,7 @@ export default function Home() {
 	const { user } = useAuth()
 	return (
 		<div className="min-h-screen">
-			<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${BUILD_ID}`}</div>
+			<div className="fixed top-2 right-3 text-xs text-black" data-testid="build-id">{BUILD_ID}</div>
 			<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
 				<div className="mx-auto max-w-6xl px-4 md:px-6 py-4 flex items-center justify-between">
 					<div className="flex items-center gap-3">
