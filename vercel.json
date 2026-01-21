@@ -5,7 +5,8 @@
   "outputDirectory": "dist",
   "routes": [
     { "src": "/healthz", "dest": "/api/healthz" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
     { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    { "src": "/((?!api/).*)", "dest": "/index.html" }
   ]
 }
