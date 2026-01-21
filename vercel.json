@@ -4,8 +4,8 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
   "functions": {
-    "dist/api/ping.js": {},
-    "dist/api/healthz.js": {}
+    "api/ping.js": {},
+    "api/healthz.js": {}
   },
   "routes": [
     { "src": "/healthz", "dest": "/api/healthz" },
