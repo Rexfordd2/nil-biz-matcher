@@ -1,3 +1,3 @@
-export const BUILD_ID = import.meta.env.VITE_BUILD_ID ?? 'local'
+export { BUILD_ID } from '../lib/buildInfo'
 
 

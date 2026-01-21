@@ -14,6 +14,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return res.status(405).json({ error: 'Method Not Allowed' })
 	}
 
+	const startedAt = Date.now()
+	const requestId = (req.headers['x-request-id'] as string) || undefined
+	const log = (status: 'start' | 'ok' | 'empty' | 'error') => {
+		try {
+			// eslint-disable-next-line no-console
+			console.log(JSON.stringify({
+				time: new Date().toISOString(),
+				tsMs: Date.now(),
+				requestId,
+				feature: 'recruitment_api',
+				route: '/api/recruiting/search',
+				status,
+				durationMs: status === 'start' ? undefined : (Date.now() - startedAt),
+				meta: {
+					sport: asString(req.query.sport),
+					level: asString(req.query.level),
+					region: asString(req.query.region)
+				}
+			}))
+		} catch {}
+	}
+	log('start')
+
 	try {
 		const sport = asString(req.query.sport)
 		const level = asString(req.query.level)
@@ -30,8 +53,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			return sportOk && levelOk && regionOk
 		})
 
+		if (programs.length === 0) log('empty'); else log('ok')
 		return res.status(200).json({ programs })
 	} catch (err) {
+		log('error')
 		// eslint-disable-next-line no-console
 		console.error('Recruiting search error:', err)
 		return res.status(200).json({ programs: [] })

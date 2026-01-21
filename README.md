@@ -24,6 +24,32 @@ We will port the UX/UI from the Figma file to this codebase. Reference design: `
 For each Figma frame, identify: component structure, states (empty/loading/error), tokens (colors, radii, spacing, typography), and interactions. Map to Tailwind classes or add tokens in `src/theme/tokens.ts` as needed.
 
 
+### Domain auto‑discovery and verification
+
+You can verify all deployed domains without manually setting `DOMAINS`. The script will auto‑discover domains/aliases from Vercel for the current project.
+
+- How the project is found:
+  - Uses `VERCEL_PROJECT_ID` if set.
+  - Else reads `.vercel/project.json` created by `vercel link` (uses `projectId` or `projectName`).
+  - Else uses `vercel.json` `"name"` and resolves it via the Vercel API.
+  - Scope: if `VERCEL_ORG_ID` is set (e.g., `team_...`), it is passed for team scoping.
+
+- Requirements:
+  - `VERCEL_TOKEN` must be set (Vercel personal access token).
+
+- Usage (PowerShell):
+  ```powershell
+  $env:VERCEL_TOKEN = "<your-vercel-token>"
+  npm run verify:all-domains
+  ```
+
+- Notes:
+  - The discovery script prints a first line CSV suitable for `DOMAINS`, followed by a readable list.
+  - You can also fetch the list directly:
+    ```powershell
+    npm run get:vercel:domains
+    ```
+
 ### Features
 - **Athlete Profile Builder**: multi‑sport, multi‑position, social handles, content styles.
 - **Business import from URL (auto‑scrape)**: pulls title, description, social links, and basic signals.
@@ -69,7 +95,114 @@ Notes:
 - **Dev**: `npm run dev`
 - **Build**: `npm run build` (outputs to `dist/`)
 - **Preview (static server)**: `npm run preview`
-- **Tests**: none configured at this time.
+- **Tests**: `npm test` (runs unit tests with vitest)
+
+### CI Gates (Running Locally)
+
+Before pushing code or creating a PR, you can run the same checks that CI will run:
+
+```bash
+# Install dependencies (clean install, like CI)
+npm ci
+
+# Run all CI checks locally
+npm test              # Run unit tests
+npm run verify:lint   # Check TypeScript types
+npm run build         # Build the application (will fail if debug routes are unprotected)
+```
+
+**CI Pipeline Checks:**
+1. **Dependencies**: `npm ci` ensures a clean install from `package-lock.json`
+2. **Tests**: `npm test` runs all unit tests (vitest)
+3. **Linting**: `npm run verify:lint` checks TypeScript types (`tsc --noEmit`)
+4. **Build**: `npm run build` builds the application and will fail if:
+   - TypeScript compilation errors exist
+   - Debug routes are not protected (when `VITE_DIAGNOSTICS` and `VITE_DEBUG_KEY` are both unset in production builds)
+
+**Optional Production Verification:**
+If you have `DOMAINS` and `VERCEL_TOKEN` environment variables set, you can also run production verification:
+
+```bash
+# PowerShell
+$env:DOMAINS = "https://your-domain.com"
+$env:VERCEL_TOKEN = "your-vercel-token"
+npm run verify:prod
+
+# Bash
+export DOMAINS="https://your-domain.com"
+export VERCEL_TOKEN="your-vercel-token"
+npm run verify:prod
+```
+
+This verifies that deployed domains are accessible, stable, and have matching build IDs.
+
+**Launch Status Report:**
+
+Generate a comprehensive launch readiness report with a single command. The script auto-discovers domains from Vercel if `VERCEL_TOKEN` is set, or you can provide `DOMAINS` explicitly.
+
+**Single-Command Launch Readiness Workflow:**
+
+```powershell
+# PowerShell
+# Set VERCEL_TOKEN (auto-discovers domains) or DOMAINS explicitly
+$env:VERCEL_TOKEN = "<your-vercel-token>"
+# OR: $env:DOMAINS = "https://your-domain.com"
+
+# Run launch status check with --strict mode (requires harness metrics)
+npm run launch:status -- --strict
+
+# Check exit code (0 = PASS/WARN, 1 = FAIL)
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Launch readiness check passed or has warnings"
+} else {
+    Write-Host "Launch readiness check failed - review LAUNCH_STATUS.md"
+    exit $LASTEXITCODE
+}
+```
+
+```bash
+# Bash
+# Set VERCEL_TOKEN (auto-discovers domains) or DOMAINS explicitly
+export VERCEL_TOKEN="<your-vercel-token>"
+# OR: export DOMAINS="https://your-domain.com"
+
+# Run launch status check with --strict mode (requires harness metrics)
+npm run launch:status -- --strict
+
+# Check exit code (0 = PASS/WARN, 1 = FAIL)
+if [ $? -eq 0 ]; then
+    echo "Launch readiness check passed or has warnings"
+else
+    echo "Launch readiness check failed - review LAUNCH_STATUS.md"
+    exit $?
+fi
+```
+
+**Exit Codes:**
+- `0` (PASS/WARN): All critical checks passed. May have non-blocking warnings (e.g., harness unavailable in non-strict mode).
+- `1` (FAIL): Blocking issues detected. Review `LAUNCH_STATUS.md` for details.
+
+**Report Contents (`LAUNCH_STATUS.md`):**
+- Overall status (PASS/WARN/FAIL)
+- Domain/build consistency results
+- Debug harness metrics (failureRate + inconsistencyRate)
+- Environment variable presence checks
+- Blocking and non-blocking issues
+- Recommended next action
+- PROOF section with exact command run and redacted environment variables
+
+**Modes:**
+- **Normal mode** (`npm run launch:status`): Harness metrics are optional. Missing harness downgrades to WARN.
+- **Strict mode** (`npm run launch:status -- --strict`): Harness metrics are required. Missing harness causes FAIL.
+
+**Note:** Debug harness metrics require `VITE_DIAGNOSTICS=true` or `VITE_DEBUG_KEY` to be set for the debug routes to be accessible. In strict mode, harness unavailability will cause the check to fail.
+
+**GitHub Actions:**
+The CI pipeline (`.github/workflows/ci.yml`) automatically runs these checks on:
+- Push to `main`, `master`, or `develop` branches
+- Pull requests targeting these branches
+
+The pipeline will fail if any check fails, preventing regressions from being merged.
 
 ### Accounts, API & Database (MVP)
 This app includes serverless API routes (under `api/`) and a SQLite database via Prisma for minimal account support.
@@ -117,6 +250,116 @@ Optional (existing and recommended):
 
 ### Deployment
 Deploy to a platform that supports both static assets and serverless (e.g., Vercel). Set `DATABASE_URL` to a persistent SQLite file or switch providers per Prisma docs. Set `AUTH_SECRET` and any SMTP variables in your host’s environment settings.
+
+
+### Non‑interactive Vercel deployment (PowerShell)
+
+Use a Vercel personal access token and run the CLI non‑interactively. The following works in CI and locally without prompts.
+
+Prereqs:
+- Create a Vercel token (`Settings → Tokens`). Store it securely.
+- Have an existing Vercel Project (or specify `--project` on first link).
+
+1) Set environment variables (PowerShell)
+
+```powershell
+# Required
+$env:VERCEL_TOKEN = "<your-vercel-token>"
+
+# Strongly recommended for non-interactive 'pull'
+# Find these in Vercel → Project → Settings → General (IDs), or via `vercel projects ls`
+$env:VERCEL_ORG_ID = "<your-org-id>"          # e.g. team_abc123... or user_abc123...
+$env:VERCEL_PROJECT_ID = "<your-project-id>"  # e.g. prj_abc123...
+```
+
+2) Link the local directory to the Vercel Project (first time only)
+
+```powershell
+# If already linked (./.vercel exists), you can skip this
+npx vercel@latest link `
+  --yes `
+  --token $env:VERCEL_TOKEN `
+  --project "<project-name>" `
+  --scope "<org-or-user-slug>"
+```
+
+Expected success pattern:
+- “Linked to <org-or-user>/<project-name> (created .vercel)”
+
+3) Pull production environment settings and generate local env files
+
+```powershell
+npx vercel@latest pull `
+  --environment=production `
+  --yes `
+  --token $env:VERCEL_TOKEN
+```
+
+Expected success pattern:
+- “Downloaded Project Settings to .vercel”
+- “Created .env.production.local”
+
+4) Build and deploy to production (non‑interactive)
+
+```powershell
+# Optional: local build, helpful to fail fast
+npm run build
+
+# Deploy to production
+npx vercel@latest deploy `
+  --prod `
+  --yes `
+  --token $env:VERCEL_TOKEN
+```
+
+Expected success patterns:
+- Line containing: “Production: https://<your-prod-url>”
+- Line containing: “Inspect: https://vercel.com/<org>/<project>/<deployment>”
+- Exit code 0
+
+5) Inspect deployment URL, aliases, and domains
+
+```powershell
+# Replace with the printed production URL (copy from "Production:" line)
+$prodUrl = "https://<your-prod-url>"
+
+# Inspect the deployment (aliases/domains are shown in the output)
+npx vercel@latest inspect $prodUrl --token $env:VERCEL_TOKEN
+
+# List aliases for the project (legacy) and domains on the account (current)
+npx vercel@latest alias ls --token $env:VERCEL_TOKEN
+npx vercel@latest domains ls --token $env:VERCEL_TOKEN
+```
+
+Expected success patterns:
+- Inspect shows “Aliases” section and the deployment status as “READY”
+- `alias ls` prints current aliases (if any)
+- `domains ls` prints connected/custom domains on the account
+
+Notes:
+- If the project requires environment variables, ensure they are configured in Vercel (Project → Settings → Environment Variables) prior to deploy. `vercel pull` will materialize them locally for builds that need them.
+- For monorepos or renamed directories, always pass the correct `--project` and `--scope` on the `link` step.
+- You can replace `npx vercel@latest` with a global install (`npm i -g vercel`) and use `vercel` in commands.
+
+#### Vercel Root Directory Configuration
+
+**Required Setting:**
+- **Vercel Root Directory**: `.` (repo root) - This must be set in Vercel Project Settings → General → Root Directory
+- **vercel.json outputDirectory**: `dist` - Static files are served from `dist/`
+- **API Functions**: Located at `api/` (repo root), copied to `dist/api/` during build via `vercel-build` script
+
+**Why this configuration:**
+- When `outputDirectory: "dist"` is set, Vercel treats `dist/` as the deployment root for static files
+- API functions must be present in `dist/api/` at deployment time
+- The `vercel-build` script includes `node scripts/copy-api-to-dist.mjs` to copy `api/` → `dist/api/`
+- Vercel Root Directory must be `.` (repo root) so that both `api/` and `dist/` are accessible during build
+
+**Verification:**
+After deployment, verify API endpoints return JSON:
+```powershell
+curl https://your-preview-url.vercel.app/api/ping
+# Should return: {"ok":true}
+```
 
 
 

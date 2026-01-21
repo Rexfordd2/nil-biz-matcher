@@ -7,7 +7,11 @@ import { usePlacesSearch, type NormalizedPlace } from '../hooks/usePlacesSearch'
 import { usePlaceDetails } from '../hooks/usePlaceDetails'
 import PlacesMap from './PlacesMap'
 import { listSavedBusinesses, removeSavedBusiness, saveBusiness, type SavedBusinessRow } from '../services/savedBusinesses'
+import Observability, { generateRequestId } from '../lib/obs'
 import { supabaseEnvConfigured } from '../lib/supabaseClient'
+import { useSupabaseSession } from '../context/SupabaseSessionContext'
+import { normalizeError, requiresUserAction } from '../lib/errorHandling'
+import { navigate } from '../routes/RootRouter'
 
 export default function Discover() {
 	const hasClientKey = useMemo(() => {
@@ -21,7 +25,7 @@ export default function Discover() {
 	const [wherePlaceId, setWherePlaceId] = useState<string | undefined>(undefined)
 
 	// Committed search params (trigger searches)
-	const [searchParams, setSearchParams] = useState<{ query: string; locationText: string; locationPlaceId?: string }>({
+	const [searchParams, setSearchParams] = useState<{ query: string; locationText: string; locationPlaceId?: string; requestId?: string }>({
 		query: '',
 		locationText: ''
 	})
@@ -57,12 +61,33 @@ export default function Discover() {
 		}
 	}, [])
 
-	const { results, loading, error, selected, setSelected } = usePlacesSearch(searchParams)
+	const { results, loading, error, isStale, selected, setSelected, retry } = usePlacesSearch(searchParams)
+	const [hasSearched, setHasSearched] = useState(false)
+
+	// Handle unauthorized errors - redirect to login
+	useEffect(() => {
+		if (error) {
+			const normalized = normalizeError(error)
+			if (requiresUserAction(normalized)) {
+				const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
+				navigate(`/auth/login?returnTo=${returnTo}`, true)
+			}
+		}
+	}, [error])
 
 	function onSearch() {
 		if (!hasClientKey) return
 		if (!whatText || !whereText) return
-		setSearchParams({ query: whatText, locationText: whereText, locationPlaceId: wherePlaceId })
+		setHasSearched(true)
+		const reqId = generateRequestId()
+		Observability.log({
+			feature: 'discover',
+			route: 'ui.discover.search',
+			status: 'ui_action',
+			requestId: reqId,
+			meta: { query: whatText, where: whereText }
+		})
+		setSearchParams({ query: whatText, locationText: whereText, locationPlaceId: wherePlaceId, requestId: reqId })
 	}
 
 	function onSelect(placeId: string) {
@@ -78,22 +103,42 @@ export default function Discover() {
 	const [saved, setSaved] = useState<SavedBusinessRow[]>([])
 	const [saving, setSaving] = useState(false)
 	const [savedLoading, setSavedLoading] = useState(false)
+	const [savedError, setSavedError] = useState<string | null>(null)
+	const { user, loading: sessionLoading } = useSupabaseSession()
 
 	async function refreshSaved() {
 		if (!supabaseEnvConfigured) return
+		// Gate on session ready and user present to avoid RLS/anon inconsistencies
+		if (sessionLoading || !user) {
+			setSaved([])
+			setSavedError(null)
+			return
+		}
 		setSavedLoading(true)
 		try {
-			const rows = await listSavedBusinesses()
-			setSaved(rows)
+			const res = await listSavedBusinesses()
+			if (res.error) {
+				if (res.permission) {
+					setSavedError(`Permission error loading saved (RLS). Please log in. ${res.code ? `Code: ${res.code}` : ''}`)
+				} else {
+					setSavedError(res.error)
+				}
+				setSaved([])
+			} else {
+				setSavedError(null)
+				setSaved(res.rows)
+			}
 		} finally {
 			setSavedLoading(false)
 		}
 	}
 
 	useEffect(() => {
+		// Refresh whenever session readiness or user changes
+		// eslint-disable-next-line @typescript-eslint/no-floating-promises
 		refreshSaved()
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [])
+	}, [sessionLoading, user?.id])
 
 	const isSelectedSaved = selected ? saved.some(s => s.place_id === selected.placeId) : false
 
@@ -104,6 +149,13 @@ export default function Discover() {
 			const res = await saveBusiness(selected, details.details || null)
 			if (res.ok) {
 				await refreshSaved()
+			} else {
+				const msg = res.permission
+					? `Permission error saving (RLS). Please log in. ${res.code ? `Code: ${res.code}` : ''}`
+					: (res.reason || 'Save failed')
+				// eslint-disable-next-line no-console
+				console.warn('Save business failed:', msg)
+				setSavedError(msg)
 			}
 		} finally {
 			setSaving(false)
@@ -111,7 +163,16 @@ export default function Discover() {
 	}
 
 	async function onRemoveSaved(placeId: string) {
-		await removeSavedBusiness(placeId)
+		const res = await removeSavedBusiness(placeId)
+		if (!res.ok) {
+			const msg = res.permission
+				? `Permission error removing (RLS). Please log in. ${res.code ? `Code: ${res.code}` : ''}`
+				: (res.reason || 'Delete failed')
+			// eslint-disable-next-line no-console
+			console.warn('Remove business failed:', msg)
+			setSavedError(msg)
+			return
+		}
 		await refreshSaved()
 	}
 
@@ -149,12 +210,17 @@ export default function Discover() {
 					</div>
 				</div>
 				{error && (
-					<div className="mt-3 text-sm text-red-300">{error}</div>
+					<div className="mt-3 text-sm text-red-300 flex items-center justify-between">
+						<span>{isStale ? 'Showing cached results — ' : ''}{error}</span>
+						<Button variant="secondary" onClick={() => retry()} disabled={loading}>Retry</Button>
+					</div>
 				)}
 			</Card>
 
 			{list.length === 0 && !loading && (
-				<div className="text-gray-400 text-sm">Search to see results.</div>
+				<div className="text-gray-400 text-sm">
+					{hasSearched ? 'No matches found.' : 'Search to see results.'}
+				</div>
 			)}
 
 			{loading && (
@@ -172,6 +238,11 @@ export default function Discover() {
 
 			{list.length > 0 && !loading && (
 				<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+					{isStale && (
+						<div className="md:col-span-2 rounded-md border border-amber-400 bg-amber-900/30 px-3 py-2 text-amber-200 text-sm">
+							Showing cached results — retrying…
+						</div>
+					)}
 					<div className="space-y-3">
 						<PlacesMap
 							places={list}
@@ -251,6 +322,15 @@ export default function Discover() {
 					<div className="text-sm text-yellow-300 mb-3">
 						Supabase is not configured; saving is disabled.
 					</div>
+				)}
+				{sessionLoading && (
+					<div className="text-sm text-gray-400 mb-2">Checking session…</div>
+				)}
+				{!sessionLoading && !user && (
+					<div className="text-sm text-gray-400 mb-2">Log in to view and save businesses.</div>
+				)}
+				{savedError && (
+					<div className="text-sm text-red-400 mb-2">{savedError}</div>
 				)}
 				{savedLoading && <div className="text-sm text-gray-400">Loading saved…</div>}
 				{!savedLoading && saved.length === 0 && (

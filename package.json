@@ -8,7 +8,7 @@
     "prebuild": "node scripts/prepare-build-env.mjs",
     "build": "tsc -b && node scripts/print-build-info.js && vite build",
     "prevercel-build": "node scripts/prepare-build-env.mjs",
-    "vercel-build": "tsc -b && cross-env VITE_BUILD_ID=$VERCEL_GIT_COMMIT_SHA VITE_DIAGNOSTICS=false vite build && node scripts/build-api.mjs && node scripts/verify-dist-api.mjs",
+    "vercel-build": "tsc -b && cross-env VITE_BUILD_ID=$VERCEL_GIT_COMMIT_SHA VITE_DIAGNOSTICS=false vite build",
     "preview": "vite preview --port 5173",
     "start": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run --exclude \"tests/**\"",

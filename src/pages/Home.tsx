@@ -2,7 +2,7 @@ import Button from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
 import { navigate } from '../routes/RootRouter'
 import { YOUTUBE_INTRO_VIDEO_ID } from '../config/content'
-import { BUILD_ID } from '../constants/build'
+import { BUILD_ID } from '../lib/buildInfo'
 
 export default function Home() {
 	const { user } = useAuth()

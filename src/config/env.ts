@@ -5,8 +5,9 @@ export function isBusinessSearchEnabled(): boolean {
 	return true
 }
 
-// Build/Version stamp (set at build-time via .env.local from prebuild script)
-export const BUILD_ID: string = (import.meta.env.VITE_BUILD_ID as string) || 'dev'
+// Build/Version stamp
+import { BUILD_ID } from '../lib/buildInfo'
+export { BUILD_ID }
 export const BUILD_TIME: string = (import.meta.env.VITE_BUILD_TIME as string) || 'unknown'
 export function getBuildStamp(): string {
 	return `Build: ${BUILD_ID} @ ${BUILD_TIME}`

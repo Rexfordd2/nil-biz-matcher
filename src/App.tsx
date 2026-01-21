@@ -41,6 +41,10 @@ import LoginPage from './components/LoginPage'
 import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseSessionContext'
 import SectionErrorBoundary from './components/ErrorBoundary'
 import { BUILD_ID } from './constants/build'
+import Observability from './lib/obs'
+import DiagnosticsPanel from './components/DiagnosticsPanel'
+import DebugDiscoverRecruiting from './pages/DebugDiscoverRecruiting'
+import DebugBuild from './pages/DebugBuild'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -117,6 +121,8 @@ function MainApp() {
 
 	// Initial mount ping (independent of auth)
 	useEffect(() => {
+		// Observability: initial load
+		Observability.log({ feature: 'ui', route: 'app.mount', status: 'ui_action' })
 		// #region agent log
 		const __dbgMount = {
 			sessionId: 'debug-session',
@@ -182,6 +188,14 @@ function MainApp() {
 			show('Please log in to access this section')
 			setTab('Log In')
 			return
+		}
+		// Observability: tab open
+		if (next === 'Discover') {
+			Observability.log({ feature: 'discover', route: 'ui.tab.open', status: 'ui_action' })
+		} else if (next === 'Recruiting') {
+			Observability.log({ feature: 'recruitment', route: 'ui.tab.open', status: 'ui_action' })
+		} else {
+			Observability.log({ feature: 'ui', route: `ui.tab.${next}.open`, status: 'ui_action' })
 		}
 		setTab(next)
 	}
@@ -804,6 +818,9 @@ function MainApp() {
 					</div>
 				)}
 
+				{/* Diagnostics (dev only or when VITE_DIAGNOSTICS=true) */}
+				{(Observability as any).isDiagnosticsEnabled?.() && <DiagnosticsPanel />}
+
 				<footer className="py-10" />
 			</div>
 			</ErrorBoundary>
@@ -848,9 +865,21 @@ function AppShell() {
 }
 
 export default function App() {
+	const path = typeof window !== 'undefined' ? window.location.pathname : '/'
+	const showDebugDiscoverRecruiting =
+		path === '/debug/discover-recruiting' &&
+		((Observability as any).isDiagnosticsEnabled?.() || import.meta.env.DEV)
+	const showDebugBuild = path === '/debug/build'
+
 	return (
 		<SupabaseSessionProvider>
-			<AppShell />
+			{showDebugDiscoverRecruiting ? (
+				<DebugDiscoverRecruiting />
+			) : showDebugBuild ? (
+				<DebugBuild />
+			) : (
+				<AppShell />
+			)}
 		</SupabaseSessionProvider>
 	)
 }

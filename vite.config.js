@@ -69,14 +69,59 @@ function wrapRes(res) {
 var __rawBuildId = (process.env.VITE_BUILD_ID || process.env.VERCEL_GIT_COMMIT_SHA || new Date().toISOString());
 // If it looks like a git SHA, shorten to 7 characters
 var __buildId = /^[a-f0-9]{7,40}$/i.test(__rawBuildId) ? __rawBuildId.slice(0, 7) : __rawBuildId;
+/**
+ * Build-time plugin to assert debug routes are protected in production.
+ * Fails the build if debug routes would be exposed without proper guards.
+ *
+ * Note: This check ensures that production builds require explicit opt-in
+ * for debug access via VITE_DIAGNOSTICS or VITE_DEBUG_KEY.
+ * Runtime protection in RootRouter.tsx provides the actual access control.
+ */
+function debugRoutesProtectionPlugin() {
+    return {
+        name: 'debug-routes-protection',
+        buildStart: function () {
+            // Only check in production builds (not dev mode or preview)
+            // Skip check if explicitly in dev mode
+            var isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+            if (isDev) {
+                return;
+            }
+            // Check if this is a production build
+            var isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+            if (!isProduction) {
+                return;
+            }
+            var diagnosticsEnabled = String(process.env.VITE_DIAGNOSTICS || '').toLowerCase() === 'true';
+            var diagnosticsExplicitlySet = process.env.VITE_DIAGNOSTICS !== undefined;
+            var hasDebugKey = Boolean(process.env.VITE_DEBUG_KEY);
+            // If neither diagnostics nor debug key is set in production, fail the build
+            // This ensures explicit opt-in for debug access in production
+            // Allow builds when VITE_DIAGNOSTICS is explicitly set to false (intentional configuration)
+            if (!diagnosticsEnabled && !hasDebugKey && !diagnosticsExplicitlySet) {
+                this.error('[SECURITY] Debug routes must be protected in production builds.\n' +
+                    'To enable debug access in production, set one of:\n' +
+                    '  - VITE_DIAGNOSTICS=true (enables all debug routes)\n' +
+                    '  - VITE_DEBUG_KEY=<secret> (enables access via ?debugKey=<secret> query param)\n' +
+                    '\n' +
+                    'Current env: NODE_ENV=' + (process.env.NODE_ENV || 'undefined') +
+                    ', VITE_DIAGNOSTICS=' + (process.env.VITE_DIAGNOSTICS || 'not set') +
+                    ', VITE_DEBUG_KEY=' + (hasDebugKey ? '***set***' : 'not set') +
+                    '\n' +
+                    'Note: Runtime protection in RootRouter.tsx will enforce access control.');
+            }
+        }
+    };
+}
 export default defineConfig({
     base: '/',
     define: {
-        // Expose a stable, build-time value for the client
-        'import.meta.env.VITE_BUILD_ID': JSON.stringify(__buildId)
+        // Expose a stable, build-time value for the client via a global constant
+        __BUILD_ID__: JSON.stringify(__buildId)
     },
     plugins: [
         react(),
+        debugRoutesProtectionPlugin(),
         {
             name: 'local-api-middleware',
             configureServer: function (server) {

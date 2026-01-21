@@ -15,6 +15,7 @@ import PlacesMap from './PlacesMap'
 import { loadGoogleMaps } from '../lib/googleMapsLoader'
 import type { NormalizedPlace } from '../hooks/usePlacesSearch'
 import { usePlaceDetails } from '../hooks/usePlaceDetails'
+import Observability, { generateRequestId } from '../lib/obs'
 
 type Org = {
   id: string
@@ -117,11 +118,14 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
   const [places, setPlaces] = useState<NormalizedPlace[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
+  const [isStale, setIsStale] = useState<boolean>(false)
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
+  const [lastGoodPlaces, setLastGoodPlaces] = useState<NormalizedPlace[]>([])
 
   const latestCenterRef = useRef<{ lat: number, lng: number }>({ lat: 39.5, lng: -98.35 })
   const latestZoomRef = useRef<number>(5)
   const searchTokenRef = useRef<number>(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
 
@@ -194,11 +198,34 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
   }
 
   async function runPlacesSearch(center: { lat: number, lng: number }, zoom: number) {
+    // Cancel any in-flight request
+    try {
+      abortControllerRef.current?.abort()
+    } catch {}
+    
+    const ac = new AbortController()
+    abortControllerRef.current = ac
     const token = ++searchTokenRef.current
+    const requestId = generateRequestId()
+    
     setLoading(true)
     setError(null)
+    setIsStale(false)
+    
+    Observability.log({
+      feature: 'recruitment',
+      route: 'ui.explore_map.search',
+      status: 'start',
+      requestId,
+      userId: userId ?? undefined,
+      meta: { center, zoom, sport, level, orgType }
+    })
+    
     try {
       const google = await loadGoogleMaps()
+      if (ac.signal.aborted) return
+      if (token !== searchTokenRef.current) return
+      
       if (!google?.maps?.places) {
         throw new Error('Google Places not available')
       }
@@ -211,7 +238,15 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       }
 
       const firstPage = await new Promise<google.maps.places.PlaceResult[]>((resolve, reject) => {
+        if (ac.signal.aborted) {
+          reject(new Error('Aborted'))
+          return
+        }
         svc.textSearch(request, (res, status) => {
+          if (ac.signal.aborted) {
+            reject(new Error('Aborted'))
+            return
+          }
           if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(res)) {
             resolve(res)
           } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
@@ -221,6 +256,8 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
           }
         })
       })
+
+      if (ac.signal.aborted || token !== searchTokenRef.current) return
 
       const normalized: NormalizedPlace[] = (firstPage || []).map((p) => {
         const lat = typeof p.geometry?.location?.lat === 'function' ? p.geometry.location.lat() : undefined
@@ -238,19 +275,58 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
         }
       }).filter(p => !!p.placeId && typeof p.location.lat === 'number' && typeof p.location.lng === 'number')
 
+      // Only update state if this is still the latest request
       if (token !== searchTokenRef.current) return
+      
       setPlaces(normalized)
+      setLastGoodPlaces(normalized)
+      setIsStale(false)
       if (normalized.length > 0) {
         setSelectedPlaceId(normalized[0].placeId)
       } else {
         setSelectedPlaceId(null)
       }
+      
+      Observability.log({
+        feature: 'recruitment',
+        route: 'ui.explore_map.search',
+        status: normalized.length === 0 ? 'empty' : 'ok',
+        requestId,
+        meta: { count: normalized.length }
+      })
     } catch (e: any) {
+      // Ignore abortion as error
+      if (ac.signal.aborted) return
       if (token !== searchTokenRef.current) return
-      setError(typeof e?.message === 'string' ? e.message : String(e || 'Search failed'))
-      setPlaces([])
-      setSelectedPlaceId(null)
+      
+      // On failure, show last known good if present
+      if (lastGoodPlaces && lastGoodPlaces.length > 0) {
+        setPlaces(lastGoodPlaces)
+        setIsStale(true)
+        setError(() => {
+          if (navigator && navigator.onLine === false) return "You're offline"
+          const msg: string = e?.message || 'Search failed'
+          if (msg.includes('OVER_QUERY_LIMIT')) return 'Server is rate limiting (429)'
+          return msg
+        })
+      } else {
+        setError(typeof e?.message === 'string' ? e.message : String(e || 'Search failed'))
+        setPlaces([])
+        setSelectedPlaceId(null)
+        setIsStale(false)
+      }
+      
+      Observability.log({
+        feature: 'recruitment',
+        route: 'ui.explore_map.search',
+        status: 'error',
+        requestId,
+        errorName: e?.name,
+        errorMessage: e?.message,
+        errorStack: e?.stack
+      })
     } finally {
+      // Only clear loading if this is the latest request
       if (token === searchTokenRef.current) {
         setLoading(false)
       }
@@ -271,6 +347,24 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
     setRefreshToken(v => v + 1) // force re-render for any dependent UI
   }
+
+  // Trigger search when filters change
+  useEffect(() => {
+    if (searchThisArea) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sport, sportOther, level, orgType, searchThisArea])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        abortControllerRef.current?.abort()
+      } catch {}
+    }
+  }, [])
 
   // Save to My Targets
   const [saving, setSaving] = useState(false)
@@ -414,7 +508,17 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
               <Button variant="secondary" onClick={() => { setSport(''); setSportOther(''); setLevel(''); setOrgType(''); setRefreshToken(v => v + 1) }}>Clear</Button>
             </div>
             <div className="text-xs text-foreground/60">Results powered by Google</div>
-            {error && <div className="text-sm text-red-600">{error}</div>}
+            {error && (
+              <div className={`text-sm ${isStale ? 'text-amber-600' : 'text-red-600'}`}>
+                {error}
+                {isStale && <span className="ml-2 font-semibold">(Showing last known good results)</span>}
+              </div>
+            )}
+            {isStale && !error && (
+              <div className="text-sm text-amber-600 font-semibold">
+                ⚠️ Showing last known good results
+              </div>
+            )}
           </div>
 
           {/* Results List (optional) */}
@@ -604,9 +708,12 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   const [saveContactSuccess, setSaveContactSuccess] = useState<string>('')
   const [saveLinkSuccess, setSaveLinkSuccess] = useState<string>('')
 
+  const [orgLoadError, setOrgLoadError] = useState<string | null>(null)
+
   async function loadOrgs() {
     if (!canQuery) return
     setLoading(true)
+    setOrgLoadError(null)
     try {
       let query = supabase!.from('orgs').select('*').order('created_at', { ascending: false })
       if (q) {
@@ -618,7 +725,15 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
       if (country) query = query.eq('country', country)
       if (region) query = query.eq('region', region)
       const { data, error } = await query
-      if (error) throw error
+      if (error) {
+        const code = (error as any)?.code ? String((error as any).code) : undefined
+        const msg = typeof (error as any)?.message === 'string' ? (error as any).message : 'Query failed'
+        const lower = msg.toLowerCase()
+        const permission = code === '42501' || lower.includes('permission') || lower.includes('rls') || lower.includes('not authorized') || lower.includes('unauthorized')
+        setOrgLoadError(permission ? `Permission error (RLS). ${code ? `Code: ${code}` : ''}` : msg)
+        setOrgs([])
+        return
+      }
 			setOrgs(Array.isArray(data) ? (data as Org[]) : [])
       // Reset details when list changes
       setSelected(null)
@@ -634,6 +749,15 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
     loadOrgs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    // when session becomes ready (userId transitions from null to string), auto-load once
+    if (userId) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      loadOrgs()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   async function loadContacts(orgId: string) {
     const { data, error } = await supabase!.from('org_contacts').select('*').eq('org_id', orgId).order('created_at', { ascending: true })
@@ -809,6 +933,9 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
       <div className="text-xs uppercase tracking-wide text-black">Directory Search Active</div>
       <div className="grid grid-cols-1 md:grid-cols-[1fr,360px] gap-6">
         <div className="space-y-3">
+              {orgLoadError && (
+                <div className="text-sm text-red-500">{orgLoadError}</div>
+              )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Input placeholder="Search by name…" value={q} onChange={e => setQ(e.target.value)} />
             <Input placeholder="Sport" value={sport} onChange={e => setSport(e.target.value)} />

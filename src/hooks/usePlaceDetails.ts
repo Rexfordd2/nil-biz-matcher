@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadGoogleMaps } from '../lib/googleMapsLoader'
+import { normalizeError, getUserErrorMessage } from '../lib/errorHandling'
 
 type Details = {
 	placeId: string
@@ -22,9 +23,14 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const requestIdRef = useRef(0)
+	const controllerRef = useRef<AbortController | null>(null)
 
 	useEffect(() => {
-		let cancelled = false
+		// Cancel any in-flight request
+		try { controllerRef.current?.abort() } catch {}
+		const ac = new AbortController()
+		controllerRef.current = ac
+
 		if (!placeId) {
 			setDetails(null)
 			return
@@ -35,7 +41,7 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 			const myId = ++requestIdRef.current
 			try {
 				const google = await loadGoogleMaps()
-				if (cancelled || myId !== requestIdRef.current) return
+				if (ac.signal.aborted || myId !== requestIdRef.current) return
 				const svc = new google.maps.places.PlacesService(document.createElement('div'))
 				await new Promise<void>((resolve, reject) => {
 					svc.getDetails(
@@ -54,10 +60,14 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 									openingHours: res.opening_hours?.weekday_text || undefined,
 									googleMapsUrl: res.url || undefined
 								}
-								setDetails(d)
+								if (!ac.signal.aborted && myId === requestIdRef.current) {
+									setDetails(d)
+								}
 								resolve()
 							} else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-								setDetails(null)
+								if (!ac.signal.aborted && myId === requestIdRef.current) {
+									setDetails(null)
+								}
 								resolve()
 							} else {
 								reject(new Error(`Places getDetails failed: ${status}`))
@@ -66,17 +76,19 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 					)
 				})
 			} catch (e: any) {
-				if (!cancelled) {
-					setError(e?.message || 'Failed to load details')
-					setDetails(null)
-				}
+				// Ignore abortion as error - don't set error state for aborted requests
+				if (ac.signal.aborted || myId !== requestIdRef.current) return
+				const normalized = normalizeError(e)
+				setError(getUserErrorMessage(normalized, false))
+				setDetails(null)
 			} finally {
-				if (!cancelled) setLoading(false)
+				// Only clear loading if this is the latest request
+				if (myId === requestIdRef.current) setLoading(false)
 			}
 		}
 		run()
 		return () => {
-			cancelled = true
+			try { controllerRef.current?.abort() } catch {}
 		}
 	}, [placeId])
 

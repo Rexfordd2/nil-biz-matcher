@@ -5,11 +5,15 @@ import Terms from '../pages/Terms'
 import Privacy from '../pages/Privacy'
 import Onboarding from '../pages/Onboarding'
 import Status from '../pages/Status'
+import DebugDiscoverRecruiting from '../pages/DebugDiscoverRecruiting'
+import DebugBuild from '../pages/DebugBuild'
+import DebugPlacesHooks from '../pages/DebugPlacesHooks'
 import LoginRoute from '../pages/auth/LoginRoute'
 import SignupRoute from '../pages/auth/SignupRoute'
 import ResetRoute from '../pages/auth/ResetRoute'
 import { useAuth } from '../context/AuthContext'
 import { supabaseEnvConfigured } from '../lib/supabaseClient'
+import { isDebugAccessAllowed } from '../lib/debugAccess'
 
 type RouteEntry =
 	| { key: 'home' }
@@ -21,6 +25,9 @@ type RouteEntry =
 	| { key: 'onboarding' }
 	| { key: 'status' }
 	| { key: 'app'; subpath: string }
+	| { key: 'debug_discover_recruiting' }
+	| { key: 'debug_build' }
+	| { key: 'debug_places_hooks' }
 
 function parseLocation(pathname: string): RouteEntry {
 	if (pathname === '/' || pathname === '') return { key: 'home' }
@@ -32,6 +39,9 @@ function parseLocation(pathname: string): RouteEntry {
 	if (pathname.startsWith('/onboarding')) return { key: 'onboarding' }
 	if (pathname.startsWith('/auth/reset')) return { key: 'reset' }
 	if (pathname.startsWith('/status')) return { key: 'status' }
+	if (pathname === '/debug/discover-recruiting') return { key: 'debug_discover_recruiting' }
+	if (pathname === '/debug/build') return { key: 'debug_build' }
+	if (pathname === '/debug/places-hooks') return { key: 'debug_places_hooks' }
 	// fallback to home
 	return { key: 'home' }
 }
@@ -75,9 +85,30 @@ export default function RootRouter() {
 	}, [loc, user, initializing])
 
 	const outlet = useMemo(() => {
+		// Check debug access for debug routes
+		const hasDebugAccess = isDebugAccessAllowed(window.location.search)
+
 		switch (loc.key) {
 			case 'home':
 				return <Home />
+			case 'debug_discover_recruiting':
+				// Protect debug routes: return Home (404-like behavior) if access not allowed
+				if (!hasDebugAccess) {
+					return <Home />
+				}
+				return <DebugDiscoverRecruiting />
+			case 'debug_build':
+				// Protect debug routes: return Home (404-like behavior) if access not allowed
+				if (!hasDebugAccess) {
+					return <Home />
+				}
+				return <DebugBuild />
+			case 'debug_places_hooks':
+				// Protect debug routes: return Home (404-like behavior) if access not allowed
+				if (!hasDebugAccess) {
+					return <Home />
+				}
+				return <DebugPlacesHooks />
 			case 'login':
 				return <LoginRoute />
 			case 'signup':

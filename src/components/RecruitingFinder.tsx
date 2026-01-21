@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import Input from './ui/Input'
@@ -14,6 +14,10 @@ import { buildRecruitingScript } from '../utils/recruitingOutreach'
 import { useToast } from './ui/Toast'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import Observability, { generateRequestId } from '../lib/obs'
+import { ValidationError } from '../validation/validators'
+import { normalizeError, getUserErrorMessage, shouldShowCachedWithRetry, requiresUserAction, shouldPreserveState } from '../lib/errorHandling'
+import { navigate } from '../routes/RootRouter'
 
 export default function RecruitingFinder({ athlete, onRequireProfile }: { athlete: AthleteProfile | null; onRequireProfile?: () => void }) {
 	const { show } = useToast()
@@ -22,9 +26,17 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 	const [level, setLevel] = useState('')
 	const [region, setRegion] = useState('')
 	const [results, setResults] = useState<CollegeProgram[]>([])
+	const [loading, setLoading] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const [isStale, setIsStale] = useState(false)
+	const [lastGood, setLastGood] = useState<CollegeProgram[] | null>(null)
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [currentIndex, setCurrentIndex] = useState(0)
 	const [isDeciding, setIsDeciding] = useState(false)
+
+	// Request management
+	const controllerRef = useRef<AbortController | null>(null)
+	const reqVersionRef = useRef(0)
 
 	useEffect(() => {
 		// run initial search by athlete primary sport if available
@@ -34,11 +46,76 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 	}, [athlete, sport])
 
 	async function runSearch() {
-		const r = await searchPrograms({ sport, level, region })
-		setResults(r)
-		setSelectedId(null)
-		setCurrentIndex(0)
+		// Cancel any in-flight
+		try { controllerRef.current?.abort() } catch {}
+		const ac = new AbortController()
+		controllerRef.current = ac
+		const myVersion = ++reqVersionRef.current
+
+		const reqId = generateRequestId()
+		Observability.log({
+			feature: 'recruitment',
+			route: 'ui.recruiting.search',
+			status: 'ui_action',
+			requestId: reqId,
+			userId: user?.id || null,
+			meta: { sport, level, region }
+		})
+
+		setLoading(true)
+		setError(null)
+		setIsStale(false)
+		try {
+			const r = await searchPrograms({ sport, level, region }, { requestId: reqId, userId: user?.id || null, signal: ac.signal })
+			// Ignore late responses
+			if (myVersion !== reqVersionRef.current) return
+			setResults(r)
+			setLastGood(r)
+			setSelectedId(null)
+			setCurrentIndex(0)
+		} catch (e: any) {
+			// Ignore abortion as error
+			if (ac.signal.aborted) return
+			if (myVersion !== reqVersionRef.current) return
+			
+			const normalized = normalizeError(e, reqId)
+			const hasLastGood = lastGood && lastGood.length > 0
+			
+			// On failure, show last known good if present for transient errors
+			if (hasLastGood && shouldShowCachedWithRetry(normalized)) {
+				setResults(lastGood)
+				setIsStale(true)
+				setError(getUserErrorMessage(normalized, true))
+			} else {
+				// For validation errors, preserve state (don't clear results)
+				if (shouldPreserveState(normalized)) {
+					setError(getUserErrorMessage(normalized, false))
+					// Don't clear results for validation errors
+				} else {
+					setResults([])
+					setSelectedId(null)
+					setCurrentIndex(0)
+					setError(getUserErrorMessage(normalized, false))
+				}
+			}
+			
+			// Handle unauthorized errors - redirect to login
+			if (requiresUserAction(normalized)) {
+				const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
+				navigate(`/auth/login?returnTo=${returnTo}`, true)
+			}
+		} finally {
+			// Only clear loading if this is the latest request
+			if (myVersion === reqVersionRef.current) setLoading(false)
+		}
 	}
+
+	// Cancel any in-flight on unmount
+	useEffect(() => {
+		return () => {
+			try { controllerRef.current?.abort() } catch {}
+		}
+	}, [])
 
 	const summaries = useMemo(() => {
 		if (!athlete) return {}
@@ -128,16 +205,27 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 					</Select>
 					<Input value={region} onChange={e => setRegion(e.target.value)} placeholder="Region/state (e.g., TX)" />
 					<div className="md:col-span-2 flex gap-2">
-						<Button onClick={runSearch}>Search</Button>
+						<Button onClick={runSearch} disabled={loading}>{loading ? 'Searching…' : 'Search'}</Button>
 						{!athlete && <div className="subtle text-sm self-center">Create your profile for better fit analysis.</div>}
 					</div>
 				</div>
+				{error && (
+					<div className="mt-2 text-sm text-red-400 flex items-center justify-between">
+						<span>{error}</span>
+						<Button variant="secondary" onClick={runSearch} disabled={loading}>Retry</Button>
+					</div>
+				)}
 			</Card>
 
-			{results.length === 0 ? (
-				<div className="text-gray-400 text-sm">Search to see programs.</div>
+			{results.length === 0 && !loading ? (
+				<div className="text-gray-400 text-sm">No matches found.</div>
 			) : (
 				<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+					{isStale && (
+						<div className="md:col-span-2 rounded-md border border-amber-400 bg-amber-900/30 px-3 py-2 text-amber-200 text-sm">
+							Showing cached results — retrying…
+						</div>
+					)}
 					<div className="space-y-3">
 						<ProgramMap
 							programs={results}
