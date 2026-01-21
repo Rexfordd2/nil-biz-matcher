@@ -96,6 +96,16 @@ export default defineConfig({
 		react(),
 		debugRoutesProtectionPlugin(),
 		{
+			name: 'inject-build-id-html',
+			transformIndexHtml(html) {
+				// Inject build ID into HTML template for server-side extraction
+				return html.replace(
+					'<div id="root">',
+					`<div id="root"><div data-testid="build-id" style="display:none">${__buildId}</div>`
+				)
+			}
+		},
+		{
 			name: 'local-api-middleware',
 			configureServer(server) {
 				server.middlewares.use(async (req, res, next) => {
