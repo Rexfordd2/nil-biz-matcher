@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { signIn } from '../../lib/authSupabase'
 import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 import { navigate } from '../../routes/RootRouter'
+import '../../lib/fetchProbe' // Initialize fetch probe if VITE_DIAGNOSTICS=true
 
 type Props = {
 	onLoggedIn: (user: CurrentUser) => void
@@ -45,6 +46,33 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const handleSubmitCountRef = useRef(0)
 	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
 	const FORCE_SUBMIT_BRIDGE = String(import.meta.env.VITE_FORCE_SUBMIT_BRIDGE || '').toLowerCase() === 'true'
+	const SHOW_DEBUG_OVERLAY = import.meta.env.DEV || import.meta.env.VITE_DIAGNOSTICS === 'true'
+	
+	// Debug state - initialize with current values
+	const getInitialDebugInfo = () => {
+		const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+		let supabaseOrigin = 'not configured'
+		if (supabaseUrl) {
+			try {
+				const url = new URL(supabaseUrl)
+				supabaseOrigin = url.origin
+			} catch {
+				supabaseOrigin = 'invalid URL'
+			}
+		}
+		return {
+			online: navigator.onLine,
+			locationOrigin: window.location.origin,
+			supabaseOrigin,
+			lastAuthError: null as string | null
+		}
+	}
+	const [debugInfo, setDebugInfo] = useState<{
+		online: boolean
+		locationOrigin: string
+		supabaseOrigin: string
+		lastAuthError: string | null
+	}>(getInitialDebugInfo())
 	
 	// Keep ref in sync with state
 	useEffect(() => {
@@ -59,6 +87,22 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		const t = window.setTimeout(() => setSlow(true), 8000)
 		return () => window.clearTimeout(t)
 	}, [loading])
+
+	// Update online status when it changes
+	useEffect(() => {
+		if (!SHOW_DEBUG_OVERLAY) return
+		
+		const handleOnline = () => setDebugInfo(prev => ({ ...prev, online: true }))
+		const handleOffline = () => setDebugInfo(prev => ({ ...prev, online: false }))
+		
+		window.addEventListener('online', handleOnline)
+		window.addEventListener('offline', handleOffline)
+		
+		return () => {
+			window.removeEventListener('online', handleOnline)
+			window.removeEventListener('offline', handleOffline)
+		}
+	}, [SHOW_DEBUG_OVERLAY])
 
 	// Native DOM submit listener (tripwire)
 	useEffect(() => {
@@ -83,14 +127,90 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		setIsSubmitting(true)
 		setLoading(true)
 		setErr(null)
+		
+		// Capture debug info before login attempt
+		const online = navigator.onLine
+		const locationOrigin = window.location.origin
+		const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+		let supabaseOrigin = 'not configured'
+		if (supabaseUrl) {
+			try {
+				const url = new URL(supabaseUrl)
+				supabaseOrigin = url.origin
+			} catch {
+				supabaseOrigin = 'invalid URL'
+			}
+		}
+		
 		try {
 			if (DEBUG_AUTH) console.log('[login] submit', { email })
-			const { data: u, error } = await signIn({ email, password })
+			
+			// Wrap signIn call to capture raw error details
+			let rawError: any = null
+			let signInResult: { data: any; error: any } | null = null
+			
+			try {
+				signInResult = await signIn({ email, password })
+			} catch (signInError: any) {
+				// Capture raw error details
+				rawError = {
+					name: signInError?.name,
+					message: signInError?.message,
+					status: signInError?.status,
+					__isAuthError: (signInError as any)?.__isAuthError,
+					code: (signInError as any)?.code,
+					stack: signInError?.stack
+				}
+				
+				// Update debug info with error
+				if (SHOW_DEBUG_OVERLAY) {
+					setDebugInfo({
+						online,
+						locationOrigin,
+						supabaseOrigin,
+						lastAuthError: JSON.stringify(rawError, null, 2)
+					})
+				}
+				
+				// Re-throw to be caught by outer catch
+				throw signInError
+			}
+			
+			const { data: u, error } = signInResult
 			if (error) {
+				// Capture error details from Supabase response
+				const errorDetails = {
+					name: 'SupabaseAuthError',
+					message: error.message,
+					status: error.status,
+					code: error.code,
+					__isAuthError: true
+				}
+				
+				if (SHOW_DEBUG_OVERLAY) {
+					setDebugInfo({
+						online,
+						locationOrigin,
+						supabaseOrigin,
+						lastAuthError: JSON.stringify(errorDetails, null, 2)
+					})
+				}
+				
 				if (DEBUG_AUTH) console.log('[login] error', error)
 				setErr(friendlyAuthErrorMessage(error, { context: 'login' }))
 				return
 			}
+			
+			// Clear debug error on success
+			if (SHOW_DEBUG_OVERLAY) {
+				setDebugInfo({
+					online,
+					locationOrigin,
+					supabaseOrigin,
+					lastAuthError: null
+				})
+			}
+			
 			if (!u) {
 				setErr('Unable to load user after login')
 				return
@@ -114,6 +234,25 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 			const returnTo = url.searchParams.get('returnTo')
 			navigate(returnTo || '/app', true)
 		} catch (e: any) {
+			// Capture exception details
+			const exceptionDetails = {
+				name: e?.name,
+				message: e?.message,
+				status: e?.status,
+				__isAuthError: (e as any)?.__isAuthError,
+				code: (e as any)?.code,
+				stack: e?.stack
+			}
+			
+			if (SHOW_DEBUG_OVERLAY) {
+				setDebugInfo({
+					online,
+					locationOrigin,
+					supabaseOrigin,
+					lastAuthError: JSON.stringify(exceptionDetails, null, 2)
+				})
+			}
+			
 			if (DEBUG_AUTH) console.log('[login] exception', e)
 			setErr(friendlyAuthErrorMessage(e, { context: 'login' }) || 'We could not sign you in. Please try again.')
 		} finally {
@@ -241,6 +380,36 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
 				</div>
 			</Card>
+			{SHOW_DEBUG_OVERLAY && (
+				<Card title="Auth Debug Overlay" className="mt-4">
+					<div className="space-y-2 text-xs font-mono">
+						<div>
+							<span className="text-gray-400">ONLINE:</span>{' '}
+							<span className={debugInfo.online ? 'text-green-400' : 'text-red-400'}>
+								{String(debugInfo.online)}
+							</span>
+						</div>
+						<div>
+							<span className="text-gray-400">LOCATION_ORIGIN:</span>{' '}
+							<span className="text-gray-300">{debugInfo.locationOrigin}</span>
+						</div>
+						<div>
+							<span className="text-gray-400">SUPABASE_ORIGIN:</span>{' '}
+							<span className="text-gray-300">{debugInfo.supabaseOrigin}</span>
+						</div>
+						<div>
+							<span className="text-gray-400">LAST_AUTH_ERROR:</span>
+							{debugInfo.lastAuthError ? (
+								<pre className="mt-1 p-2 bg-gray-900 rounded text-red-300 overflow-auto max-h-48">
+									{debugInfo.lastAuthError}
+								</pre>
+							) : (
+								<span className="text-green-400 ml-2">none</span>
+							)}
+						</div>
+					</div>
+				</Card>
+			)}
 		</div>
 	)
 }
