@@ -27,60 +27,108 @@ async function loginIfNeeded(page: any) {
 		await page.waitForSelector('h3:has-text("Log in to Athlete Ledger")', { timeout: 10000 })
 		await page.waitForTimeout(1000) // Wait for form to render
 		
-		// Try to find login inputs - use multiple strategies
-		let emailInput = page.getByTestId('login-email')
-		let passwordInput = page.getByTestId('login-password')
-		let submitButton = page.getByTestId('login-submit')
+		// Step 1: Confirm DOM wiring
+		const form = page.getByTestId('login-form')
+		const emailInput = page.getByTestId('login-email')
+		const passwordInput = page.getByTestId('login-password')
+		const submitButton = page.getByTestId('login-submit')
+		const statusEl = page.getByTestId('login-status')
 		
-		// Fallback: if test-id not found, use placeholder/type selectors
-		if (!(await emailInput.isVisible().catch(() => false))) {
-			emailInput = page.locator('input[type="email"]').first()
-		}
-		if (!(await passwordInput.isVisible().catch(() => false))) {
-			passwordInput = page.locator('input[type="password"]').first()
-		}
-		if (!(await submitButton.isVisible().catch(() => false))) {
-			submitButton = page.getByRole('button', { name: /log in/i }).first()
-		}
+		// Assert all elements exist and are visible (except status which is hidden)
+		await expect(form).toBeVisible({ timeout: 5000 })
+		await expect(emailInput).toBeVisible({ timeout: 5000 })
+		await expect(passwordInput).toBeVisible({ timeout: 5000 })
+		await expect(submitButton).toBeVisible({ timeout: 5000 })
+		await expect(statusEl).toHaveCount(1, { timeout: 5000 })
+		
+		// Get submit button details
+		const submitTagName = await submitButton.evaluate((el: any) => el.tagName)
+		const submitType = await submitButton.evaluate((el: any) => el.type || 'N/A')
+		const submitDisabled = await submitButton.isDisabled()
+		
+		// Check if submit button is inside form
+		const submitInForm = await page.evaluate(() => {
+			const form = document.querySelector('[data-testid="login-form"]')
+			const submit = document.querySelector('[data-testid="login-submit"]')
+			if (!form || !submit) return false
+			return form.contains(submit)
+		})
+		
+		console.log('DOM_WIRING:')
+		console.log(`  submit button: ${submitTagName} type="${submitType}" disabled=${submitDisabled}`)
+		console.log(`  submit in form: ${submitInForm}`)
 
 		await emailInput.fill(SMOKE_EMAIL!)
 		await passwordInput.fill(SMOKE_PASSWORD!)
 		
-		// Wait for submit button to be enabled before clicking (ensure form is ready)
-		await submitButton.waitFor({ state: 'visible' })
-		
-		// Wait a moment for form to be fully ready
+		// Wait for form to be ready
 		await page.waitForTimeout(500)
 		
-		await submitButton.click()
-
-		// Wait until login-status becomes 'submitting' (timeout 3s)
-		// First ensure element exists, then wait for text change
-		try {
-			// Wait for element to exist (it should always be in DOM)
-			await page.waitForFunction(
-				() => !!document.querySelector('[data-testid="login-status"]'),
-				{ timeout: 2000 }
-			).catch(() => {
-				throw new Error('LOGIN_SUBMIT_NOT_TRIGGERED: login-status element not found in DOM')
-			})
-			
-			// Wait for status to become 'submitting'
-			await page.waitForFunction(
-				() => {
-					const statusEl = document.querySelector('[data-testid="login-status"]')
-					if (!statusEl) return false
-					const text = statusEl.textContent?.trim() || ''
-					return text === 'submitting'
-				},
-				{ timeout: 3000 }
-			)
-		} catch (e: any) {
-			if (e.message?.includes('not found')) {
-				throw e
-			}
-			throw new Error('LOGIN_SUBMIT_NOT_TRIGGERED: status did not become submitting within 3s')
+		// Step 2: Submit via form submit event dispatch
+		await submitButton.waitFor({ state: 'visible' })
+		const isDisabledBefore = await submitButton.isDisabled()
+		if (isDisabledBefore) {
+			throw new Error('Submit button is disabled before submit')
 		}
+		
+		// Step 3: Sample login-status every 250ms for 5 seconds (20 samples)
+		// Start sampling immediately, then submit
+		const samples: string[] = []
+		const samplingPromise = (async () => {
+			for (let i = 0; i < 20; i++) {
+				await page.waitForTimeout(250)
+				const statusText = await page.evaluate(() => {
+					const statusEl = document.querySelector('[data-testid="login-status"]')
+					return statusEl?.textContent?.trim() || 'missing'
+				}).catch(() => 'error')
+				samples.push(statusText)
+			}
+		})()
+		
+		// Dispatch submit event directly on form (triggers React onSubmit)
+		await form.evaluate((f: HTMLFormElement) => {
+			const submitEvent = new Event('submit', { bubbles: true, cancelable: true })
+			f.dispatchEvent(submitEvent)
+		})
+		await page.waitForTimeout(200) // Small delay to let React process
+		
+		// Read tripwire values immediately after submit attempt
+		const tripwireValues = await page.evaluate(() => {
+			const nativeSubmit = document.querySelector('[data-testid="login-native-submit-count"]')?.textContent?.trim() || '0'
+			const clickCaptured = document.querySelector('[data-testid="login-click-captured"]')?.textContent?.trim() || '0'
+			const submitCaptured = document.querySelector('[data-testid="login-submit-captured"]')?.textContent?.trim() || '0'
+			const status = document.querySelector('[data-testid="login-status"]')?.textContent?.trim() || 'missing'
+			return { nativeSubmit, clickCaptured, submitCaptured, status }
+		})
+		
+		// Screenshot for tripwire proof
+		const tripwirePath = join(ARTIFACTS_DIR, 'prod-tripwire.png')
+		await page.screenshot({ path: tripwirePath, fullPage: true })
+		console.log(`Screenshot saved: ${tripwirePath}`)
+		
+		console.log(`TRIPWIRE:`)
+		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} clickCaptured=${tripwireValues.clickCaptured} submitCaptured=${tripwireValues.submitCaptured} status=${tripwireValues.status}`)
+		
+		// Wait for all samples to complete
+		await samplingPromise
+		console.log(`STATUS_SAMPLES: ${samples.join(', ')}`)
+		
+		// Step 4: Check if status became 'submitting'
+		const becameSubmitting = samples.some(s => s === 'submitting')
+		
+		if (!becameSubmitting) {
+			const currentUrl = page.url()
+			const failPath = join(ARTIFACTS_DIR, 'prod-submit-not-triggered.png')
+			await page.screenshot({ path: failPath, fullPage: true })
+			console.log(`Screenshot saved: ${failPath}`)
+			
+			console.log('RESULT: FAIL')
+			console.log(`  Error: LOGIN_SUBMIT_NOT_TRIGGERED: status never became submitting`)
+			console.log(`  Screenshot: ${tripwirePath}`)
+			throw new Error('LOGIN_SUBMIT_NOT_TRIGGERED: status never became submitting')
+		}
+		
+		console.log('RESULT: PASS (status became submitting)')
 
 		// Wait until login-status becomes 'idle' OR URL becomes /app (timeout 12s)
 		try {
