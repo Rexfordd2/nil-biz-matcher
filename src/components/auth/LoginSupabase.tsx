@@ -30,6 +30,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const [password, setPassword] = useState('')
 	const [err, setErr] = useState<string | null>(null)
 	const [loading, setLoading] = useState(false)
+	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [sendingReset, setSendingReset] = useState(false)
 	const [slow, setSlow] = useState(false)
 	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
@@ -47,6 +48,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		e.preventDefault()
 		setErr(null)
 		setLoading(true)
+		setIsSubmitting(true)
 		try {
 			if (DEBUG_AUTH) console.log('[login] submit', { email })
 			const { data: u, error } = await signIn({ email, password })
@@ -82,6 +84,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 			setErr(friendlyAuthErrorMessage(e, { context: 'login' }) || 'We could not sign you in. Please try again.')
 		} finally {
 			setLoading(false)
+			setIsSubmitting(false)
 		}
 	}
 
@@ -104,10 +107,11 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	return (
 		<div className="max-w-md mx-auto">
 			<Card title="Log in to Athlete Ledger">
-				<form className="space-y-4" onSubmit={handleSubmit}>
+				<form data-testid="login-form" className="space-y-4" onSubmit={handleSubmit}>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Email</span>
 						<Input
+							data-testid="login-email"
 							type="email"
 							value={email}
 							onChange={e => setEmail(e.target.value)}
@@ -117,16 +121,24 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Password</span>
 						<Input
+							data-testid="login-password"
 							type="password"
 							value={password}
 							onChange={e => setPassword(e.target.value)}
 							placeholder="••••••••"
 						/>
 					</label>
-					{err && <div className="text-red-400 text-sm">{err}</div>}
+					<div data-testid="login-status" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+						{isSubmitting ? 'submitting' : 'idle'}
+					</div>
+					<div data-testid="login-error" aria-live="polite" className="text-red-400 text-sm">
+						{err ?? ''}
+					</div>
 					{slow && !err && <div className="text-amber-300 text-xs">Login is taking longer than expected. Refresh and try again.</div>}
 					<div className="flex items-center justify-between">
-						<Button className="red-glow" type="submit" disabled={loading}>{loading ? 'Logging in…' : 'Log in'}</Button>
+						<Button data-testid="login-submit" data-testid-loading={loading ? 'true' : 'false'} className="red-glow" type="submit" disabled={isSubmitting}>
+							{loading ? <span data-testid="login-loading">Logging in…</span> : 'Log in'}
+						</Button>
 						{onNeedAccount && (
 							<button type="button" onClick={onNeedAccount} className="text-sm text-gray-300 hover:text-white">Need an account? Sign up</button>
 						)}
