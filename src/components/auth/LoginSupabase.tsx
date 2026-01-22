@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Card from '../ui/Card'
@@ -37,7 +37,18 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const [clickCapturedCount, setClickCapturedCount] = useState(0)
 	const [nativeSubmitCount, setNativeSubmitCount] = useState(0)
 	const [handleSubmitCount, setHandleSubmitCount] = useState(0)
+	const [captureDefaultPrevented, setCaptureDefaultPrevented] = useState(false)
+	const [capturePreventedByUs, setCapturePreventedByUs] = useState(false)
+	const [captureEventPhase, setCaptureEventPhase] = useState(0)
+	const [bridgeFiredCount, setBridgeFiredCount] = useState(0)
+	const handleSubmitCountRef = useRef(0)
 	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
+	const FORCE_SUBMIT_BRIDGE = String(import.meta.env.VITE_FORCE_SUBMIT_BRIDGE || '').toLowerCase() === 'true'
+	
+	// Keep ref in sync with state
+	useEffect(() => {
+		handleSubmitCountRef.current = handleSubmitCount
+	}, [handleSubmitCount])
 
 	useEffect(() => {
 		if (!loading) {
@@ -61,7 +72,11 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	}, [])
 
 	async function handleSubmit(e: React.FormEvent) {
-		setHandleSubmitCount(c => c + 1)
+		setHandleSubmitCount(c => {
+			const newCount = c + 1
+			handleSubmitCountRef.current = newCount
+			return newCount
+		})
 		setIsSubmitting(true)
 		setLoading(true)
 		setErr(null)
@@ -128,7 +143,24 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					data-testid="login-form" 
 					className="space-y-4" 
 					onSubmit={handleSubmit}
-					onSubmitCapture={() => setSubmitCapturedCount(c => c + 1)}
+					onSubmitCapture={(e) => {
+						setSubmitCapturedCount(c => c + 1)
+						setCaptureDefaultPrevented(e.defaultPrevented)
+						setCaptureEventPhase(e.eventPhase)
+						setCapturePreventedByUs(false)
+						
+						// Check if nativeEvent.defaultPrevented exists (marker for debugging)
+						const nativeEvent = (e as any).nativeEvent
+						if (nativeEvent && typeof nativeEvent.defaultPrevented !== 'undefined') {
+							// Marker exists, can be logged if needed
+						}
+						
+						// Bridge: if handleSubmit isn't firing, call it directly
+						if (FORCE_SUBMIT_BRIDGE && handleSubmitCountRef.current === 0 && !e.defaultPrevented) {
+							setBridgeFiredCount(c => c + 1)
+							handleSubmit(e as any)
+						}
+					}}
 					onClickCapture={() => setClickCapturedCount(c => c + 1)}
 				>
 					<label className="flex flex-col gap-2">
@@ -165,6 +197,15 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					</div>
 					<div data-testid="login-handle-submit-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
 						{handleSubmitCount}
+					</div>
+					<div data-testid="login-capture-default-prevented" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+						{captureDefaultPrevented ? 'true' : 'false'}
+					</div>
+					<div data-testid="login-capture-event-phase" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+						{captureEventPhase}
+					</div>
+					<div data-testid="login-bridge-fired-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+						{bridgeFiredCount}
 					</div>
 					<div data-testid="login-error" aria-live="polite" className="text-red-400 text-sm">
 						{err ?? ''}

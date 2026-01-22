@@ -98,8 +98,11 @@ async function loginIfNeeded(page: any) {
 			const clickCaptured = document.querySelector('[data-testid="login-click-captured"]')?.textContent?.trim() || '0'
 			const submitCaptured = document.querySelector('[data-testid="login-submit-captured"]')?.textContent?.trim() || '0'
 			const handleSubmit = document.querySelector('[data-testid="login-handle-submit-count"]')?.textContent?.trim() || '0'
+			const captureDefaultPrevented = document.querySelector('[data-testid="login-capture-default-prevented"]')?.textContent?.trim() || 'false'
+			const captureEventPhase = document.querySelector('[data-testid="login-capture-event-phase"]')?.textContent?.trim() || '0'
+			const bridgeFired = document.querySelector('[data-testid="login-bridge-fired-count"]')?.textContent?.trim() || '0'
 			const status = document.querySelector('[data-testid="login-status"]')?.textContent?.trim() || 'missing'
-			return { nativeSubmit, clickCaptured, submitCaptured, handleSubmit, status }
+			return { nativeSubmit, clickCaptured, submitCaptured, handleSubmit, captureDefaultPrevented, captureEventPhase, bridgeFired, status }
 		})
 		
 		// Screenshot for tripwire proof
@@ -111,7 +114,7 @@ async function loginIfNeeded(page: any) {
 		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} clickCaptured=${tripwireValues.clickCaptured} submitCaptured=${tripwireValues.submitCaptured} status=${tripwireValues.status}`)
 		
 		console.log(`HANDLE_SUBMIT_PROOF:`)
-		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} submitCaptured=${tripwireValues.submitCaptured} handleSubmit=${tripwireValues.handleSubmit} status=${tripwireValues.status}`)
+		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} submitCaptured=${tripwireValues.submitCaptured} captureDefaultPrevented=${tripwireValues.captureDefaultPrevented} captureEventPhase=${tripwireValues.captureEventPhase} bridgeFired=${tripwireValues.bridgeFired} handleSubmit=${tripwireValues.handleSubmit} status=${tripwireValues.status}`)
 		
 		// Screenshot for handleSubmit proof
 		const handleSubmitProofPath = join(ARTIFACTS_DIR, 'prod-handleSubmit-proof.png')
