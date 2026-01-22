@@ -287,7 +287,38 @@ $env:ALLOW_STRICT_WITHOUT_DEBUG='true'
 npm run launch:status -- --strict
 ```
 
-## 6. Success Checklist (6-line definition of DONE)
+## 6. Production Smoke Test Setup
+
+**One-time manual step:** Create a smoke test user in Supabase Auth:
+
+1. Go to Supabase Dashboard → Authentication → Users
+2. Click "Add user" → "Create new user"
+3. Set:
+   - Email: `smoke@<yourdomain>` or your existing email alias
+   - Password: (choose a secure password)
+   - Role: `athlete` (set in user metadata if needed)
+4. Save the email and password for use in smoke test environment variables
+
+**Running smoke tests:**
+
+```powershell
+# Set environment variables
+$env:BASE_URL="https://athlete-ledger.vercel.app"
+$env:SMOKE_EMAIL="smoke@yourdomain.com"
+$env:SMOKE_PASSWORD="your-password"
+
+# Run smoke tests
+npm run smoke:prod
+```
+
+The smoke test will:
+- Authenticate with the smoke test user
+- Verify Discover flow (search for "gym" in "Austin, TX")
+- Verify Recruiting flow (search for "football" in "TX")
+- Assert results containers are visible and error banners are NOT visible
+- Save screenshots: `smoke-artifacts/discover-authed.png` and `smoke-artifacts/recruiting-authed.png`
+
+## 7. Success Checklist (6-line definition of DONE)
 
 ```
 ✅ Build: npm run vercel-build completes with dist/api/ping.js and dist/api/healthz.js present

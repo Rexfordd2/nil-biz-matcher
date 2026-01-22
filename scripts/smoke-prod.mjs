@@ -24,22 +24,6 @@ console.log(`📍 Testing: ${BASE_URL}`)
 console.log(`👤 Email: ${SMOKE_EMAIL}\n`)
 
 try {
-	// Ensure smoke test user exists
-	console.log('🔧 Ensuring smoke test user exists...')
-	try {
-		execSync(
-			`node scripts/ensure-smoke-user.mjs`,
-			{ 
-				stdio: 'inherit',
-				env: { ...process.env, SMOKE_EMAIL, SMOKE_PASSWORD }
-			}
-		)
-	} catch (error) {
-		console.warn('⚠️  Warning: Could not ensure smoke user (may already exist)')
-	}
-	
-	console.log('\n🚀 Running smoke tests...\n')
-	
 	// Run Playwright tests
 	execSync(
 		`npx playwright test tests/smoke-prod.spec.ts --config=playwright.config.ts`,

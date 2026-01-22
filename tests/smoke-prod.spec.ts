@@ -48,10 +48,14 @@ async function loginIfNeeded(page: any) {
 		// Click submit button
 		await submitButton.click()
 		
-		// Wait for either success (URL includes /app) or failure (login-error non-empty)
+		// Wait for FIRST of: URL contains /app (success) OR login-error has non-empty text (fail)
+		// Timeout 20s
+		let loginSuccess = false
+		let loginError = ''
+		
 		try {
 			await Promise.race([
-				page.waitForURL(/\/app/, { timeout: 20000 }),
+				page.waitForURL(/\/app/, { timeout: 20000 }).then(() => { loginSuccess = true }),
 				page.waitForFunction(
 					() => {
 						const errorEl = document.querySelector('[data-testid="login-error"]')
@@ -59,7 +63,10 @@ async function loginIfNeeded(page: any) {
 						return errorText.length > 0
 					},
 					{ timeout: 20000 }
-				)
+				).then(async () => {
+					const errorEl = page.getByTestId('login-error')
+					loginError = await errorEl.textContent().catch(() => '')
+				})
 			])
 		} catch {
 			// Timeout - check current state below
@@ -82,17 +89,19 @@ async function loginIfNeeded(page: any) {
 		
 		// Check final state
 		const currentUrl = page.url()
-		if (currentUrl.includes('/app')) {
+		if (loginSuccess || currentUrl.includes('/app')) {
 			// Success - wait for nav sidebar to appear
 			await page.waitForSelector('[data-testid="nav-discover-button"], [data-testid="nav-recruiting-button"]', { timeout: 5000 })
 			await page.waitForTimeout(2000) // Wait for app to stabilize
 		} else {
-			// Still on /auth/login - check error
-			const errorEl = page.getByTestId('login-error')
-			const errorText = await errorEl.textContent().catch(() => '')
+			// Failure - get error text if not already captured
+			if (!loginError) {
+				const errorEl = page.getByTestId('login-error')
+				loginError = await errorEl.textContent().catch(() => '')
+			}
 			
-			if (errorText && errorText.trim().length > 0) {
-				throw new Error(`LOGIN_FAILED: ${errorText.trim()}`)
+			if (loginError && loginError.trim().length > 0) {
+				throw new Error(`LOGIN_FAILED: ${loginError.trim()}`)
 			} else {
 				throw new Error('LOGIN_FAILED: Timeout waiting for login response')
 			}
