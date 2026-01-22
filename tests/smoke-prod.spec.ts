@@ -97,8 +97,9 @@ async function loginIfNeeded(page: any) {
 			const nativeSubmit = document.querySelector('[data-testid="login-native-submit-count"]')?.textContent?.trim() || '0'
 			const clickCaptured = document.querySelector('[data-testid="login-click-captured"]')?.textContent?.trim() || '0'
 			const submitCaptured = document.querySelector('[data-testid="login-submit-captured"]')?.textContent?.trim() || '0'
+			const handleSubmit = document.querySelector('[data-testid="login-handle-submit-count"]')?.textContent?.trim() || '0'
 			const status = document.querySelector('[data-testid="login-status"]')?.textContent?.trim() || 'missing'
-			return { nativeSubmit, clickCaptured, submitCaptured, status }
+			return { nativeSubmit, clickCaptured, submitCaptured, handleSubmit, status }
 		})
 		
 		// Screenshot for tripwire proof
@@ -108,6 +109,14 @@ async function loginIfNeeded(page: any) {
 		
 		console.log(`TRIPWIRE:`)
 		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} clickCaptured=${tripwireValues.clickCaptured} submitCaptured=${tripwireValues.submitCaptured} status=${tripwireValues.status}`)
+		
+		console.log(`HANDLE_SUBMIT_PROOF:`)
+		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} submitCaptured=${tripwireValues.submitCaptured} handleSubmit=${tripwireValues.handleSubmit} status=${tripwireValues.status}`)
+		
+		// Screenshot for handleSubmit proof
+		const handleSubmitProofPath = join(ARTIFACTS_DIR, 'prod-handleSubmit-proof.png')
+		await page.screenshot({ path: handleSubmitProofPath, fullPage: true })
+		console.log(`Screenshot saved: ${handleSubmitProofPath}`)
 		
 		// Wait for all samples to complete
 		await samplingPromise

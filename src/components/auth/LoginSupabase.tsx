@@ -36,6 +36,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const [submitCapturedCount, setSubmitCapturedCount] = useState(0)
 	const [clickCapturedCount, setClickCapturedCount] = useState(0)
 	const [nativeSubmitCount, setNativeSubmitCount] = useState(0)
+	const [handleSubmitCount, setHandleSubmitCount] = useState(0)
 	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
 
 	useEffect(() => {
@@ -60,10 +61,11 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	}, [])
 
 	async function handleSubmit(e: React.FormEvent) {
-		e.preventDefault()
-		setErr(null)
-		setLoading(true)
+		setHandleSubmitCount(c => c + 1)
 		setIsSubmitting(true)
+		setLoading(true)
+		setErr(null)
+		e.preventDefault()
 		try {
 			if (DEBUG_AUTH) console.log('[login] submit', { email })
 			const { data: u, error } = await signIn({ email, password })
@@ -160,6 +162,9 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					</div>
 					<div data-testid="login-native-submit-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
 						{nativeSubmitCount}
+					</div>
+					<div data-testid="login-handle-submit-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+						{handleSubmitCount}
 					</div>
 					<div data-testid="login-error" aria-live="polite" className="text-red-400 text-sm">
 						{err ?? ''}
