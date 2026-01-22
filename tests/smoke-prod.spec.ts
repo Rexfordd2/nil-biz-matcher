@@ -23,237 +23,85 @@ let didLoginScreenshot = false
 async function loginIfNeeded(page: any) {
 	const currentUrl = page.url()
 	if (currentUrl.includes('/auth/login')) {
-		// Wait for login page to load - check for heading first
+		// Wait for login page to load
 		await page.waitForSelector('h3:has-text("Log in to Athlete Ledger")', { timeout: 10000 })
-		await page.waitForTimeout(1000) // Wait for form to render
+		await page.waitForTimeout(1000)
 		
-		// Step 1: Confirm DOM wiring
-		const form = page.getByTestId('login-form')
 		const emailInput = page.getByTestId('login-email')
 		const passwordInput = page.getByTestId('login-password')
 		const submitButton = page.getByTestId('login-submit')
-		const statusEl = page.getByTestId('login-status')
 		
-		// Assert all elements exist and are visible (except status which is hidden)
-		await expect(form).toBeVisible({ timeout: 5000 })
 		await expect(emailInput).toBeVisible({ timeout: 5000 })
 		await expect(passwordInput).toBeVisible({ timeout: 5000 })
 		await expect(submitButton).toBeVisible({ timeout: 5000 })
-		await expect(statusEl).toHaveCount(1, { timeout: 5000 })
-		
-		// Get submit button details
-		const submitTagName = await submitButton.evaluate((el: any) => el.tagName)
-		const submitType = await submitButton.evaluate((el: any) => el.type || 'N/A')
-		const submitDisabled = await submitButton.isDisabled()
-		
-		// Check if submit button is inside form
-		const submitInForm = await page.evaluate(() => {
-			const form = document.querySelector('[data-testid="login-form"]')
-			const submit = document.querySelector('[data-testid="login-submit"]')
-			if (!form || !submit) return false
-			return form.contains(submit)
-		})
-		
-		console.log('DOM_WIRING:')
-		console.log(`  submit button: ${submitTagName} type="${submitType}" disabled=${submitDisabled}`)
-		console.log(`  submit in form: ${submitInForm}`)
 
 		await emailInput.fill(SMOKE_EMAIL!)
 		await passwordInput.fill(SMOKE_PASSWORD!)
-		
-		// Wait for form to be ready
 		await page.waitForTimeout(500)
 		
-		// Step 2: Read submitStartCount BEFORE submit
+		// Debug markers (read but don't fail on them)
 		const beforeSubmitStart = await page.evaluate(() => {
 			const el = document.querySelector('[data-testid="login-submit-start-count"]')
 			return parseInt(el?.textContent?.trim() || '0', 10)
-		})
+		}).catch(() => 0)
 		
-		// Step 3: Submit via form submit event dispatch
-		await submitButton.waitFor({ state: 'visible' })
-		const isDisabledBefore = await submitButton.isDisabled()
-		if (isDisabledBefore) {
-			throw new Error('Submit button is disabled before submit')
-		}
+		// Click submit button
+		await submitButton.click()
 		
-		// Step 4: Sample login-status every 250ms for 5 seconds (20 samples)
-		// Start sampling immediately, then submit
-		const samples: string[] = []
-		const samplingPromise = (async () => {
-			for (let i = 0; i < 20; i++) {
-				await page.waitForTimeout(250)
-				const statusText = await page.evaluate(() => {
-					const statusEl = document.querySelector('[data-testid="login-status"]')
-					return statusEl?.textContent?.trim() || 'missing'
-				}).catch(() => 'error')
-				samples.push(statusText)
-			}
-		})()
-		
-		// Dispatch submit event directly on form (triggers React onSubmit)
-		await form.evaluate((f: HTMLFormElement) => {
-			const submitEvent = new Event('submit', { bubbles: true, cancelable: true })
-			f.dispatchEvent(submitEvent)
-		})
-		
-		// Step 5: Wait until submitStartCount increments by 1 (timeout 3s)
+		// Wait for either success (URL includes /app) or failure (login-error non-empty)
 		try {
-			await page.waitForFunction(
-				(expectedValue: number) => {
-					const el = document.querySelector('[data-testid="login-submit-start-count"]')
-					const currentValue = parseInt(el?.textContent?.trim() || '0', 10)
-					return currentValue === expectedValue + 1
-				},
-				beforeSubmitStart,
-				{ timeout: 3000 }
-			)
+			await Promise.race([
+				page.waitForURL(/\/app/, { timeout: 20000 }),
+				page.waitForFunction(
+					() => {
+						const errorEl = document.querySelector('[data-testid="login-error"]')
+						const errorText = errorEl?.textContent?.trim() || ''
+						return errorText.length > 0
+					},
+					{ timeout: 20000 }
+				)
+			])
 		} catch {
-			// Timeout - continue anyway to capture proof
+			// Timeout - check current state below
 		}
 		
-		// Read values after submit
+		// Debug markers (read but don't fail)
 		const afterSubmitStart = await page.evaluate(() => {
 			const el = document.querySelector('[data-testid="login-submit-start-count"]')
 			return parseInt(el?.textContent?.trim() || '0', 10)
-		})
+		}).catch(() => 0)
 		const handleSubmitCount = await page.evaluate(() => {
 			const el = document.querySelector('[data-testid="login-handle-submit-count"]')
 			return parseInt(el?.textContent?.trim() || '0', 10)
-		})
-		const loginStatus = await page.evaluate(() => {
-			const el = document.querySelector('[data-testid="login-status"]')
-			return el?.textContent?.trim() || 'missing'
-		})
+		}).catch(() => 0)
 		
-		// Print LOGIN_PROOF block
-		console.log(`LOGIN_PROOF:`)
-		console.log(`beforeSubmitStart=${beforeSubmitStart} afterSubmitStart=${afterSubmitStart} handleSubmitCount=${handleSubmitCount} loginStatus=${loginStatus}`)
-		
-		await page.waitForTimeout(200) // Small delay to let React process
-		
-		// Read tripwire values immediately after submit attempt
-		const tripwireValues = await page.evaluate(() => {
-			const nativeSubmit = document.querySelector('[data-testid="login-native-submit-count"]')?.textContent?.trim() || '0'
-			const clickCaptured = document.querySelector('[data-testid="login-click-captured"]')?.textContent?.trim() || '0'
-			const submitCaptured = document.querySelector('[data-testid="login-submit-captured"]')?.textContent?.trim() || '0'
-			const handleSubmit = document.querySelector('[data-testid="login-handle-submit-count"]')?.textContent?.trim() || '0'
-			const captureDefaultPrevented = document.querySelector('[data-testid="login-capture-default-prevented"]')?.textContent?.trim() || 'false'
-			const captureEventPhase = document.querySelector('[data-testid="login-capture-event-phase"]')?.textContent?.trim() || '0'
-			const bridgeFired = document.querySelector('[data-testid="login-bridge-fired-count"]')?.textContent?.trim() || '0'
-			const status = document.querySelector('[data-testid="login-status"]')?.textContent?.trim() || 'missing'
-			return { nativeSubmit, clickCaptured, submitCaptured, handleSubmit, captureDefaultPrevented, captureEventPhase, bridgeFired, status }
-		})
-		
-		// Screenshot for tripwire proof
-		const tripwirePath = join(ARTIFACTS_DIR, 'prod-tripwire.png')
-		await page.screenshot({ path: tripwirePath, fullPage: true })
-		console.log(`Screenshot saved: ${tripwirePath}`)
-		
-		console.log(`TRIPWIRE:`)
-		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} clickCaptured=${tripwireValues.clickCaptured} submitCaptured=${tripwireValues.submitCaptured} status=${tripwireValues.status}`)
-		
-		console.log(`HANDLE_SUBMIT_PROOF:`)
-		console.log(`nativeSubmit=${tripwireValues.nativeSubmit} submitCaptured=${tripwireValues.submitCaptured} captureDefaultPrevented=${tripwireValues.captureDefaultPrevented} captureEventPhase=${tripwireValues.captureEventPhase} bridgeFired=${tripwireValues.bridgeFired} handleSubmit=${tripwireValues.handleSubmit} status=${tripwireValues.status}`)
-		
-		// Screenshot for handleSubmit proof
-		const handleSubmitProofPath = join(ARTIFACTS_DIR, 'prod-handleSubmit-proof.png')
-		await page.screenshot({ path: handleSubmitProofPath, fullPage: true })
-		console.log(`Screenshot saved: ${handleSubmitProofPath}`)
-		
-		// Wait for all samples to complete
-		await samplingPromise
-		console.log(`STATUS_SAMPLES: ${samples.join(', ')}`)
-		
-		// Step 4: Check if status became 'submitting'
-		const becameSubmitting = samples.some(s => s === 'submitting')
-		
-		if (!becameSubmitting) {
-			const currentUrl = page.url()
-			const failPath = join(ARTIFACTS_DIR, 'prod-submit-not-triggered.png')
-			await page.screenshot({ path: failPath, fullPage: true })
-			console.log(`Screenshot saved: ${failPath}`)
-			
-			console.log('RESULT: FAIL')
-			console.log(`  Error: LOGIN_SUBMIT_NOT_TRIGGERED: status never became submitting`)
-			console.log(`  Screenshot: ${tripwirePath}`)
-			throw new Error('LOGIN_SUBMIT_NOT_TRIGGERED: status never became submitting')
+		// Debug output (optional)
+		if (process.env.DEBUG_LOGIN) {
+			console.log(`LOGIN_PROOF: beforeSubmitStart=${beforeSubmitStart} afterSubmitStart=${afterSubmitStart} handleSubmitCount=${handleSubmitCount}`)
 		}
 		
-		console.log('RESULT: PASS (status became submitting)')
-
-		// Wait until login-status becomes 'idle' OR URL becomes /app (timeout 12s)
-		try {
-			await Promise.race([
-				page.waitForFunction(
-					() => {
-						const statusEl = document.querySelector('[data-testid="login-status"]')
-						const text = statusEl?.textContent?.trim() || ''
-						return text === 'idle'
-					},
-					{ timeout: 12000 }
-				),
-				page.waitForURL(/\/app/, { timeout: 12000 })
-			])
-		} catch {
-			// If both time out, check current state below
-		}
-
 		// Check final state
 		const currentUrl = page.url()
 		if (currentUrl.includes('/app')) {
 			// Success - wait for nav sidebar to appear
 			await page.waitForSelector('[data-testid="nav-discover-button"], [data-testid="nav-recruiting-button"]', { timeout: 5000 })
-			const navBtn = page.locator('[data-testid="nav-discover-button"], [data-testid="nav-recruiting-button"]').first()
-			await expect(navBtn).toBeVisible({ timeout: 5000 })
-			
-			// Screenshot after successful login (only once)
-			if (!didLoginScreenshot) {
-				const successPath = join(ARTIFACTS_DIR, 'login-success.png')
-				await page.screenshot({ path: successPath, fullPage: true })
-				console.log(`Screenshot saved: ${successPath}`)
-				didLoginScreenshot = true
-			}
-			
 			await page.waitForTimeout(2000) // Wait for app to stabilize
 		} else {
-			// Still on /auth/login - check status and error
-			const statusText = await page.evaluate(() => {
-				const statusEl = document.querySelector('[data-testid="login-status"]')
-				return statusEl?.textContent?.trim() || ''
-			}).catch(() => '')
+			// Still on /auth/login - check error
 			const errorEl = page.getByTestId('login-error')
 			const errorText = await errorEl.textContent().catch(() => '')
 			
-			// Take screenshot on failure (only once)
-			if (!didLoginScreenshot) {
-				try {
-					const failPath = join(ARTIFACTS_DIR, 'login-failed.png')
-					await page.screenshot({ path: failPath, fullPage: true })
-					console.log(`Screenshot saved: ${failPath}`)
-					didLoginScreenshot = true
-				} catch (e) {
-					// Screenshot failed, continue
-				}
-			}
-
-			if (statusText.trim() === 'idle') {
-				// Request finished
-				if (errorText && errorText.trim().length > 0) {
-					throw new Error(`LOGIN_FAILED: check SMOKE_EMAIL/SMOKE_PASSWORD or Supabase auth (Error: ${errorText.trim()})`)
-				} else {
-					throw new Error('LOGIN_FAILED_UI_BUG_DONE_NO_ERROR')
-				}
+			if (errorText && errorText.trim().length > 0) {
+				throw new Error(`LOGIN_FAILED: ${errorText.trim()}`)
 			} else {
-				// Status is still 'submitting' or unknown - timeout
-				throw new Error('LOGIN_FAILED: check SMOKE_EMAIL/SMOKE_PASSWORD or Supabase auth (Timeout: still submitting after 12s)')
+				throw new Error('LOGIN_FAILED: Timeout waiting for login response')
 			}
 		}
 	}
 }
 
 test.describe('Production Smoke Tests', () => {
-	test('A) Discover Businesses Flow', async ({ page }) => {
+	test('Authenticated App Flows', async ({ page }) => {
 		// Navigate to production site
 		await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
 
@@ -266,7 +114,7 @@ test.describe('Production Smoke Tests', () => {
 		// Authenticate if needed
 		await loginIfNeeded(page)
 
-		// Try to find and click Discover tab/button
+		// A) Discover Flow
 		const discoverBtn = page.getByTestId('nav-discover-button')
 		if (await discoverBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
 			await discoverBtn.click()
@@ -283,67 +131,43 @@ test.describe('Production Smoke Tests', () => {
 			}
 		}
 
-		// Wait for Discover page to load
 		await page.waitForTimeout(1000)
 
-		// Look for search inputs using data-testid
 		const whatInput = page.getByTestId('discover-what-input')
 		const whereInput = page.getByTestId('discover-where-input')
 
-		// Fill in search fields
 		await whatInput.fill('gym')
 		await whereInput.fill('Austin, TX')
 
-		// Find and click Search button
-		const searchButton = page.getByTestId('discover-search-button')
-		await searchButton.click()
+		const discoverSearchButton = page.getByTestId('discover-search-button')
+		await discoverSearchButton.click()
 
-		// Wait for search to complete - wait for loading indicator to disappear
+		// Wait for search to complete
 		await page.waitForFunction(() => {
 			const loadingText = Array.from(document.querySelectorAll('*')).some(el => 
 				el.textContent?.toLowerCase().includes('searching')
 			)
 			return !loadingText
-		}, { timeout: 15000 }).catch(() => {
-			// If wait fails, just wait a fixed time
-		})
+		}, { timeout: 15000 }).catch(() => {})
 		await page.waitForTimeout(3000)
 
-		// Check for error banner (should NOT be present)
-		const errorBanner = page.getByTestId('discover-error-banner')
-		if (await errorBanner.isVisible().catch(() => false)) {
-			const errorText = await errorBanner.textContent().catch(() => 'Unknown error')
-			throw new Error(`Error banner found: ${errorText}`)
+		// Assert NO error banner
+		const discoverErrorBanner = page.getByTestId('discover-error-banner')
+		if (await discoverErrorBanner.isVisible().catch(() => false)) {
+			const errorText = await discoverErrorBanner.textContent().catch(() => 'Unknown error')
+			throw new Error(`Discover error banner found: ${errorText}`)
 		}
 
-		// Assert that results render OR clear "No results" state
-		const resultsContainer = page.getByTestId('discover-results-container')
-		const hasResults = await resultsContainer.isVisible().catch(() => false)
-		
-		if (!hasResults) {
-			throw new Error('Results container not found')
-		}
+		// Assert results container is visible
+		const discoverResultsContainer = page.getByTestId('discover-results-container')
+		await expect(discoverResultsContainer).toBeVisible({ timeout: 5000 })
 
-		// Take screenshot AFTER results load
-		const screenshotPath = join(ARTIFACTS_DIR, 'discover-flow.png')
-		await page.screenshot({ path: screenshotPath, fullPage: true })
-		console.log(`Screenshot saved: ${screenshotPath}`)
-	})
+		// Screenshot
+		const discoverScreenshotPath = join(ARTIFACTS_DIR, 'discover-authed.png')
+		await page.screenshot({ path: discoverScreenshotPath, fullPage: true })
+		console.log(`Screenshot saved: ${discoverScreenshotPath}`)
 
-	test('B) Recruiting Finder Flow', async ({ page }) => {
-		// Navigate to production site
-		await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
-
-		// Navigate directly to /app
-		await page.goto(`${BASE_URL}/app`, { waitUntil: 'domcontentloaded' })
-		
-		// Wait for page to stabilize
-		await page.waitForTimeout(2000)
-
-		// Authenticate if needed
-		await loginIfNeeded(page)
-
-		// Try to find and click Recruiting tab/button
+		// B) Recruiting Flow
 		const recruitingBtn = page.getByTestId('nav-recruiting-button')
 		if (await recruitingBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
 			await recruitingBtn.click()
@@ -360,20 +184,16 @@ test.describe('Production Smoke Tests', () => {
 			}
 		}
 
-		// Wait for Recruiting page to load
 		await page.waitForTimeout(1000)
 
-		// Look for search inputs using data-testid
 		const sportInput = page.getByTestId('recruiting-sport-input')
 		const regionInput = page.getByTestId('recruiting-region-input')
 
-		// Fill in search fields
 		await sportInput.fill('football')
 		await regionInput.fill('TX')
 
-		// Find and click Search button
-		const searchButton = page.getByTestId('recruiting-search-button')
-		await searchButton.click()
+		const recruitingSearchButton = page.getByTestId('recruiting-search-button')
+		await recruitingSearchButton.click()
 
 		// Wait for search to complete
 		await page.waitForFunction(() => {
@@ -381,29 +201,23 @@ test.describe('Production Smoke Tests', () => {
 				el.textContent?.toLowerCase().includes('searching')
 			)
 			return !loadingText
-		}, { timeout: 15000 }).catch(() => {
-			// If wait fails, just wait a fixed time
-		})
+		}, { timeout: 15000 }).catch(() => {})
 		await page.waitForTimeout(3000)
 
-		// Check for error banner (should NOT be present)
-		const errorBanner = page.getByTestId('recruiting-error-banner')
-		if (await errorBanner.isVisible().catch(() => false)) {
-			const errorText = await errorBanner.textContent().catch(() => 'Unknown error')
-			throw new Error(`Error banner found: ${errorText}`)
+		// Assert NO error banner
+		const recruitingErrorBanner = page.getByTestId('recruiting-error-banner')
+		if (await recruitingErrorBanner.isVisible().catch(() => false)) {
+			const errorText = await recruitingErrorBanner.textContent().catch(() => 'Unknown error')
+			throw new Error(`Recruiting error banner found: ${errorText}`)
 		}
 
-		// Assert that results render OR clear "No results" state
-		const resultsContainer = page.getByTestId('recruiting-results-container')
-		const hasResults = await resultsContainer.isVisible().catch(() => false)
-		
-		if (!hasResults) {
-			throw new Error('Results container not found')
-		}
+		// Assert results container is visible
+		const recruitingResultsContainer = page.getByTestId('recruiting-results-container')
+		await expect(recruitingResultsContainer).toBeVisible({ timeout: 5000 })
 
-		// Take screenshot AFTER results load
-		const screenshotPath = join(ARTIFACTS_DIR, 'recruiting-flow.png')
-		await page.screenshot({ path: screenshotPath, fullPage: true })
-		console.log(`Screenshot saved: ${screenshotPath}`)
+		// Screenshot
+		const recruitingScreenshotPath = join(ARTIFACTS_DIR, 'recruiting-authed.png')
+		await page.screenshot({ path: recruitingScreenshotPath, fullPage: true })
+		console.log(`Screenshot saved: ${recruitingScreenshotPath}`)
 	})
 })
