@@ -37,6 +37,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const [clickCapturedCount, setClickCapturedCount] = useState(0)
 	const [nativeSubmitCount, setNativeSubmitCount] = useState(0)
 	const [handleSubmitCount, setHandleSubmitCount] = useState(0)
+	const [submitStartCount, setSubmitStartCount] = useState(0)
 	const [captureDefaultPrevented, setCaptureDefaultPrevented] = useState(false)
 	const [capturePreventedByUs, setCapturePreventedByUs] = useState(false)
 	const [captureEventPhase, setCaptureEventPhase] = useState(0)
@@ -72,6 +73,8 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	}, [])
 
 	async function handleSubmit(e: React.FormEvent) {
+		e.preventDefault()
+		setSubmitStartCount(c => c + 1)
 		setHandleSubmitCount(c => {
 			const newCount = c + 1
 			handleSubmitCountRef.current = newCount
@@ -80,7 +83,6 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		setIsSubmitting(true)
 		setLoading(true)
 		setErr(null)
-		e.preventDefault()
 		try {
 			if (DEBUG_AUTH) console.log('[login] submit', { email })
 			const { data: u, error } = await signIn({ email, password })
@@ -197,6 +199,9 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					</div>
 					<div data-testid="login-handle-submit-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
 						{handleSubmitCount}
+					</div>
+					<div data-testid="login-submit-start-count" style={{ position: 'absolute', left: '-9999px' }}>
+						{submitStartCount}
 					</div>
 					<div data-testid="login-capture-default-prevented" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
 						{captureDefaultPrevented ? 'true' : 'false'}

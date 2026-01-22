@@ -64,14 +64,20 @@ async function loginIfNeeded(page: any) {
 		// Wait for form to be ready
 		await page.waitForTimeout(500)
 		
-		// Step 2: Submit via form submit event dispatch
+		// Step 2: Read submitStartCount BEFORE submit
+		const beforeSubmitStart = await page.evaluate(() => {
+			const el = document.querySelector('[data-testid="login-submit-start-count"]')
+			return parseInt(el?.textContent?.trim() || '0', 10)
+		})
+		
+		// Step 3: Submit via form submit event dispatch
 		await submitButton.waitFor({ state: 'visible' })
 		const isDisabledBefore = await submitButton.isDisabled()
 		if (isDisabledBefore) {
 			throw new Error('Submit button is disabled before submit')
 		}
 		
-		// Step 3: Sample login-status every 250ms for 5 seconds (20 samples)
+		// Step 4: Sample login-status every 250ms for 5 seconds (20 samples)
 		// Start sampling immediately, then submit
 		const samples: string[] = []
 		const samplingPromise = (async () => {
@@ -90,6 +96,40 @@ async function loginIfNeeded(page: any) {
 			const submitEvent = new Event('submit', { bubbles: true, cancelable: true })
 			f.dispatchEvent(submitEvent)
 		})
+		
+		// Step 5: Wait until submitStartCount increments by 1 (timeout 3s)
+		try {
+			await page.waitForFunction(
+				(expectedValue: number) => {
+					const el = document.querySelector('[data-testid="login-submit-start-count"]')
+					const currentValue = parseInt(el?.textContent?.trim() || '0', 10)
+					return currentValue === expectedValue + 1
+				},
+				beforeSubmitStart,
+				{ timeout: 3000 }
+			)
+		} catch {
+			// Timeout - continue anyway to capture proof
+		}
+		
+		// Read values after submit
+		const afterSubmitStart = await page.evaluate(() => {
+			const el = document.querySelector('[data-testid="login-submit-start-count"]')
+			return parseInt(el?.textContent?.trim() || '0', 10)
+		})
+		const handleSubmitCount = await page.evaluate(() => {
+			const el = document.querySelector('[data-testid="login-handle-submit-count"]')
+			return parseInt(el?.textContent?.trim() || '0', 10)
+		})
+		const loginStatus = await page.evaluate(() => {
+			const el = document.querySelector('[data-testid="login-status"]')
+			return el?.textContent?.trim() || 'missing'
+		})
+		
+		// Print LOGIN_PROOF block
+		console.log(`LOGIN_PROOF:`)
+		console.log(`beforeSubmitStart=${beforeSubmitStart} afterSubmitStart=${afterSubmitStart} handleSubmitCount=${handleSubmitCount} loginStatus=${loginStatus}`)
+		
 		await page.waitForTimeout(200) // Small delay to let React process
 		
 		// Read tripwire values immediately after submit attempt
