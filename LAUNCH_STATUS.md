@@ -1,30 +1,40 @@
 # Launch Status Report
 
-**Generated:** 2026-01-20T08:39:30.310Z
+**Generated:** 2026-01-21T20:01:05.924Z
 
-## Overall Status: ❌ FAIL
+## Overall Status: ⚠️ WARN
 
 ### Build Information
 - **Primary Domain:** https://athlete-ledger.vercel.app
-- **BuildId:** unknown
-- **Timestamp:** 2026-01-20T08:39:54.014Z
+- **BuildId:** 3c63267
+- **Timestamp:** 2026-01-21T20:01:06.149Z
+- **Header BuildId:** 3c63267
 
-## ❌ Blocking Issues
+### Environment Variables (Presence)
+#### Feature Flags
+- **REQUIRE_CSE:** ❌ false (CSE keys are non-blocking)
+- **REQUIRE_GOOGLE_MAPS_SERVER_KEY:** ❌ false (Server key is non-blocking)
 
-- verify:prod failed: Command failed: C:\nvm4w\nodejs\node.exe C:\Users\13109\Desktop\Monster Collective\scripts\verify-all-domains.mjs
-❌ 1 domain(s) failed verification
-
-- /healthz endpoint not accessible: Unexpected token '<', "<!doctype "... is not valid JSON
+#### Variable Presence
+- **hasViteSupabaseUrl:** ✅ Present
+- **hasViteSupabaseAnonKey:** ✅ Present
+- **hasViteGoogleMapsApiKey:** ✅ Present
+- **hasCseKey:** ⚠️ Missing (non-blocking)
+- **hasCseCx:** ⚠️ Missing (non-blocking)
+- **hasGoogleMapsServerKey:** ⚠️ Missing (non-blocking)
+- **hasVercelGitCommitSha:** ✅ Present
 
 ## ⚠️ Non-Blocking Issues
 
 - DEBUG_GATED: Debug routes are gated in production. Set VITE_DIAGNOSTICS=true or VITE_DEBUG_KEY to enable access.
+- CSE_KEY or CSE_CX not set (CSE search disabled; set REQUIRE_CSE=true to require)
+- GOOGLE_MAPS_SERVER_KEY not set (server-side maps disabled; set REQUIRE_GOOGLE_MAPS_SERVER_KEY=true to require)
 
 ### Domain Verification Results
 
-**Error:** Command failed: C:\nvm4w\nodejs\node.exe C:\Users\13109\Desktop\Monster Collective\scripts\verify-all-domains.mjs
-❌ 1 domain(s) failed verification
-
+| Domain | BuildId | Stable | Header Matches | Error |
+|--------|---------|--------|----------------|-------|
+| https://athlete-ledger.vercel.app | 3c63267 | yes | yes | - |
 
 ### Debug Harness
 
@@ -33,29 +43,53 @@
 
 ## Recommended Next Action
 
-Investigate and fix domain verification failures before proceeding with launch.
+Review non-blocking issues and address critical ones before launch.
 
 ## PROOF
 
 ### Exact Command Run
 
 ```bash
-VERCEL_TOKEN="***REDACTED***" C:\nvm4w\nodejs\node.exe C:\Users\13109\Desktop\Monster Collective\scripts\launch-status.mjs
+DOMAINS="https://athlete-ledger.vercel.app" VERCEL_TOKEN="***REDACTED***" C:\nvm4w\nodejs\node.exe C:\Users\13109\Desktop\Monster Collective\scripts\launch-status.mjs
 ```
 
 ### Timestamp of Report Generation
 
-2026-01-20T08:39:30.310Z
+2026-01-21T20:01:05.924Z
 
-### Raw /healthz JSON Payload
+### Raw /healthz JSON Payload (Booleans + buildId/timestamp)
 
-**Error:** Unexpected token '<', "<!doctype "... is not valid JSON
+```json
+{
+  "buildId": "3c63267",
+  "timestamp": "2026-01-21T20:01:06.149Z",
+  "configPresence": {
+    "hasViteSupabaseUrl": true,
+    "hasViteSupabaseAnonKey": true,
+    "hasViteGoogleMapsApiKey": true,
+    "hasCseKey": false,
+    "hasCseCx": false,
+    "hasGoogleMapsServerKey": false,
+    "hasVercelGitCommitSha": true
+  }
+}
+```
 
 ### Raw verify:prod Table Output
 
-**Error:** Command failed: C:\nvm4w\nodejs\node.exe C:\Users\13109\Desktop\Monster Collective\scripts\verify-all-domains.mjs
-❌ 1 domain(s) failed verification
+```
 
+Verifying 1 domain(s)...
+
+Domain Build Consistency Verification
+
+Domain                             buildId  stableAcrossRuns  headerMatches  error
+---------------------------------  -------  ----------------  -------------  -----
+https://athlete-ledger.vercel.app  3c63267  yes               yes            -    
+
+✅ All domains passed verification and buildIds match
+
+```
 
 ### Harness Raw Metrics
 
