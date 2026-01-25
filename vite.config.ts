@@ -62,13 +62,13 @@ function debugRoutesProtectionPlugin(): Plugin {
 			}
 
 			const diagnosticsEnabled = String(process.env.VITE_DIAGNOSTICS || '').toLowerCase() === 'true'
-			const diagnosticsExplicitlySet = process.env.VITE_DIAGNOSTICS !== undefined
-			const hasDebugKey = Boolean(process.env.VITE_DEBUG_KEY)
+			const hasDebugKey = Boolean(process.env.VITE_DEBUG_KEY && process.env.VITE_DEBUG_KEY.trim().length > 0)
 
-			// If neither diagnostics nor debug key is set in production, fail the build
-			// This ensures explicit opt-in for debug access in production
-			// Allow builds when VITE_DIAGNOSTICS is explicitly set to false (intentional configuration)
-			if (!diagnosticsEnabled && !hasDebugKey && !diagnosticsExplicitlySet) {
+			// Production builds require explicit opt-in for debug access:
+			// - If VITE_DIAGNOSTICS=true → allow build (full diagnostics enabled)
+			// - Else if VITE_DEBUG_KEY is set (non-empty) → allow build (debug key protection)
+			// - Else → fail build (no protection configured)
+			if (!diagnosticsEnabled && !hasDebugKey) {
 				this.error(
 					'[SECURITY] Debug routes must be protected in production builds.\n' +
 					'To enable debug access in production, set one of:\n' +
@@ -98,11 +98,31 @@ export default defineConfig({
 		{
 			name: 'inject-build-id-html',
 			transformIndexHtml(html) {
-				// Inject build ID into HTML template for server-side extraction
-				return html.replace(
+				// Preserve OG/Twitter meta tags if they exist, inject build ID
+				let result = html.replace(
 					'<div id="root">',
 					`<div id="root"><div data-testid="build-id" style="display:none">${__buildId}</div>`
 				)
+				// Ensure OG tags are preserved (Vite may strip them, so re-add if missing)
+				if (!result.includes('og:title')) {
+					// If OG tags are missing, inject them before closing </head>
+					const ogTags = `
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://athlete-ledger.vercel.app/" />
+		<meta property="og:title" content="Athlete Ledger - Connect with College Coaches" />
+		<meta property="og:description" content="The platform for athletes to discover and connect with college coaches. Showcase your profile and find your perfect match." />
+		<meta property="og:image" content="https://athlete-ledger.vercel.app/athlete-ledger-logo.png" />
+		
+		<!-- Twitter -->
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:url" content="https://athlete-ledger.vercel.app/" />
+		<meta name="twitter:title" content="Athlete Ledger - Connect with College Coaches" />
+		<meta name="twitter:description" content="The platform for athletes to discover and connect with college coaches. Showcase your profile and find your perfect match." />
+		<meta name="twitter:image" content="https://athlete-ledger.vercel.app/athlete-ledger-logo.png" />`
+					result = result.replace('</head>', `${ogTags}\n\t</head>`)
+				}
+				return result
 			}
 		},
 		{

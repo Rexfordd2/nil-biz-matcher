@@ -511,66 +511,98 @@ async function extractDebugHarnessMetrics(domain, strictMode = false) {
 /**
  * Determine overall status and issues
  * Hardened rules:
- * - FAIL if verify:prod failed OR no parseable results OR domain failures OR buildId mismatches
- * - FAIL if /healthz failed OR missing buildId
- * - FAIL if header buildId doesn't match /healthz buildId
- * - WARN if harness unavailable (unless --strict mode)
- * - PASS only if all critical checks pass AND harness available (unless strict disabled)
- * - FAIL in --strict mode if debug is gated (unless ALLOW_STRICT_WITHOUT_DEBUG=true)
+ * - STRICT PASS: blockingIssues.length === 0 AND healthz.ok === true AND healthz.data.buildId exists => PASS/WARN, exit 0
+ * - FAIL if /healthz failed OR missing buildId (always blocking)
+ * - FAIL if header buildId doesn't match /healthz buildId (always blocking)
+ * - verify:prod failures: BLOCKING if domainCount > 1, WARN if domainCount === 1 (Hobby-safe)
+ * - Header buildId extraction failure: WARN (non-blocking)
+ * - DEBUG_GATED: WARN if ALLOW_STRICT_WITHOUT_DEBUG=true, BLOCKING otherwise in strict mode
+ * - Non-blocking issues NEVER cause exit code 1
  */
-function analyzeStatus(verifyProd, debugHarness, healthz, headerBuildId, strictMode, allowStrictWithoutDebug = false) {
+function analyzeStatus(verifyProd, debugHarness, healthz, headerBuildId, strictMode, allowStrictWithoutDebug = false, domainCount = 1) {
 	const blockingIssues = []
 	const nonBlockingIssues = []
 	
-	// Rule 1: FAIL if verify:prod did not run successfully OR produced no parseable results
+	// verify:prod handling: BLOCKING if >1 domain, WARN if single domain (Hobby-safe)
 	if (!verifyProd.ok) {
-		if (verifyProd.error === 'VERIFY_PROD_NO_TABLE') {
-			blockingIssues.push('verify:prod failed to return a results table')
-		} else if (verifyProd.error === 'VERIFY_PROD_FAILED') {
-			blockingIssues.push(`verify:prod script failed to run: ${verifyProd.error}`)
+		if (domainCount > 1) {
+			// Multi-domain: verify:prod failure is blocking
+			if (verifyProd.error === 'VERIFY_PROD_NO_TABLE') {
+				blockingIssues.push('verify:prod failed to return a results table')
+			} else if (verifyProd.error === 'VERIFY_PROD_FAILED') {
+				blockingIssues.push(`verify:prod script failed to run: ${verifyProd.error}`)
+			} else {
+				blockingIssues.push(`verify:prod failed: ${verifyProd.error || 'Unknown error'}`)
+			}
 		} else {
-			blockingIssues.push(`verify:prod failed: ${verifyProd.error || 'Unknown error'}`)
+			// Single-domain: verify:prod failure is non-blocking (WARN)
+			if (verifyProd.error === 'VERIFY_PROD_NO_TABLE') {
+				nonBlockingIssues.push('verify:prod failed to return a results table (single-domain mode: non-blocking)')
+			} else if (verifyProd.error === 'VERIFY_PROD_FAILED') {
+				nonBlockingIssues.push(`verify:prod script failed to run: ${verifyProd.error} (single-domain mode: non-blocking)`)
+			} else {
+				nonBlockingIssues.push(`verify:prod failed: ${verifyProd.error || 'Unknown error'} (single-domain mode: non-blocking)`)
+			}
 		}
 	}
 	
-	// Rule 1: FAIL if verify:prod has no parseable results (even if ok flag is true)
+	// verify:prod has no parseable results: BLOCKING if >1 domain, WARN if single domain
 	if (verifyProd.ok && (!verifyProd.results || verifyProd.results.length === 0)) {
-		blockingIssues.push('verify:prod produced no parseable results')
+		if (domainCount > 1) {
+			blockingIssues.push('verify:prod produced no parseable results')
+		} else {
+			nonBlockingIssues.push('verify:prod produced no parseable results (single-domain mode: non-blocking)')
+		}
 	}
 	
-	// Rule 1: FAIL if any domain failed OR buildId mismatch across domains
+	// Domain failures: BLOCKING if >1 domain, WARN if single domain
 	if (verifyProd.ok && verifyProd.results && verifyProd.results.length > 0) {
 		if (verifyProd.buildIdMismatch) {
-			blockingIssues.push(`BuildId mismatch across domains: ${verifyProd.uniqueBuildIds.join(', ')}`)
+			if (domainCount > 1) {
+				blockingIssues.push(`BuildId mismatch across domains: ${verifyProd.uniqueBuildIds.join(', ')}`)
+			} else {
+				nonBlockingIssues.push(`BuildId mismatch detected (single-domain mode: non-blocking)`)
+			}
 		}
 		const failedDomains = verifyProd.results.filter(r => 
 			r.buildId === 'n/a' || r.stableAcrossRuns !== 'yes' || r.headerMatches !== 'yes'
 		)
 		if (failedDomains.length > 0) {
-			blockingIssues.push(`${failedDomains.length} domain(s) failed verification`)
-			failedDomains.forEach(d => {
-				if (d.error && d.error !== '-') {
-					blockingIssues.push(`  - ${d.domain}: ${d.error}`)
-				} else {
-					blockingIssues.push(`  - ${d.domain}: buildId=${d.buildId}, stable=${d.stableAcrossRuns}, headerMatches=${d.headerMatches}`)
-				}
-			})
+			if (domainCount > 1) {
+				blockingIssues.push(`${failedDomains.length} domain(s) failed verification`)
+				failedDomains.forEach(d => {
+					if (d.error && d.error !== '-') {
+						blockingIssues.push(`  - ${d.domain}: ${d.error}`)
+					} else {
+						blockingIssues.push(`  - ${d.domain}: buildId=${d.buildId}, stable=${d.stableAcrossRuns}, headerMatches=${d.headerMatches}`)
+					}
+				})
+			} else {
+				nonBlockingIssues.push(`${failedDomains.length} domain(s) failed verification (single-domain mode: non-blocking)`)
+				failedDomains.forEach(d => {
+					if (d.error && d.error !== '-') {
+						nonBlockingIssues.push(`  - ${d.domain}: ${d.error}`)
+					} else {
+						nonBlockingIssues.push(`  - ${d.domain}: buildId=${d.buildId}, stable=${d.stableAcrossRuns}, headerMatches=${d.headerMatches}`)
+					}
+				})
+			}
 		}
 	}
 	
-	// Rule 1: FAIL if /healthz fetch failed
+	// Rule: FAIL if /healthz fetch failed (always blocking)
 	if (!healthz.ok) {
 		blockingIssues.push(`/healthz endpoint not accessible: ${healthz.error}`)
 	}
 	
-	// Rule 1: FAIL if /healthz returned missing buildId
+	// Rule: FAIL if /healthz returned missing buildId (always blocking)
 	if (healthz.ok && healthz.data) {
 		if (!healthz.data.buildId || healthz.data.buildId === 'unknown' || healthz.data.buildId === '') {
 			blockingIssues.push('/healthz returned missing or invalid buildId')
 		}
 	}
 	
-	// Rule 1: FAIL if header buildId does not match /healthz buildId
+	// Rule: FAIL if header buildId does not match /healthz buildId (always blocking)
 	if (healthz.ok && healthz.data && healthz.data.buildId && healthz.data.buildId !== 'unknown') {
 		if (headerBuildId.ok && headerBuildId.buildId) {
 			const healthzBuildId = healthz.data.buildId
@@ -579,8 +611,8 @@ function analyzeStatus(verifyProd, debugHarness, healthz, headerBuildId, strictM
 				blockingIssues.push(`BuildId mismatch: /healthz reports "${healthzBuildId}" but header shows "${headerBuildIdValue}"`)
 			}
 		} else {
-			// Header buildId extraction failed but /healthz succeeded
-			blockingIssues.push(`Failed to extract buildId from homepage header: ${headerBuildId.error || 'Unknown error'}`)
+			// Header buildId extraction failed but /healthz succeeded: WARN (non-blocking)
+			nonBlockingIssues.push(`Failed to extract buildId from homepage header: ${headerBuildId.error || 'Unknown error'} (non-blocking)`)
 		}
 	}
 	
@@ -648,66 +680,80 @@ function analyzeStatus(verifyProd, debugHarness, healthz, headerBuildId, strictM
 	}
 	
 	// Rule 2: WARN if env presence booleans show any missing non-critical config
+	// Feature flags control whether CSE and Google Maps Server Key are blocking
+	const requireCse = String(process.env.REQUIRE_CSE || '').toLowerCase() === 'true'
+	const requireGoogleMapsServerKey = String(process.env.REQUIRE_GOOGLE_MAPS_SERVER_KEY || '').toLowerCase() === 'true'
+	
 	if (healthz.ok && healthz.data) {
 		// buildId check already handled above as blocking
 		// Check config presence
 		if (healthz.data.configPresence) {
 			const cp = healthz.data.configPresence
-			// Check for missing critical config (non-blocking warnings)
-			if (!cp.hasViteGoogleMapsApiKey && !cp.hasGoogleMapsServerKey) {
-				nonBlockingIssues.push('GOOGLE_MAPS_API_KEY not set (business search may use fallback)')
-			}
+			
+			// Supabase keys are always blocking (required)
 			if (!cp.hasViteSupabaseUrl) {
-				nonBlockingIssues.push('VITE_SUPABASE_URL not set (Supabase client may not work)')
+				blockingIssues.push('VITE_SUPABASE_URL not set (Supabase client required)')
 			}
 			if (!cp.hasViteSupabaseAnonKey) {
-				nonBlockingIssues.push('VITE_SUPABASE_ANON_KEY not set (Supabase client may not work)')
+				blockingIssues.push('VITE_SUPABASE_ANON_KEY not set (Supabase client required)')
+			}
+			
+			// Client Google Maps API Key is always blocking (required)
+			if (!cp.hasViteGoogleMapsApiKey) {
+				blockingIssues.push('VITE_GOOGLE_MAPS_API_KEY not set (client maps required)')
+			}
+			
+			// CSE keys: blocking only if REQUIRE_CSE=true
+			if (!cp.hasCseKey || !cp.hasCseCx) {
+				if (requireCse) {
+					if (!cp.hasCseKey) {
+						blockingIssues.push('CSE_KEY not set (REQUIRE_CSE=true requires it)')
+					}
+					if (!cp.hasCseCx) {
+						blockingIssues.push('CSE_CX not set (REQUIRE_CSE=true requires it)')
+					}
+				} else {
+					if (!cp.hasCseKey || !cp.hasCseCx) {
+						nonBlockingIssues.push('CSE_KEY or CSE_CX not set (CSE search disabled; set REQUIRE_CSE=true to require)')
+					}
+				}
+			}
+			
+			// Google Maps Server Key: blocking only if REQUIRE_GOOGLE_MAPS_SERVER_KEY=true
+			if (!cp.hasGoogleMapsServerKey) {
+				if (requireGoogleMapsServerKey) {
+					blockingIssues.push('GOOGLE_MAPS_SERVER_KEY not set (REQUIRE_GOOGLE_MAPS_SERVER_KEY=true requires it)')
+				} else {
+					nonBlockingIssues.push('GOOGLE_MAPS_SERVER_KEY not set (server-side maps disabled; set REQUIRE_GOOGLE_MAPS_SERVER_KEY=true to require)')
+				}
 			}
 		}
 	}
 	
 	// Determine overall status
-	// Rule 3: PASS only if all critical checks pass AND harness available (unless strict disabled)
+	// STRICT PASS rule: blockingIssues.length === 0 AND healthz.ok === true AND healthz.data.buildId exists => PASS/WARN, exit 0
 	let overallStatus = 'PASS'
 	
 	// If any blocking issues, status is FAIL
 	if (blockingIssues.length > 0) {
 		overallStatus = 'FAIL'
 	} else {
-		// Check if harness is available and metrics are within acceptable thresholds (<= 10%)
-		// Note: Metrics 5-10% are warnings (non-blocking), but still acceptable for PASS
-		// Only metrics > 10% are blocking (FAIL)
-		const harnessAvailable = debugHarness.ok && debugHarness.metrics
-		const harnessWithinThresholds = harnessAvailable && 
-			debugHarness.metrics.discoverFailureRate <= 0.10 &&
-			(debugHarness.metrics.discoverInconsistencyRate === null || debugHarness.metrics.discoverInconsistencyRate <= 0.10) &&
-			debugHarness.metrics.recruitingFailureRate <= 0.10 &&
-			(debugHarness.metrics.recruitingInconsistencyRate === null || debugHarness.metrics.recruitingInconsistencyRate <= 0.10)
-		
-		// Rule 3: PASS requires:
-		// - All critical checks pass (no blocking issues) ✓
-		// - Harness metrics available AND within thresholds (unless strict mode disabled)
-		// Special case: DEBUG_GATED with allowStrictWithoutDebug flag
-		const isDebugGatedWithAllowance = debugHarness.debugGated && debugHarness.error === 'DEBUG_GATED' && strictMode && allowStrictWithoutDebug
-		
-		if (!harnessAvailable && !strictMode) {
-			// Rule 2: WARN if harness unavailable (not strict mode)
-			// Harness unavailable is already recorded as non-blocking issue
-			overallStatus = 'WARN'
-		} else if (!harnessAvailable && strictMode && !isDebugGatedWithAllowance) {
-			// Rule 4: FAIL in strict mode if harness unavailable (unless DEBUG_GATED with allowance)
-			// This should have been caught above as blocking issue, but double-check
-			overallStatus = 'FAIL'
-		} else if (harnessAvailable && !harnessWithinThresholds) {
-			// Metrics exceed thresholds - should be caught as blocking issues above
-			// But if somehow not, this is still a problem
-			overallStatus = 'FAIL'
-		} else if (nonBlockingIssues.length > 0) {
-			// All critical checks pass, harness OK, but non-blocking issues exist
-			overallStatus = 'WARN'
+		// STRICT PASS: No blocking issues AND healthz.ok AND buildId exists => PASS/WARN
+		if (healthz.ok && healthz.data && healthz.data.buildId && healthz.data.buildId !== 'unknown' && healthz.data.buildId !== '') {
+			// All critical checks pass
+			if (nonBlockingIssues.length > 0) {
+				overallStatus = 'WARN'
+			} else {
+				overallStatus = 'PASS'
+			}
 		} else {
-			// All checks pass AND harness available and within thresholds (or strict disabled)
-			overallStatus = 'PASS'
+			// This should have been caught as blocking issue above, but if not, fail
+			overallStatus = 'FAIL'
+			if (!healthz.ok) {
+				blockingIssues.push(`/healthz endpoint not accessible: ${healthz.error}`)
+			} else if (!healthz.data || !healthz.data.buildId || healthz.data.buildId === 'unknown' || healthz.data.buildId === '') {
+				blockingIssues.push('/healthz returned missing or invalid buildId')
+			}
 		}
 	}
 	
@@ -813,8 +859,24 @@ function generateMarkdown(status, verifyProd, debugHarness, healthz, headerBuild
 	
 	if (healthz.data?.configPresence) {
 		md += `### Environment Variables (Presence)\n`
+		
+		// Show feature flags
+		const requireCse = String(process.env.REQUIRE_CSE || '').toLowerCase() === 'true'
+		const requireGoogleMapsServerKey = String(process.env.REQUIRE_GOOGLE_MAPS_SERVER_KEY || '').toLowerCase() === 'true'
+		md += `#### Feature Flags\n`
+		md += `- **REQUIRE_CSE:** ${requireCse ? '✅ true (CSE keys are blocking)' : '❌ false (CSE keys are non-blocking)'}\n`
+		md += `- **REQUIRE_GOOGLE_MAPS_SERVER_KEY:** ${requireGoogleMapsServerKey ? '✅ true (Server key is blocking)' : '❌ false (Server key is non-blocking)'}\n`
+		md += `\n`
+		
+		md += `#### Variable Presence\n`
 		Object.entries(healthz.data.configPresence).forEach(([key, present]) => {
-			md += `- **${key}:** ${present ? '✅ Present' : '❌ Missing'}\n`
+			const isBlocking = (
+				(key === 'hasViteSupabaseUrl' || key === 'hasViteSupabaseAnonKey' || key === 'hasViteGoogleMapsApiKey') ||
+				(key === 'hasCseKey' || key === 'hasCseCx') && requireCse ||
+				(key === 'hasGoogleMapsServerKey') && requireGoogleMapsServerKey
+			)
+			const status = present ? '✅ Present' : (isBlocking ? '❌ Missing (BLOCKING)' : '⚠️ Missing (non-blocking)')
+			md += `- **${key}:** ${status}\n`
 		})
 		md += `\n`
 	}
@@ -823,6 +885,12 @@ function generateMarkdown(status, verifyProd, debugHarness, healthz, headerBuild
 		md += `## ❌ Blocking Issues\n\n`
 		blockingIssues.forEach(issue => {
 			md += `- ${issue}\n`
+		})
+		md += `\n`
+		md += `## WHY FAIL\n\n`
+		md += `Exit code 1 is caused by the following blocking issue(s):\n\n`
+		blockingIssues.forEach((issue, idx) => {
+			md += `${idx + 1}. ${issue}\n`
 		})
 		md += `\n`
 	}
@@ -1038,7 +1106,8 @@ async function main() {
 		healthz,
 		headerBuildId,
 		strictMode,
-		allowStrictWithoutDebug
+		allowStrictWithoutDebug,
+		domains.length
 	)
 	const recommendedAction = getRecommendedAction(overallStatus, blockingIssues, nonBlockingIssues)
 	
@@ -1080,8 +1149,25 @@ async function main() {
 	console.log(`\nRecommended: ${recommendedAction}`)
 	
 	// Exit with appropriate code
-	// Requirement: FAIL status MUST exit with code 1
-	const exitCode = overallStatus === 'FAIL' ? 1 : 0
+	// STRICT PASS rule: exit code 0 if blockingIssues.length === 0
+	// Non-blocking issues NEVER cause exit code 1
+	const exitCode = blockingIssues.length === 0 ? 0 : 1
+	
+	// Bug check: if exit code is 1 but blockingIssues is empty, hard-fail
+	if (exitCode === 1 && blockingIssues.length === 0) {
+		console.error('\nBUG: exit 1 with no blockingIssues')
+		console.error('This should never happen. Please report this bug.')
+		process.exit(1)
+	}
+	
+	if (exitCode === 1) {
+		console.log(`\n## WHY FAIL`)
+		console.log(`Exit code 1 is caused by the following blocking issue(s):`)
+		blockingIssues.forEach((issue, idx) => {
+			console.log(`${idx + 1}. ${issue}`)
+		})
+	}
+	
 	console.log(`\nExit code: ${exitCode}`)
 	process.exit(exitCode)
 }

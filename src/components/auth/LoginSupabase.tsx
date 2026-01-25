@@ -4,7 +4,6 @@ import Input from '../ui/Input'
 import Card from '../ui/Card'
 import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
-import { signIn } from '../../lib/authSupabase'
 import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 import { navigate } from '../../routes/RootRouter'
 import '../../lib/fetchProbe' // Initialize fetch probe if VITE_DIAGNOSTICS=true
@@ -47,6 +46,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
 	const FORCE_SUBMIT_BRIDGE = String(import.meta.env.VITE_FORCE_SUBMIT_BRIDGE || '').toLowerCase() === 'true'
 	const SHOW_DEBUG_OVERLAY = import.meta.env.DEV || import.meta.env.VITE_DIAGNOSTICS === 'true'
+	const DIAG = String(import.meta.env.VITE_DIAGNOSTICS || '').toLowerCase()
 	
 	// Debug state - initialize with current values
 	const getInitialDebugInfo = () => {
@@ -145,12 +145,13 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		try {
 			if (DEBUG_AUTH) console.log('[login] submit', { email })
 			
-			// Wrap signIn call to capture raw error details
+			// Use signInWithPassword directly to ensure password authentication (not OTP)
 			let rawError: any = null
 			let signInResult: { data: any; error: any } | null = null
 			
 			try {
-				signInResult = await signIn({ email, password })
+				const result = await sb.auth.signInWithPassword({ email, password })
+				signInResult = { data: result.data.user, error: result.error }
 			} catch (signInError: any) {
 				// Capture raw error details
 				rawError = {
@@ -304,6 +305,9 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					}}
 					onClickCapture={() => setClickCapturedCount(c => c + 1)}
 				>
+					<div data-testid="diag-compiled" style={{ position: 'absolute', left: -9999 }}>
+						{DIAG}
+					</div>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Email</span>
 						<Input

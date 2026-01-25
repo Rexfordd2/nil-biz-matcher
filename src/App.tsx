@@ -34,6 +34,7 @@ import LoginSupabase from './components/auth/LoginSupabase'
 import Extras from './pages/Extras'
 import { type CurrentUser } from './utils/auth'
 import { useAutosaveProfile } from './hooks/useAutosaveProfile'
+import { useAnonProfileDraft } from './hooks/useAnonProfileDraft'
 import { supabase, supabaseEnvConfigured } from './lib/supabaseClient'
 import { getSession } from './lib/authSupabase'
 import { signOut } from './lib/authSupabase'
@@ -45,6 +46,7 @@ import Observability from './lib/obs'
 import DiagnosticsPanel from './components/DiagnosticsPanel'
 import DebugDiscoverRecruiting from './pages/DebugDiscoverRecruiting'
 import DebugBuild from './pages/DebugBuild'
+import { navigate } from './routes/RootRouter'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -92,6 +94,7 @@ type Tab =
 	| 'Recruiting Blast'
 	| 'Sign Up'
 	| 'Log In'
+	| 'Settings'
 	| 'Extras'
 
 function MainApp() {
@@ -105,6 +108,7 @@ function MainApp() {
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const { user, loading } = useSupabaseSession()
 	const autosave = useAutosaveProfile({ user, debounceMs: 800 })
+	const anonDraft = useAnonProfileDraft({ debounceMs: 800 })
 	const cloudConfigured = supabaseEnvConfigured
 
 	// Debug-only health check state
@@ -179,16 +183,8 @@ function MainApp() {
 		setTab('Businesses')
 	}
 
-	function isProtected(target: Tab): boolean {
-		return ['Athlete', 'Deals', 'Opportunities', 'Recruiting', 'Recruiting Board', 'Recruiting Blast'].includes(target)
-	}
-
 	async function goToTab(next: Tab) {
-		if (isProtected(next) && !currentUser) {
-			show('Please log in to access this section')
-			setTab('Log In')
-			return
-		}
+		// Allow access to all tabs regardless of authentication state
 		// Observability: tab open
 		if (next === 'Discover') {
 			Observability.log({ feature: 'discover', route: 'ui.tab.open', status: 'ui_action' })
@@ -315,20 +311,31 @@ function MainApp() {
 										onClick={() => setUserMenuOpen(v => !v)}
 										className="text-white bg-mid border border-border rounded-md px-3 py-1 hover:bg-mid/80"
 									>
-										{currentUser.fullName}
+										{currentUser?.fullName || 'User'}
 									</button>
 									{userMenuOpen && (
 										<div className="absolute right-0 mt-2 w-44 bg-background border border-border rounded-md shadow-lg overflow-hidden">
 											<button className="w-full text-left px-3 py-2 text-gray-200 hover:bg-mid" onClick={() => { setUserMenuOpen(false); goToTab('Athlete') }}>Profile</button>
-											<button className="w-full text-left px-3 py-2 text-gray-200 hover:bg-mid" onClick={() => setUserMenuOpen(false)}>Settings</button>
+											<button className="w-full text-left px-3 py-2 text-gray-200 hover:bg-mid" onClick={() => { setUserMenuOpen(false); goToTab('Settings') }}>Settings</button>
 											<button className="w-full text-left px-3 py-2 text-gray-200 hover:bg-mid" onClick={handleLogout}>Log out</button>
 										</div>
 									)}
 								</div>
 							) : (
-								<div className="flex items-center gap-2">
-									<button className="text-gray-300 hover:text-white" onClick={() => setTab('Log In')}>Log in</button>
-									<Button onClick={() => setTab('Sign Up')} className="red-glow">Sign up</Button>
+								<div className="flex flex-col items-end gap-1">
+									<Button onClick={() => {
+										Observability.log({
+											feature: 'ui',
+											route: 'app.cta.save_progress',
+											status: 'ui_action'
+										})
+										navigate('/')
+										// Small delay to ensure page loads before scrolling
+										setTimeout(() => {
+											document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
+										}, 100)
+									}} className="red-glow">Save my progress</Button>
+									<p className="text-xs text-gray-400">No login required</p>
 								</div>
 							)}
 						</div>
@@ -345,9 +352,9 @@ function MainApp() {
 									<div>
 										<div>User ID: <span className="text-white">{currentUser?.id || '—'}</span></div>
 										<div>Env configured: <span className="text-white">{String(cloudConfigured)}</span></div>
-										<div>Last saved: <span className="text-white">{autosave.lastSavedAt ? new Date(autosave.lastSavedAt).toLocaleString() : '—'}</span></div>
-										<div>Status: <span className="text-white">{autosave.statusText || '—'}</span></div>
-										{autosave.error && <div>Error: <span className="text-amber-300">{autosave.error}</span></div>}
+										<div>Last saved: <span className="text-white">{currentUser ? (autosave.lastSavedAt ? new Date(autosave.lastSavedAt).toLocaleString() : '—') : (anonDraft.lastSavedAt ? new Date(anonDraft.lastSavedAt).toLocaleString() : '—')}</span></div>
+										<div>Status: <span className="text-white">{currentUser ? (autosave.statusText || '—') : (anonDraft.statusText || '—')}</span></div>
+										{currentUser && autosave.error && <div>Error: <span className="text-amber-300">{autosave.error}</span></div>}
 										{(healthResult.sessionOk !== null || healthResult.dbOk !== null) && (
 											<div className="mt-2 space-y-1">
 												<div>Health Session: <span className={healthResult.sessionOk ? 'text-green-300' : 'text-amber-300'}>{healthResult.sessionOk ? 'pass' : 'fail'}</span> {healthResult.sessionError ? `- ${healthResult.sessionError}` : ''}</div>
@@ -356,7 +363,7 @@ function MainApp() {
 										)}
 									</div>
 									<div>
-										<Button variant="ghost" onClick={() => autosave.refresh()}>Force reload from Supabase</Button>
+										{currentUser && <Button variant="ghost" onClick={() => autosave.refresh()}>Force reload from Supabase</Button>}
 										<Button variant="ghost" onClick={() => runHealthCheck()} disabled={healthRunning} className="ml-2">{healthRunning ? 'Health Check…' : 'Health Check'}</Button>
 									</div>
 								</div>
@@ -379,6 +386,7 @@ function MainApp() {
 											{ key: 'Dashboard', label: 'Dashboard' },
 											{ key: 'Recruiting', label: 'Recruiting' },
 											{ key: 'Profile Preview', label: 'Public Profile' },
+											{ key: 'Settings', label: 'Settings' },
 											...(currentUser ? [] as any : [{ key: 'Log In', label: 'Log In' }, { key: 'Sign Up', label: 'Sign Up' }])
 										]
 									},
@@ -423,26 +431,44 @@ function MainApp() {
 						<>
 							<div className="flex items-center justify-between">
 								<div className="text-sm text-gray-400">
-									{autosave.statusText}
-									{autosave.lastSavedAt && (autosave.statusText === '' || autosave.statusText === 'All changes saved') && (
-										<span className="ml-2">Last saved at {new Date(autosave.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+									{currentUser ? (
+										<>
+											{autosave.statusText}
+											{autosave.lastSavedAt && (autosave.statusText === '' || autosave.statusText === 'All changes saved') && (
+												<span className="ml-2">Last saved at {new Date(autosave.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+											)}
+											{autosave.error && <span className="ml-2 text-amber-300">({autosave.error})</span>}
+										</>
+									) : (
+										<>
+											{anonDraft.statusText}
+											{anonDraft.lastSavedAt && anonDraft.status === 'saved' && (
+												<span className="ml-2">Last saved at {new Date(anonDraft.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+											)}
+										</>
 									)}
-									{autosave.error && <span className="ml-2 text-amber-300">({autosave.error})</span>}
 								</div>
 							</div>
 							<AthleteProfileForm
-								key={`${currentUser?.id || 'anon'}:${autosave.initialProfile ? 'loaded' : 'new'}`}
-								value={autosave.initialProfile ?? undefined}
+								key={`${currentUser?.id || 'anon'}:${currentUser ? (autosave.initialProfile ? 'loaded' : 'new') : (anonDraft.initialProfile ? 'loaded' : 'new')}`}
+								value={currentUser ? (autosave.initialProfile ?? undefined) : (anonDraft.initialProfile ?? undefined)}
 								onSave={async (a) => {
 									setAthlete(a)
 									if (currentUser) {
 										autosave.onDraftChange(a)
 										await autosave.saveNow()
+									} else {
+										anonDraft.onDraftChange(a)
+										await anonDraft.saveNow()
 									}
 								}}
 								onChange={(draft) => {
 									setAthlete(draft)
-									if (currentUser) autosave.onDraftChange(draft)
+									if (currentUser) {
+										autosave.onDraftChange(draft)
+									} else {
+										anonDraft.onDraftChange(draft)
+									}
 								}}
 							/>
 							<div className="flex justify-end">
@@ -651,7 +677,7 @@ function MainApp() {
 						</>
 					)}
 
-					{tab === 'Profile Preview' && <PublicProfile athlete={(autosave.initialProfile || athlete) ?? null} />}
+					{tab === 'Profile Preview' && <PublicProfile athlete={((currentUser ? autosave.initialProfile : anonDraft.initialProfile) || athlete) ?? null} />}
 
 					{tab === 'Recruiting' && (
 						<SectionErrorBoundary>
@@ -701,6 +727,49 @@ function MainApp() {
 
 					{tab === 'Vendor Directory' && <VendorDirectory />}
 
+					{tab === 'Settings' && (
+						<div className="space-y-6">
+							<div className="card p-6">
+								<h2 className="headline text-xl mb-4">Settings</h2>
+								{currentUser ? (
+									<div className="space-y-4">
+										<div>
+											<div className="text-sm text-gray-400 mb-2">Account</div>
+											<div className="text-white">{currentUser.email}</div>
+										</div>
+										<div>
+											<div className="text-sm text-gray-400 mb-2">Cloud Sync</div>
+											<div className="text-white">{cloudAvailable ? 'Enabled' : 'Unavailable'}</div>
+										</div>
+									</div>
+								) : (
+									<div className="space-y-4">
+										<div className="border border-border rounded-lg p-4 bg-mid/30">
+											<h3 className="text-white font-semibold mb-2">Anonymous Mode</h3>
+											<p className="text-gray-300 text-sm mb-4">
+												You're using anonymous mode. Your progress is saved to this device.
+											</p>
+											<Button
+												onClick={() => {
+													navigate('/')
+													setTimeout(() => {
+														document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
+													}, 100)
+												}}
+												className="red-glow"
+											>
+												Join waitlist to save progress to email
+											</Button>
+										</div>
+										<div className="text-sm text-gray-400">
+											<p>To access your data across devices and enable cloud sync, join the waitlist and claim your account when available.</p>
+										</div>
+									</div>
+								)}
+							</div>
+						</div>
+					)}
+
 					{tab === 'Extras' && <Extras />}
 						</div>
 					</div>
@@ -724,6 +793,7 @@ function MainApp() {
 							Athlete
 						</button>
 						<button
+							data-testid="nav-discover-button"
 							type="button"
 							onClick={() => goToTab('Discover')}
 							className={`text-sm px-2 py-2 rounded-md ${tab === 'Discover' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
@@ -778,8 +848,9 @@ function MainApp() {
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Discover') }}>Discover</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Matches') }}>Matches</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Dashboard') }}>Dashboard</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Recruiting</button>
+										<button data-testid="nav-recruiting-button" className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Recruiting</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Profile Preview') }}>Public Profile</button>
+										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Settings') }}>Settings</button>
 										{!currentUser && (
 											<>
 												<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Log In') }}>Log In</button>
@@ -821,7 +892,32 @@ function MainApp() {
 				{/* Diagnostics (dev only or when VITE_DIAGNOSTICS=true) */}
 				{(Observability as any).isDiagnosticsEnabled?.() && <DiagnosticsPanel />}
 
-				<footer className="py-10" />
+				<footer className="py-10">
+					{!currentUser && (
+						<div className="mx-auto max-w-6xl px-4 md:px-6">
+							<div className="card p-4 bg-mid/30 border border-border">
+								<div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+									<div>
+										<p className="text-sm text-gray-300">
+											<span className="font-semibold">Anonymous mode:</span> Your progress is saved to this device.
+										</p>
+									</div>
+									<Button
+										variant="secondary"
+										onClick={() => {
+											navigate('/')
+											setTimeout(() => {
+												document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
+											}, 100)
+										}}
+									>
+										Join waitlist to save progress to email
+									</Button>
+								</div>
+							</div>
+						</div>
+					)}
+				</footer>
 			</div>
 			</ErrorBoundary>
 		</ToastProvider>
@@ -838,29 +934,8 @@ function AppShell() {
 			</div>
 		)
 	}
-	if (loading) {
-		return (
-			<div className="min-h-screen">
-				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${BUILD_ID}`}</div>
-				<div>Loading auth…</div>
-			</div>
-		)
-	}
-	if (!user) {
-		const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
-		return (
-			<div className="min-h-screen">
-				<div className="fixed top-2 right-3 text-xs text-black">{`Build: ${BUILD_ID}`}</div>
-				<div className="p-3 text-sm text-gray-300">
-					You are not signed in.{' '}
-					<a href={`/auth/login?returnTo=${returnTo}`} className="underline">
-						Log in
-					</a>
-				</div>
-				<LoginPage />
-			</div>
-		)
-	}
+	// Don't block rendering - allow unauthenticated access immediately
+	// Session loading happens in background and updates when ready
 	return <MainApp />
 }
 

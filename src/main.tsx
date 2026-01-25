@@ -4,6 +4,10 @@ import RootRouter from './routes/RootRouter'
 import './index.css'
 import { AuthProvider } from './context/AuthContext'
 import { normalizeError } from './lib/normalizeError'
+import { initAnonIdentity } from './lib/anonIdentity'
+
+// Initialize anonymous identity at app start
+initAnonIdentity()
 
 function showBootError(error: unknown) {
 	const rootEl = document.getElementById('root')

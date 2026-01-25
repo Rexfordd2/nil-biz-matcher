@@ -40,20 +40,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			if (!supabase) {
 				if (DEBUG_AUTH) console.log('[auth] refresh: supabase not configured')
 				setUser(null)
+				setInitializing(false)
 				return
 			}
+			
+			// Check localStorage for Supabase session token before making network call
+			// Supabase stores sessions in localStorage with keys like "sb-<project-ref>-auth-token"
+			const hasLocalSession = typeof window !== 'undefined' && 
+				Object.keys(localStorage).some(key => 
+					key.startsWith('sb-') && key.includes('auth-token')
+				)
+			
+			if (!hasLocalSession) {
+				// No session indicators - skip network call
+				if (DEBUG_AUTH) console.log('[auth] refresh: no session indicators, skipping getSession')
+				setUser(null)
+				setInitializing(false)
+				return
+			}
+			
 			const { data, error } = await supabase.auth.getSession()
 			if (error) {
-				// eslint-disable-next-line no-console
-				console.warn('[auth] getSession error', error)
+				// Silently handle errors - don't show network errors for missing sessions
+				if (!error.message?.includes('session') && !error.message?.includes('token')) {
+					// eslint-disable-next-line no-console
+					console.warn('[auth] getSession error', error)
+				}
 			}
 			const s = data?.session ?? null
 			const mapped = mapSupabaseUserToCurrent(s?.user)
 			setUser(mapped)
 			if (DEBUG_AUTH) console.log('[auth] refresh: auth getSession end', { hasSession: Boolean(s), hasUser: Boolean(mapped) })
 		} catch (e) {
+			// Silently handle exceptions - don't block rendering
 			// eslint-disable-next-line no-console
-			console.warn('[auth] getSession exception', e)
+			if (DEBUG_AUTH) console.warn('[auth] getSession exception', e)
 			setUser(null)
 		} finally {
 			setInitializing(false)
@@ -82,20 +103,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					if (DEBUG_AUTH) console.log('[auth] boot: supabase not configured')
 					if (!mounted) return
 					setUser(null)
+					setInitializing(false)
 					return
 				}
+				
+				// Check localStorage for Supabase session token before making network call
+				// Supabase stores sessions in localStorage with keys like "sb-<project-ref>-auth-token"
+				const hasLocalSession = typeof window !== 'undefined' && 
+					Object.keys(localStorage).some(key => 
+						key.startsWith('sb-') && key.includes('auth-token')
+					)
+				
+				if (!hasLocalSession) {
+					// No session indicators - skip network call
+					if (DEBUG_AUTH) console.log('[auth] boot: no session indicators, skipping getSession')
+					if (!mounted) return
+					setUser(null)
+					setInitializing(false)
+					return
+				}
+				
 				const { data, error } = await supabase.auth.getSession()
 				if (error) {
-					// eslint-disable-next-line no-console
-					console.warn('[auth] getSession error', error)
+					// Silently handle errors - don't show network errors for missing sessions
+					if (!error.message?.includes('session') && !error.message?.includes('token')) {
+						// eslint-disable-next-line no-console
+						console.warn('[auth] getSession error', error)
+					}
 				}
 				if (!mounted) return
 				const s = data?.session ?? null
 				setUser(mapSupabaseUserToCurrent(s?.user))
 				if (DEBUG_AUTH) console.log('[auth] boot: auth getSession end', { hasSession: Boolean(s) })
 			} catch (e) {
+				// Silently handle exceptions - don't block rendering
 				// eslint-disable-next-line no-console
-				console.warn('[auth] getSession exception', e)
+				if (DEBUG_AUTH) console.warn('[auth] getSession exception', e)
 				if (!mounted) return
 				setUser(null)
 			} finally {

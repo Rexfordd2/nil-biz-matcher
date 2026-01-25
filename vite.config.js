@@ -93,12 +93,12 @@ function debugRoutesProtectionPlugin() {
                 return;
             }
             var diagnosticsEnabled = String(process.env.VITE_DIAGNOSTICS || '').toLowerCase() === 'true';
-            var diagnosticsExplicitlySet = process.env.VITE_DIAGNOSTICS !== undefined;
-            var hasDebugKey = Boolean(process.env.VITE_DEBUG_KEY);
-            // If neither diagnostics nor debug key is set in production, fail the build
-            // This ensures explicit opt-in for debug access in production
-            // Allow builds when VITE_DIAGNOSTICS is explicitly set to false (intentional configuration)
-            if (!diagnosticsEnabled && !hasDebugKey && !diagnosticsExplicitlySet) {
+            var hasDebugKey = Boolean(process.env.VITE_DEBUG_KEY && process.env.VITE_DEBUG_KEY.trim().length > 0);
+            // Production builds require explicit opt-in for debug access:
+            // - If VITE_DIAGNOSTICS=true → allow build (full diagnostics enabled)
+            // - Else if VITE_DEBUG_KEY is set (non-empty) → allow build (debug key protection)
+            // - Else → fail build (no protection configured)
+            if (!diagnosticsEnabled && !hasDebugKey) {
                 this.error('[SECURITY] Debug routes must be protected in production builds.\n' +
                     'To enable debug access in production, set one of:\n' +
                     '  - VITE_DIAGNOSTICS=true (enables all debug routes)\n' +
@@ -122,6 +122,20 @@ export default defineConfig({
     plugins: [
         react(),
         debugRoutesProtectionPlugin(),
+        {
+            name: 'inject-build-id-html',
+            transformIndexHtml: function (html) {
+                // Preserve OG/Twitter meta tags if they exist, inject build ID
+                var result = html.replace('<div id="root">', "<div id=\"root\"><div data-testid=\"build-id\" style=\"display:none\">".concat(__buildId, "</div>"));
+                // Ensure OG tags are preserved (Vite may strip them, so re-add if missing)
+                if (!result.includes('og:title')) {
+                    // If OG tags are missing, inject them before closing </head>
+                    var ogTags = "\n\t\t<!-- Open Graph / Facebook -->\n\t\t<meta property=\"og:type\" content=\"website\" />\n\t\t<meta property=\"og:url\" content=\"https://athlete-ledger.vercel.app/\" />\n\t\t<meta property=\"og:title\" content=\"Athlete Ledger - Connect with College Coaches\" />\n\t\t<meta property=\"og:description\" content=\"The platform for athletes to discover and connect with college coaches. Showcase your profile and find your perfect match.\" />\n\t\t<meta property=\"og:image\" content=\"https://athlete-ledger.vercel.app/athlete-ledger-logo.png\" />\n\t\t\n\t\t<!-- Twitter -->\n\t\t<meta name=\"twitter:card\" content=\"summary_large_image\" />\n\t\t<meta name=\"twitter:url\" content=\"https://athlete-ledger.vercel.app/\" />\n\t\t<meta name=\"twitter:title\" content=\"Athlete Ledger - Connect with College Coaches\" />\n\t\t<meta name=\"twitter:description\" content=\"The platform for athletes to discover and connect with college coaches. Showcase your profile and find your perfect match.\" />\n\t\t<meta name=\"twitter:image\" content=\"https://athlete-ledger.vercel.app/athlete-ledger-logo.png\" />";
+                    result = result.replace('</head>', "".concat(ogTags, "\n\t</head>"));
+                }
+                return result;
+            }
+        },
         {
             name: 'local-api-middleware',
             configureServer: function (server) {

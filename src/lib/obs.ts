@@ -3,7 +3,7 @@
 // - In-memory ring buffer for Diagnostics panel
 // - Helpers for requestId generation and timing
 
-export type ObservabilityFeature = 'discover' | 'recruitment' | 'discover_api' | 'recruitment_api' | 'ui';
+export type ObservabilityFeature = 'discover' | 'recruitment' | 'discover_api' | 'recruitment_api' | 'ui' | 'user_data';
 
 export type ObservabilityStatus =
 	| 'ui_action'

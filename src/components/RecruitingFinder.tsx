@@ -16,8 +16,8 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Observability, { generateRequestId } from '../lib/obs'
 import { ValidationError } from '../validation/validators'
-import { normalizeError, getUserErrorMessage, shouldShowCachedWithRetry, requiresUserAction, shouldPreserveState } from '../lib/errorHandling'
-import { navigate } from '../routes/RootRouter'
+import { normalizeError, getUserErrorMessage, shouldShowCachedWithRetry, shouldPreserveState } from '../lib/errorHandling'
+import { saveUserData } from '../lib/userData'
 
 export default function RecruitingFinder({ athlete, onRequireProfile }: { athlete: AthleteProfile | null; onRequireProfile?: () => void }) {
 	const { show } = useToast()
@@ -62,6 +62,15 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 			meta: { sport, level, region }
 		})
 
+		// Save user data (non-blocking)
+		saveUserData('recruiting_search', {
+			sport,
+			region,
+			ts: new Date().toISOString()
+		}).catch(() => {
+			// Errors are already logged in saveUserData
+		})
+
 		setLoading(true)
 		setError(null)
 		setIsStale(false)
@@ -99,11 +108,7 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 				}
 			}
 			
-			// Handle unauthorized errors - redirect to login
-			if (requiresUserAction(normalized)) {
-				const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
-				navigate(`/auth/login?returnTo=${returnTo}`, true)
-			}
+			// Errors are handled and displayed to user, but no redirects
 		} finally {
 			// Only clear loading if this is the latest request
 			if (myVersion === reqVersionRef.current) setLoading(false)
@@ -193,7 +198,7 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 		<div className="space-y-4">
 			<Card title="College & Semi-Pro Finder">
 				<div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-					<Input value={sport} onChange={e => setSport(e.target.value)} placeholder="Sport (e.g., Football)" />
+					<Input data-testid="recruiting-sport-input" value={sport} onChange={e => setSport(e.target.value)} placeholder="Sport (e.g., Football)" />
 					<Select value={level} onChange={e => setLevel(e.target.value)}>
 						<option value="">Any Level</option>
 						<option value="ncaa_d1">NCAA_D1</option>
@@ -203,14 +208,14 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 						<option value="juco">JUCO</option>
 						<option value="semi_pro">SEMI_PRO</option>
 					</Select>
-					<Input value={region} onChange={e => setRegion(e.target.value)} placeholder="Region/state (e.g., TX)" />
+					<Input data-testid="recruiting-region-input" value={region} onChange={e => setRegion(e.target.value)} placeholder="Region/state (e.g., TX)" />
 					<div className="md:col-span-2 flex gap-2">
-						<Button onClick={runSearch} disabled={loading}>{loading ? 'Searching…' : 'Search'}</Button>
+						<Button data-testid="recruiting-search-button" onClick={runSearch} disabled={loading}>{loading ? 'Searching…' : 'Search'}</Button>
 						{!athlete && <div className="subtle text-sm self-center">Create your profile for better fit analysis.</div>}
 					</div>
 				</div>
 				{error && (
-					<div className="mt-2 text-sm text-red-400 flex items-center justify-between">
+					<div data-testid="recruiting-error-banner" className="mt-2 text-sm text-red-400 flex items-center justify-between">
 						<span>{error}</span>
 						<Button variant="secondary" onClick={runSearch} disabled={loading}>Retry</Button>
 					</div>
@@ -218,9 +223,9 @@ export default function RecruitingFinder({ athlete, onRequireProfile }: { athlet
 			</Card>
 
 			{results.length === 0 && !loading ? (
-				<div className="text-gray-400 text-sm">No matches found.</div>
+				<div data-testid="recruiting-results-container" className="text-gray-400 text-sm">No matches found.</div>
 			) : (
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+				<div data-testid="recruiting-results-container" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 					{isStale && (
 						<div className="md:col-span-2 rounded-md border border-amber-400 bg-amber-900/30 px-3 py-2 text-amber-200 text-sm">
 							Showing cached results — retrying…

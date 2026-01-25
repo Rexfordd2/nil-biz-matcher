@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import App from '../App'
 import Home from '../pages/Home'
+import Demo from '../pages/Demo'
 import Terms from '../pages/Terms'
 import Privacy from '../pages/Privacy'
 import Onboarding from '../pages/Onboarding'
@@ -17,6 +18,7 @@ import { isDebugAccessAllowed } from '../lib/debugAccess'
 
 type RouteEntry =
 	| { key: 'home' }
+	| { key: 'demo' }
 	| { key: 'login' }
 	| { key: 'signup' }
 	| { key: 'reset' }
@@ -31,6 +33,7 @@ type RouteEntry =
 
 function parseLocation(pathname: string): RouteEntry {
 	if (pathname === '/' || pathname === '') return { key: 'home' }
+	if (pathname.startsWith('/demo')) return { key: 'demo' }
 	if (pathname.startsWith('/auth/login')) return { key: 'login' }
 	if (pathname.startsWith('/auth/signup')) return { key: 'signup' }
 	if (pathname.startsWith('/terms')) return { key: 'terms' }
@@ -60,8 +63,7 @@ export function navigate(to: string, replace: boolean = false) {
 
 export default function RootRouter() {
 	const [loc, setLoc] = useState<RouteEntry>(() => parseLocation(window.location.pathname))
-	const { user, initializing } = useAuth()
-	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
+	const { user } = useAuth()
 
 	useEffect(() => {
 		function onPop() {
@@ -71,18 +73,9 @@ export default function RootRouter() {
 		return () => window.removeEventListener('popstate', onPop)
 	}, [])
 
-	// Auth guard for /app/*
-	useEffect(() => {
-		if (DEBUG_AUTH) console.log('[router] guard check', { route: loc.key, initializing, hasUser: Boolean(user) })
-		// Do not redirect while initializing
-		if (initializing) return
-		// Only guard app or onboarding sections
-		if ((loc.key === 'app' || loc.key === 'onboarding') && !user) {
-			const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
-			if (DEBUG_AUTH) console.log('[router] redirect -> /auth/login', { returnTo })
-			navigate(`/auth/login?returnTo=${returnTo}`, true)
-		}
-	}, [loc, user, initializing])
+	// Auth guard removed - allow unauthenticated access to all routes
+	// /app is the main experience and is accessible to anonymous users
+	// /demo is an optional marketing demo, also accessible without authentication
 
 	const outlet = useMemo(() => {
 		// Check debug access for debug routes
@@ -91,6 +84,8 @@ export default function RootRouter() {
 		switch (loc.key) {
 			case 'home':
 				return <Home />
+			case 'demo':
+				return <Demo />
 			case 'debug_discover_recruiting':
 				// Protect debug routes: return Home (404-like behavior) if access not allowed
 				if (!hasDebugAccess) {
@@ -124,7 +119,8 @@ export default function RootRouter() {
 			case 'status':
 				return <Status />
 			case 'app':
-				// Render authenticated app shell under /app/*
+				// Render app shell under /app/* - accessible to anonymous users
+				// Components handle null currentUser gracefully using anonId-based behavior
 				return <App />
 			case 'login':
 			case 'signup':

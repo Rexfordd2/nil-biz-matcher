@@ -10,8 +10,8 @@ import { listSavedBusinesses, removeSavedBusiness, saveBusiness, type SavedBusin
 import Observability, { generateRequestId } from '../lib/obs'
 import { supabaseEnvConfigured } from '../lib/supabaseClient'
 import { useSupabaseSession } from '../context/SupabaseSessionContext'
-import { normalizeError, requiresUserAction } from '../lib/errorHandling'
-import { navigate } from '../routes/RootRouter'
+import { saveUserData } from '../lib/userData'
+import { normalizeError } from '../lib/errorHandling'
 
 export default function Discover() {
 	const hasClientKey = useMemo(() => {
@@ -64,16 +64,7 @@ export default function Discover() {
 	const { results, loading, error, isStale, selected, setSelected, retry } = usePlacesSearch(searchParams)
 	const [hasSearched, setHasSearched] = useState(false)
 
-	// Handle unauthorized errors - redirect to login
-	useEffect(() => {
-		if (error) {
-			const normalized = normalizeError(error)
-			if (requiresUserAction(normalized)) {
-				const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
-				navigate(`/auth/login?returnTo=${returnTo}`, true)
-			}
-		}
-	}, [error])
+	// Errors are handled and displayed to user, but no redirects
 
 	function onSearch() {
 		if (!hasClientKey) return
@@ -87,6 +78,16 @@ export default function Discover() {
 			requestId: reqId,
 			meta: { query: whatText, where: whereText }
 		})
+		
+		// Save user data (non-blocking)
+		saveUserData('discover_search', {
+			what: whatText,
+			where: whereText,
+			ts: new Date().toISOString()
+		}).catch(() => {
+			// Errors are already logged in saveUserData
+		})
+		
 		setSearchParams({ query: whatText, locationText: whereText, locationPlaceId: wherePlaceId, requestId: reqId })
 	}
 
@@ -193,24 +194,26 @@ export default function Discover() {
 				)}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 					<Input
+						data-testid="discover-what-input"
 						value={whatText}
 						onChange={e => setWhatText(e.target.value)}
 						placeholder="What (pizza, gym, store...)"
 					/>
 					<Input
+						data-testid="discover-where-input"
 						ref={whereInputRef}
 						value={whereText}
 						onChange={e => { setWhereText(e.target.value); setWherePlaceId(undefined) }}
 						placeholder="Where (City, ST or zip)"
 					/>
 					<div className="flex items-center">
-						<Button onClick={onSearch} className="w-full" disabled={!hasClientKey || loading || !whatText || !whereText}>
+						<Button data-testid="discover-search-button" onClick={onSearch} className="w-full" disabled={!hasClientKey || loading || !whatText || !whereText}>
 							{loading ? 'Searching…' : 'Search'}
 						</Button>
 					</div>
 				</div>
 				{error && (
-					<div className="mt-3 text-sm text-red-300 flex items-center justify-between">
+					<div data-testid="discover-error-banner" className="mt-3 text-sm text-red-300 flex items-center justify-between">
 						<span>{isStale ? 'Showing cached results — ' : ''}{error}</span>
 						<Button variant="secondary" onClick={() => retry()} disabled={loading}>Retry</Button>
 					</div>
@@ -218,7 +221,7 @@ export default function Discover() {
 			</Card>
 
 			{list.length === 0 && !loading && (
-				<div className="text-gray-400 text-sm">
+				<div data-testid="discover-results-container" className="text-gray-400 text-sm">
 					{hasSearched ? 'No matches found.' : 'Search to see results.'}
 				</div>
 			)}
@@ -237,7 +240,7 @@ export default function Discover() {
 			)}
 
 			{list.length > 0 && !loading && (
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+				<div data-testid="discover-results-container" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 					{isStale && (
 						<div className="md:col-span-2 rounded-md border border-amber-400 bg-amber-900/30 px-3 py-2 text-amber-200 text-sm">
 							Showing cached results — retrying…

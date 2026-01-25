@@ -26,10 +26,31 @@ export default function AppHome({ onEditProfile, onLogout }: Props) {
 		;(async () => {
 			setLoading(true)
 			setError(null)
+			
+			// Check localStorage for Supabase session token before making network call
+			// Supabase stores sessions in localStorage with keys like "sb-<project-ref>-auth-token"
+			const hasLocalSession = typeof window !== 'undefined' && 
+				Object.keys(localStorage).some(key => 
+					key.startsWith('sb-') && key.includes('auth-token')
+				)
+			
+			if (!hasLocalSession) {
+				// No session - skip network call
+				if (!mounted) return
+				setLoading(false)
+				setError(null) // Don't show error for missing session
+				return
+			}
+			
 			const { data: userData, error: userErr } = await supabase.auth.getUser()
 			if (userErr || !userData?.user) {
 				if (!mounted) return
-				setError(userErr?.message || 'Not authenticated')
+				// Only show error if it's not a missing session error
+				if (userErr && !userErr.message?.includes('session') && !userErr.message?.includes('token')) {
+					setError(userErr.message)
+				} else {
+					setError(null) // Don't show error for missing session
+				}
 				setLoading(false)
 				return
 			}
