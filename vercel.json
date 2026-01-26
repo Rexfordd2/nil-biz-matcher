@@ -15,9 +15,23 @@
     }
   ],
   "routes": [
-    { "src": "/healthz", "dest": "/api/healthz" },
-    { "src": "/demo", "dest": "/demo.html" },
-    { "handle": "filesystem" },
-    { "src": "/((?!api/).*)", "dest": "/index.html" }
-  ]
+    {
+      "src": "/healthz",
+      "dest": "/api/healthz"
+    },
+    {
+      "src": "/demo",
+      "dest": "/demo.html"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/((?!api/).*)",
+      "dest": "/index.html"
+    }
+  ],
+  "git": {
+    "submodules": false
+  }
 }
