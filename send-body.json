@@ -1,0 +1,8 @@
+{
+  "athlete": { "id": "athlete-123", "fullName": "Jane Doe", "email": "jane@example.com" },
+  "clipId": "cmipeovu8000212dqkae91abj",
+  "coachIds": ["cmipeovbw000012dqblxqkxzh", "cmipeovo1000112dqapcvwtu2"],
+  "subject": "Highlight: Jane Doe - 2025",
+  "body": "Coach, I'd love your feedback on my latest highlight."
+}
+

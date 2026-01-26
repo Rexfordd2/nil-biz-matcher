@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+}
+
+/* Base light theme defaults */
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+    font-feature-settings: "ss01" on, "ss02" on;
+  }
+  h1, .h1 { @apply text-2xl font-semibold leading-tight text-slate-900; }
+  h2, .h2 { @apply text-lg font-semibold text-slate-900; }
+  label, .label { @apply text-xs font-medium text-slate-700; }
+}
+
+/* Containers and sections */
+.page-shell {
+  @apply max-w-6xl mx-auto px-4 md:px-6;
+}
+.section {
+  @apply flex flex-col space-y-6;
+}
+
+/* Card primitive */
+.card {
+  @apply bg-white text-black border border-slate-200 rounded-2xl shadow-sm p-6;
+}
+
+/* Button primitives */
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 min-h-10 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.btn-primary {
+	@apply bg-slate-900 text-white hover:bg-slate-800;
+}
+.btn-ghost {
+  @apply bg-transparent text-slate-700 hover:bg-slate-100;
+}
+.btn-secondary {
+  @apply bg-white text-slate-900 border border-slate-300 hover:bg-slate-50;
+}
+
+/* Badges */
+.badge {
+  @apply inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-xs font-bold;
+}
+.badge-perfect { @apply bg-fit-perfect/15 text-fit-perfect ring-1 ring-fit-perfect/30; }
+.badge-good { @apply bg-fit-good/15 text-fit-good ring-1 ring-fit-good/30; }
+.badge-stretch { @apply bg-fit-stretch/15 text-fit-stretch ring-1 ring-fit-stretch/30; }
+.badge-poor { @apply bg-fit-poor/15 text-fit-poor ring-1 ring-fit-poor/30; }
+
+.level-local { @apply bg-brand-red/15 text-brand-red ring-1 ring-brand-red/30; }
+.level-regional { @apply bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30; }
+.level-national { @apply bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30; }
+
+.headline { /* keep existing class name but align to new typographic scale */
+  @apply text-slate-900 font-semibold tracking-tight;
+}
+.subtle {
+  @apply text-slate-600;
+}
+
+.red-glow {
+  /* compatibility name; neutral glow in light */
+  box-shadow: 0 0 0 2px rgba(51, 65, 85, 0.2), 0 0 16px rgba(15, 23, 42, 0.15);
+}
+
+.fade-in {
+  animation: fade-in 300ms ease-out;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Light theme overrides for legacy gray/white text utilities used in components */
+.light-theme .text-white {
+  color: #0f172a; /* slate-900 */
+}
+.light-theme .text-gray-200 {
+  color: #334155; /* slate-700 */
+}
+.light-theme .text-gray-300 {
+  color: #475569; /* slate-600 */
+}
+.light-theme .text-gray-400 {
+  color: #475569; /* slate-600 */
+}
+/* Ensure dark buttons keep white text even in light theme override contexts */
+.light-theme .btn-primary {
+  color: #fff;
+}
+
+/* Forms */
+.ui-input,
+input.ui-input,
+select.ui-input,
+textarea.ui-input {
+  @apply w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-3 py-2
+		focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400;
+}
+
+/* Tables */
+.table thead th {
+  @apply text-xs font-semibold uppercase tracking-wide text-black/70;
+}
+.table th,
+.table td {
+  @apply px-3 py-2 align-top;
+}
+
+/* Print styles */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  html,
+  body,
+  #root {
+    height: auto !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt;
+  }
+  /* Hide app chrome and interactive UI */
+  .no-print,
+  nav,
+  .sidebar,
+  .tabs,
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost {
+    display: none !important;
+  }
+  /* Ensure clean, unclipped sections */
+  .card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+    border-color: #e5e7eb !important; /* slate-200 */
+    color: #000 !important;
+  }
+  a {
+    color: #000 !important;
+    text-decoration: underline;
+  }
+}

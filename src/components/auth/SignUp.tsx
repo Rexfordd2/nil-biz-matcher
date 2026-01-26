@@ -1,0 +1,96 @@
+import { useState } from 'react'
+import Button from '../ui/Button'
+import Input from '../ui/Input'
+import Card from '../ui/Card'
+import { type CurrentUser } from '../../utils/auth'
+import { useToast } from '../ui/Toast'
+import { useAuth } from '../../context/AuthContext'
+import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
+
+type Props = {
+	onSignedIn: (user: CurrentUser) => void
+}
+
+export default function SignUp({ onSignedIn }: Props) {
+	const { show } = useToast()
+	const { signup } = useAuth()
+	const [fullName, setFullName] = useState('')
+	const [email, setEmail] = useState('')
+	const [phone, setPhone] = useState('')
+	const [marketingConsent, setMarketingConsent] = useState(false)
+	const [termsAccepted, setTermsAccepted] = useState(false)
+	const [loading, setLoading] = useState(false)
+
+	async function handleSubmit(e: React.FormEvent) {
+		e.preventDefault()
+		if (!email || !fullName) {
+			show('Please enter your name and email')
+			return
+		}
+		if (!termsAccepted) {
+			show('You must accept the Terms of Use and Privacy Policy')
+			return
+		}
+		setLoading(true)
+		try {
+			const user = await signup({ email, fullName, phone: phone || undefined, marketingConsent })
+			onSignedIn(user)
+		} catch (err: any) {
+			show(friendlyAuthErrorMessage(err, { context: 'signup' }) || "We couldn't create your account. Please try again shortly.")
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	return (
+		<div className="max-w-lg mx-auto">
+			<Card title="Create your Athlete Ledger account">
+				<form className="space-y-4" onSubmit={handleSubmit}>
+					<label className="flex flex-col gap-2">
+						<span className="subtle text-sm">Full name</span>
+						<Input
+							type="text"
+							value={fullName}
+							onChange={e => setFullName(e.target.value)}
+							placeholder="Your full name"
+						/>
+					</label>
+					<label className="flex flex-col gap-2">
+						<span className="subtle text-sm">Email</span>
+						<Input
+							type="email"
+							value={email}
+							onChange={e => setEmail(e.target.value)}
+							placeholder="you@example.com"
+						/>
+					</label>
+					<label className="flex flex-col gap-2">
+						<span className="subtle text-sm">Phone (optional)</span>
+						<Input
+							type="tel"
+							value={phone}
+							onChange={e => setPhone(e.target.value)}
+							placeholder="(555) 123-4567"
+						/>
+					</label>
+					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
+						<input type="checkbox" checked={marketingConsent} onChange={e => setMarketingConsent(e.target.checked)} />
+						<span>I consent to receive educational messages and offers related to Athlete Ledger and NIL opportunities.</span>
+					</label>
+					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
+						<input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />
+						<span>I agree to the <a href="/terms" className="underline">Terms of Use</a> and <a href="/privacy" className="underline">Privacy Policy</a>.</span>
+					</label>
+					<div className="pt-2">
+						<Button type="submit" className="red-glow" disabled={loading}>{loading ? 'Creating…' : 'Create my Athlete Ledger account'}</Button>
+					</div>
+				</form>
+				<div className="text-xs text-gray-400 mt-3">
+					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
+				</div>
+			</Card>
+		</div>
+	)
+}
+
+
