@@ -18,6 +18,7 @@ $ASSET_URL = if ($ASSET_PATH) { "https://athlete-ledger.vercel.app$ASSET_PATH" }
 
 # Fetch the JS bundle
 $GREP_PROOF = "none"
+$matchedLines = @()
 if ($ASSET_URL -ne "unknown") {
     Write-Host "Fetching JS bundle: $ASSET_URL"
     $bundleResponse = Invoke-WebRequest -Uri "$ASSET_URL`?cb=$timestamp" -UseBasicParsing
@@ -25,7 +26,6 @@ if ($ASSET_URL -ne "unknown") {
     # Search for waitlist-related strings in the bundle
     $searchPatterns = @('WaitlistGate', 'al_waitlist_joined', 'waitlist_gate')
     $lines = $bundleResponse.Content -split "`n"
-    $matchedLines = @()
     
     foreach ($line in $lines) {
         if ($matchedLines.Count -ge 20) { break }
@@ -52,8 +52,9 @@ Write-Host "ASSET_URL: $ASSET_URL"
 Write-Host "GREP_PROOF:"
 Write-Host $GREP_PROOF
 
-# Exit with code 1 if conditions are met
-if ($HOMEPAGE_BUILD_ID -eq "ac87f4b" -or $GREP_PROOF -eq "none") {
+# Exit with code 1 if conditions are NOT met
+$hasWaitlistCode = $matchedLines.Count -gt 0
+if ($HOMEPAGE_BUILD_ID -eq "ac87f4b" -or -not $hasWaitlistCode) {
     Write-Host "`nVerification FAILED: Old build or missing waitlist code detected"
     exit 1
 }
