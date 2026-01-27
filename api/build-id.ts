@@ -2,8 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 function deriveBuildId(): string {
 	const raw =
-		process.env.VERCEL_GIT_COMMIT_SHA ||
 		process.env.VITE_BUILD_ID ||
+		process.env.VERCEL_GIT_COMMIT_SHA ||
 		process.env.GIT_COMMIT_SHA ||
 		process.env.COMMIT_REF ||
 		''
@@ -18,18 +18,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	}
 	
 	const buildId = deriveBuildId()
-	const commit = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VITE_BUILD_ID || 'unknown'
+	const gitCommitSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VITE_BUILD_ID || ''
+	const timestamp = new Date().toISOString()
 	
 	const payload = {
 		buildId,
-		commit
+		gitCommitSha,
+		timestamp
 	}
 	
-	// Cache-busting headers
-	res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+	// Aggressive cache-busting headers
+	res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
 	res.setHeader('Pragma', 'no-cache')
 	res.setHeader('Expires', '0')
 	res.setHeader('CDN-Cache-Control', 'no-store')
+	res.setHeader('Surrogate-Control', 'no-store')
 	
 	return res.status(200).json(payload)
 }

@@ -8,6 +8,7 @@ on:
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
   deploy:
@@ -15,6 +16,28 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "❌ ERROR: VERCEL_TOKEN secret is not set"
+            echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "Get token from: https://vercel.com/account/tokens"
+            exit 1
+          fi
+          if [ -z "${{ secrets.VERCEL_ORG_ID }}" ]; then
+            echo "❌ ERROR: VERCEL_ORG_ID secret is not set"
+            echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "Value should be: team_3afvMrd9BHXAk9ULFIuSRIfo"
+            exit 1
+          fi
+          if [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "❌ ERROR: VERCEL_PROJECT_ID secret is not set"
+            echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "Value should be: prj_omEmNLLhHETdIZqmBSEkAeJCu0ha"
+            exit 1
+          fi
+          echo "✅ All required secrets are set"
+      
       - name: Checkout code
         uses: actions/checkout@v4
       
@@ -28,23 +51,24 @@ jobs:
         run: npm ci
       
       - name: Pull Vercel environment information
-        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID
       
       - name: Build project artifacts
-        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel build --prod --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID
       
       - name: Deploy prebuilt artifacts to Vercel
         id: deploy
         run: |
-          DEPLOYMENT_URL=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tee /dev/stderr | grep -oP 'https://[^\s]+' | tail -1)
+          DEPLOYMENT_URL=$(npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID 2>&1 | tee /dev/stderr | grep -oP 'https://[^\s]+' | tail -1)
           echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
           echo "✅ Deployed to: $DEPLOYMENT_URL"
       
       - name: Print deployment info
         run: |
           echo "Deployment URL: ${{ steps.deploy.outputs.url }}"
-          echo "Git SHA: ${{ github.sha }}"
-          echo "Short SHA: $(echo ${{ github.sha }} | cut -c1-7)"
+          echo "Git SHA (full): ${{ github.sha }}"
+          echo "Git SHA (short): $(echo ${{ github.sha }} | cut -c1-7)"
+          echo "Expected in /api/build-id: gitCommitSha should equal ${{ github.sha }}"
 
   verify:
     name: Verify Production Deployment
@@ -58,50 +82,66 @@ jobs:
       - name: Check /api/healthz
         id: healthz
         run: |
-          echo "Fetching https://athlete-ledger.vercel.app/api/healthz"
-          RESPONSE=$(curl -s https://athlete-ledger.vercel.app/api/healthz)
+          echo "Fetching https://athlete-ledger.vercel.app/api/healthz?cb=${{ github.run_id }}"
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" "https://athlete-ledger.vercel.app/api/healthz?cb=${{ github.run_id }}")
+          echo "HTTP Status: $HTTP_CODE"
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "❌ ERROR: /api/healthz returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+          RESPONSE=$(cat response.json)
           echo "Response: $RESPONSE"
           BUILD_ID=$(echo $RESPONSE | jq -r '.buildId')
           echo "buildId=$BUILD_ID" >> $GITHUB_OUTPUT
           echo "Build ID from healthz: $BUILD_ID"
+          
+          # Fail if still serving old build
+          if [ "$BUILD_ID" = "ac87f4b" ]; then
+            echo "❌ FAILED: /api/healthz is still serving old build (ac87f4b)"
+            exit 1
+          fi
       
       - name: Check /api/build-id
         id: build_id
         run: |
-          echo "Fetching https://athlete-ledger.vercel.app/api/build-id"
-          RESPONSE=$(curl -s https://athlete-ledger.vercel.app/api/build-id)
-          echo "Response: $RESPONSE"
-          BUILD_ID=$(echo $RESPONSE | jq -r '.buildId')
-          COMMIT=$(echo $RESPONSE | jq -r '.commit')
-          echo "buildId=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
-          echo "Build ID: $BUILD_ID"
-          echo "Commit: $COMMIT"
-      
-      - name: Verify deployment is current
-        run: |
-          CURRENT_SHA="${{ github.sha }}"
-          SHORT_SHA=$(echo $CURRENT_SHA | cut -c1-7)
-          BUILD_ID="${{ steps.build_id.outputs.buildId }}"
-          COMMIT="${{ steps.build_id.outputs.commit }}"
-          HEALTHZ_BUILD_ID="${{ steps.healthz.outputs.buildId }}"
-          
-          echo "Expected short SHA: $SHORT_SHA"
-          echo "Build ID from /api/build-id: $BUILD_ID"
-          echo "Commit from /api/build-id: $COMMIT"
-          echo "Build ID from /api/healthz: $HEALTHZ_BUILD_ID"
-          
-          # Check if still serving old build
-          if [ "$BUILD_ID" = "ac87f4b" ] || [ "$HEALTHZ_BUILD_ID" = "ac87f4b" ]; then
-            echo "❌ FAILED: Production is still serving old build (ac87f4b)"
+          echo "Fetching https://athlete-ledger.vercel.app/api/build-id?cb=${{ github.run_id }}"
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" "https://athlete-ledger.vercel.app/api/build-id?cb=${{ github.run_id }}")
+          echo "HTTP Status: $HTTP_CODE"
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "❌ ERROR: /api/build-id returned HTTP $HTTP_CODE"
             exit 1
           fi
+          RESPONSE=$(cat response.json)
+          echo "Response: $RESPONSE"
+          BUILD_ID=$(echo $RESPONSE | jq -r '.buildId // empty')
+          GIT_COMMIT_SHA=$(echo $RESPONSE | jq -r '.gitCommitSha // empty')
+          echo "buildId=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "gitCommitSha=$GIT_COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "Build ID: $BUILD_ID"
+          echo "Git Commit SHA: $GIT_COMMIT_SHA"
           
-          # Check if build ID matches current commit
-          if [[ "$BUILD_ID" == *"$SHORT_SHA"* ]] || [[ "$COMMIT" == *"$SHORT_SHA"* ]] || [[ "$COMMIT" == *"$CURRENT_SHA"* ]]; then
-            echo "✅ SUCCESS: Production is serving current commit ($SHORT_SHA)"
+          if [ -z "$BUILD_ID" ]; then
+            echo "❌ ERROR: buildId is missing or empty in response"
+            exit 1
+          fi
+      
+      - name: Verify deployment matches current commit
+        run: |
+          EXPECTED_SHA="${{ github.sha }}"
+          BUILD_ID="${{ steps.build_id.outputs.buildId }}"
+          GIT_COMMIT_SHA="${{ steps.build_id.outputs.gitCommitSha }}"
+          HEALTHZ_BUILD_ID="${{ steps.healthz.outputs.buildId }}"
+          
+          echo "Expected SHA: $EXPECTED_SHA"
+          echo "Build ID from /api/build-id: $BUILD_ID"
+          echo "Git Commit SHA from /api/build-id: $GIT_COMMIT_SHA"
+          echo "Build ID from /api/healthz: $HEALTHZ_BUILD_ID"
+          
+          # Check if gitCommitSha matches expected SHA (starts with or equals)
+          if [[ "$GIT_COMMIT_SHA" == "$EXPECTED_SHA"* ]] || [[ "$GIT_COMMIT_SHA" == "$EXPECTED_SHA" ]]; then
+            echo "✅ SUCCESS: gitCommitSha ($GIT_COMMIT_SHA) matches expected SHA ($EXPECTED_SHA)"
             exit 0
           else
-            echo "❌ FAILED: Build ID ($BUILD_ID) and commit ($COMMIT) do not match expected SHA ($SHORT_SHA)"
+            echo "❌ FAILED: gitCommitSha ($GIT_COMMIT_SHA) does NOT match expected SHA ($EXPECTED_SHA)"
             exit 1
           fi
