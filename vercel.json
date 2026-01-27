@@ -14,21 +14,18 @@
       ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/healthz",
-      "dest": "/api/healthz"
+      "source": "/healthz",
+      "destination": "/api/healthz"
     },
     {
-      "src": "/demo",
-      "dest": "/demo.html"
+      "source": "/demo",
+      "destination": "/demo.html"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/((?!api/).*)",
-      "dest": "/index.html"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ],
   "git": {
