@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 
 $url = "https://athlete-ledger.vercel.app/api/build-id"
 $cacheBuster = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$fullUrl = "$url?cb=$cacheBuster"
+$fullUrl = "${url}?cb=${cacheBuster}"
 
 Write-Host "Fetching build info from: $fullUrl"
 Write-Host ""
@@ -23,13 +23,13 @@ try {
     # Check if it's the expected new commit
     $expectedCommit = "3627261"
     if ($response.buildId -match $expectedCommit -or $response.commit -match $expectedCommit) {
-        Write-Host "✓ SUCCESS: Production is serving commit >= $expectedCommit" -ForegroundColor Green
+        Write-Host "[SUCCESS] Production is serving commit >= $expectedCommit" -ForegroundColor Green
         exit 0
     } elseif ($response.buildId -eq "ac87f4b" -or $response.commit -match "ac87f4b") {
-        Write-Host "✗ FAILED: Still serving old build (ac87f4b)" -ForegroundColor Red
+        Write-Host "[FAILED] Still serving old build (ac87f4b)" -ForegroundColor Red
         exit 1
     } else {
-        Write-Host "? UNKNOWN: Build ID is '$($response.buildId)', commit is '$($response.commit)'" -ForegroundColor Yellow
+        Write-Host "[UNKNOWN] Build ID is '$($response.buildId)', commit is '$($response.commit)'" -ForegroundColor Yellow
         Write-Host "  Expected: $expectedCommit or newer" -ForegroundColor Yellow
         exit 1
     }
