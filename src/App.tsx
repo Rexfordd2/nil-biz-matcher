@@ -47,6 +47,7 @@ import DiagnosticsPanel from './components/DiagnosticsPanel'
 import DebugDiscoverRecruiting from './pages/DebugDiscoverRecruiting'
 import DebugBuild from './pages/DebugBuild'
 import { navigate } from './routes/RootRouter'
+import WaitlistGate from './components/WaitlistGate'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -277,6 +278,7 @@ function MainApp() {
 	return (
 		<ToastProvider>
 			<ErrorBoundary>
+			<WaitlistGate />
 			<div className="min-h-screen bg-background light-theme">
 				<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
 					<div className="mx-auto max-w-6xl px-4 md:px-6 py-4 flex items-center justify-between">
