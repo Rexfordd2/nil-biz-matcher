@@ -52,15 +52,15 @@ jobs:
           npx vercel teams ls --token=$VERCEL_TOKEN
       
       - name: Pull Vercel environment information
-        run: npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID
+        run: npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
       
       - name: Build project artifacts
-        run: npx vercel build --prod --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID
+        run: npx vercel build --prod --token=$VERCEL_TOKEN
       
       - name: Deploy prebuilt artifacts to Vercel
         id: deploy
         run: |
-          DEPLOYMENT_URL=$(npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID 2>&1 | tee /dev/stderr | grep -oP 'https://[^\s]+' | tail -1)
+          DEPLOYMENT_URL=$(npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN 2>&1 | tee /dev/stderr | grep -oP 'https://[^\s]+' | tail -1)
           echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
           echo "✅ Deployed to: $DEPLOYMENT_URL"
       
