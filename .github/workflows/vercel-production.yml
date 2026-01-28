@@ -17,26 +17,43 @@ jobs:
     
     steps:
       - name: Validate required secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
-            echo "❌ ERROR: VERCEL_TOKEN secret is not set"
+          echo "Checking secret lengths (never printing actual values)..."
+          
+          TOKEN_LENGTH=${#VERCEL_TOKEN}
+          ORG_ID_LENGTH=${#VERCEL_ORG_ID}
+          PROJECT_ID_LENGTH=${#VERCEL_PROJECT_ID}
+          
+          echo "TOKEN length: $TOKEN_LENGTH"
+          echo "ORG_ID length: $ORG_ID_LENGTH"
+          echo "PROJECT_ID length: $PROJECT_ID_LENGTH"
+          
+          if [ "$TOKEN_LENGTH" -eq 0 ]; then
+            echo "❌ ERROR: VERCEL_TOKEN is empty - GitHub Secrets not being injected"
             echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
             echo "Get token from: https://vercel.com/account/tokens"
             exit 1
           fi
-          if [ -z "${{ secrets.VERCEL_ORG_ID }}" ]; then
-            echo "❌ ERROR: VERCEL_ORG_ID secret is not set"
+          
+          if [ "$ORG_ID_LENGTH" -eq 0 ]; then
+            echo "❌ ERROR: VERCEL_ORG_ID is empty - GitHub Secrets not being injected"
             echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
             echo "Value should be: athleteledger"
             exit 1
           fi
-          if [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
-            echo "❌ ERROR: VERCEL_PROJECT_ID secret is not set"
+          
+          if [ "$PROJECT_ID_LENGTH" -eq 0 ]; then
+            echo "❌ ERROR: VERCEL_PROJECT_ID is empty - GitHub Secrets not being injected"
             echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
             echo "Value should be: prj_omEmNLLhHETdIZqmBSEkAeJCu0ha"
             exit 1
           fi
-          echo "✅ All required secrets are set"
+          
+          echo "✅ All required secrets are set and non-empty"
       
       - name: Checkout code
         uses: actions/checkout@v4
