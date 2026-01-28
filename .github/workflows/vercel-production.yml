@@ -6,9 +6,9 @@ on:
       - main
 
 env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
   deploy:
@@ -16,44 +16,20 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Validate required secrets
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Assert secrets injected
         run: |
-          echo "Checking secret lengths (never printing actual values)..."
-          
-          TOKEN_LENGTH=${#VERCEL_TOKEN}
           ORG_ID_LENGTH=${#VERCEL_ORG_ID}
           PROJECT_ID_LENGTH=${#VERCEL_PROJECT_ID}
+          TOKEN_LENGTH=${#VERCEL_TOKEN}
           
-          echo "TOKEN length: $TOKEN_LENGTH"
           echo "ORG_ID length: $ORG_ID_LENGTH"
           echo "PROJECT_ID length: $PROJECT_ID_LENGTH"
+          echo "TOKEN length: $TOKEN_LENGTH"
           
-          if [ "$TOKEN_LENGTH" -eq 0 ]; then
-            echo "❌ ERROR: VERCEL_TOKEN is empty - GitHub Secrets not being injected"
-            echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            echo "Get token from: https://vercel.com/account/tokens"
+          if [ "$ORG_ID_LENGTH" -eq 0 ] || [ "$PROJECT_ID_LENGTH" -eq 0 ] || [ "$TOKEN_LENGTH" -eq 0 ]; then
+            echo "GitHub Secrets not being injected"
             exit 1
           fi
-          
-          if [ "$ORG_ID_LENGTH" -eq 0 ]; then
-            echo "❌ ERROR: VERCEL_ORG_ID is empty - GitHub Secrets not being injected"
-            echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            echo "Value should be: athleteledger"
-            exit 1
-          fi
-          
-          if [ "$PROJECT_ID_LENGTH" -eq 0 ]; then
-            echo "❌ ERROR: VERCEL_PROJECT_ID is empty - GitHub Secrets not being injected"
-            echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            echo "Value should be: prj_omEmNLLhHETdIZqmBSEkAeJCu0ha"
-            exit 1
-          fi
-          
-          echo "✅ All required secrets are set and non-empty"
       
       - name: Checkout code
         uses: actions/checkout@v4
