@@ -27,7 +27,7 @@ jobs:
           if [ -z "${{ secrets.VERCEL_ORG_ID }}" ]; then
             echo "❌ ERROR: VERCEL_ORG_ID secret is not set"
             echo "Set it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            echo "Value should be: team_3afvMrd9BHXAk9ULFIuSRIfo"
+            echo "Value should be: athleteledger"
             exit 1
           fi
           if [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
