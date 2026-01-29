@@ -76,6 +76,9 @@ var __buildId = /^[a-f0-9]{7,40}$/i.test(__rawBuildId) ? __rawBuildId.slice(0, 7
  * Note: This check ensures that production builds require explicit opt-in
  * for debug access via VITE_DIAGNOSTICS or VITE_DEBUG_KEY.
  * Runtime protection in RootRouter.tsx provides the actual access control.
+ *
+ * In PUBLIC_MODE, the build is allowed even without explicit debug protection,
+ * since debug routes are deny-by-default at runtime (no DIAGNOSTICS, no DEBUG_KEY).
  */
 function debugRoutesProtectionPlugin() {
     return {
@@ -94,19 +97,26 @@ function debugRoutesProtectionPlugin() {
             }
             var diagnosticsEnabled = String(process.env.VITE_DIAGNOSTICS || '').toLowerCase() === 'true';
             var hasDebugKey = Boolean(process.env.VITE_DEBUG_KEY && process.env.VITE_DEBUG_KEY.trim().length > 0);
+            // Check both VITE_PUBLIC_MODE and NEXT_PUBLIC_PUBLIC_MODE alias
+            var publicMode = String(process.env.VITE_PUBLIC_MODE || '').toLowerCase() === 'true' ||
+                String(process.env.NEXT_PUBLIC_PUBLIC_MODE || '').toLowerCase() === 'true';
             // Production builds require explicit opt-in for debug access:
             // - If VITE_DIAGNOSTICS=true → allow build (full diagnostics enabled)
             // - Else if VITE_DEBUG_KEY is set (non-empty) → allow build (debug key protection)
+            // - Else if VITE_PUBLIC_MODE=true (or NEXT_PUBLIC_PUBLIC_MODE=true) → allow build (public release; debug routes deny-by-default)
             // - Else → fail build (no protection configured)
-            if (!diagnosticsEnabled && !hasDebugKey) {
+            if (!diagnosticsEnabled && !hasDebugKey && !publicMode) {
                 this.error('[SECURITY] Debug routes must be protected in production builds.\n' +
                     'To enable debug access in production, set one of:\n' +
                     '  - VITE_DIAGNOSTICS=true (enables all debug routes)\n' +
                     '  - VITE_DEBUG_KEY=<secret> (enables access via ?debugKey=<secret> query param)\n' +
+                    '  - VITE_PUBLIC_MODE=true (or NEXT_PUBLIC_PUBLIC_MODE=true) (public release; debug routes deny-by-default)\n' +
                     '\n' +
                     'Current env: NODE_ENV=' + (process.env.NODE_ENV || 'undefined') +
                     ', VITE_DIAGNOSTICS=' + (process.env.VITE_DIAGNOSTICS || 'not set') +
                     ', VITE_DEBUG_KEY=' + (hasDebugKey ? '***set***' : 'not set') +
+                    ', VITE_PUBLIC_MODE=' + (process.env.VITE_PUBLIC_MODE || 'not set') +
+                    ', NEXT_PUBLIC_PUBLIC_MODE=' + (process.env.NEXT_PUBLIC_PUBLIC_MODE || 'not set') +
                     '\n' +
                     'Note: Runtime protection in RootRouter.tsx will enforce access control.');
             }

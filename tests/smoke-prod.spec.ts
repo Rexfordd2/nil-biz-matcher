@@ -124,16 +124,16 @@ test.describe('Production Smoke Tests', () => {
 		await loginIfNeeded(page)
 
 		// A) Discover Flow
-		const discoverBtn = page.getByTestId('nav-discover-button')
+		const discoverBtn = page.getByTestId('nav-discover-button').first()
 		if (await discoverBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
 			await discoverBtn.click()
 		} else {
 			// Try "More" menu on mobile
-			const moreBtn = page.getByRole('button', { name: /More/i }).first()
+			const moreBtn = page.getByTestId('nav-more-button')
 			if (await moreBtn.isVisible().catch(() => false)) {
 				await moreBtn.click()
 				await page.waitForTimeout(500)
-				const menuDiscover = page.getByTestId('nav-discover-button')
+				const menuDiscover = page.getByTestId('nav-discover-button').first()
 				await menuDiscover.click()
 			} else {
 				throw new Error('Could not find Discover button')
@@ -177,16 +177,16 @@ test.describe('Production Smoke Tests', () => {
 		console.log(`Screenshot saved: ${discoverScreenshotPath}`)
 
 		// B) Recruiting Flow
-		const recruitingBtn = page.getByTestId('nav-recruiting-button')
+		const recruitingBtn = page.getByTestId('nav-recruiting-button').first()
 		if (await recruitingBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
 			await recruitingBtn.click()
 		} else {
 			// Try "More" menu on mobile
-			const moreBtn = page.getByRole('button', { name: /More/i }).first()
+			const moreBtn = page.getByTestId('nav-more-button')
 			if (await moreBtn.isVisible().catch(() => false)) {
 				await moreBtn.click()
 				await page.waitForTimeout(500)
-				const menuRecruiting = page.getByTestId('nav-recruiting-button')
+				const menuRecruiting = page.getByTestId('nav-recruiting-button').first()
 				await menuRecruiting.click()
 			} else {
 				throw new Error('Could not find Recruiting button')

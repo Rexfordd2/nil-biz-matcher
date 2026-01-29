@@ -18,7 +18,7 @@ test.describe('Debug Routes Protection', () => {
 		const url = page.url()
 		// If redirected or showing home, URL might be '/' or still '/debug/build' but content is home
 		// Check that debug-specific content is NOT present
-		await expect(page.locator('text=Build Debug')).not.toBeVisible({ timeout: 1000 }).catch(() => {
+		await expect(page.getByRole('heading', { name: 'Build Debug' })).not.toBeVisible({ timeout: 1000 }).catch(() => {
 			// Expected: debug content should not be visible
 		})
 	})
@@ -27,7 +27,7 @@ test.describe('Debug Routes Protection', () => {
 		await page.goto('/debug/discover-recruiting')
 		
 		// Should show home page, not debug page
-		await expect(page.locator('text=Debug: Discover & Recruiting Harness')).not.toBeVisible({ timeout: 1000 }).catch(() => {
+		await expect(page.getByRole('heading', { name: 'Debug: Discover & Recruiting Harness' })).not.toBeVisible({ timeout: 1000 }).catch(() => {
 			// Expected: debug content should not be visible
 		})
 	})
@@ -44,7 +44,7 @@ test.describe('Debug Routes Protection', () => {
 		await page.goto('/debug/build')
 		
 		// Should show debug content
-		await expect(page.locator('text=Build Debug')).toBeVisible({ timeout: 5000 })
+		await expect(page.getByRole('heading', { name: 'Build Debug' })).toBeVisible({ timeout: 5000 })
 	})
 
 	test('should allow access to /debug/build with correct debugKey query param', async ({ page }) => {
@@ -61,10 +61,10 @@ test.describe('Debug Routes Protection', () => {
 		// Should show debug content if key matches
 		// Note: This will only work if VITE_DEBUG_KEY matches the provided key
 		if (process.env.VITE_DEBUG_KEY === debugKey) {
-			await expect(page.locator('text=Build Debug')).toBeVisible({ timeout: 5000 })
+			await expect(page.getByRole('heading', { name: 'Build Debug' })).toBeVisible({ timeout: 5000 })
 		} else {
 			// If key doesn't match, should show home (404-like)
-			await expect(page.locator('text=Build Debug')).not.toBeVisible({ timeout: 1000 }).catch(() => {
+			await expect(page.getByRole('heading', { name: 'Build Debug' })).not.toBeVisible({ timeout: 1000 }).catch(() => {
 				// Expected: debug content should not be visible
 			})
 		}
@@ -74,7 +74,7 @@ test.describe('Debug Routes Protection', () => {
 		await page.goto('/debug/build?debugKey=wrong-key')
 		
 		// Should show home page, not debug page
-		await expect(page.locator('text=Build Debug')).not.toBeVisible({ timeout: 1000 }).catch(() => {
+		await expect(page.getByRole('heading', { name: 'Build Debug' })).not.toBeVisible({ timeout: 1000 }).catch(() => {
 			// Expected: debug content should not be visible
 		})
 	})

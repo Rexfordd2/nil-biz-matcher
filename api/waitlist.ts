@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	}
 
 	// Parse and validate email
-	const { email, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, anon_id } = (req.body || {}) as {
+	const { email, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, anon_id, website } = (req.body || {}) as {
 		email?: string
 		source?: string
 		utm_source?: string
@@ -31,6 +31,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		utm_term?: string
 		utm_content?: string
 		anon_id?: string
+		website?: string // Honeypot field
+	}
+
+	// Honeypot check: if website field is filled, it's likely a bot
+	// Return success to avoid revealing the honeypot, but don't store
+	if (website && website.trim() !== '') {
+		console.log('[waitlist] Honeypot triggered:', { website, email, source })
+		// Silent rejection - return success to bot but don't store
+		return res.status(200).json({ ok: true, status: 'honeypot_rejected' })
 	}
 
 	// Normalize and validate email

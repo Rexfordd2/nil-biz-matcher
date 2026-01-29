@@ -346,13 +346,13 @@ Notes:
 **Required Setting:**
 - **Vercel Root Directory**: `.` (repo root) - This must be set in Vercel Project Settings → General → Root Directory
 - **vercel.json outputDirectory**: `dist` - Static files are served from `dist/`
-- **API Functions**: Located at `api/` (repo root), copied to `dist/api/` during build via `vercel-build` script
+- **API Functions**: Located at `api/` (repo root), automatically detected by Vercel as serverless functions
 
 **Why this configuration:**
-- When `outputDirectory: "dist"` is set, Vercel treats `dist/` as the deployment root for static files
-- API functions must be present in `dist/api/` at deployment time
-- The `vercel-build` script includes `node scripts/copy-api-to-dist.mjs` to copy `api/` → `dist/api/`
-- Vercel Root Directory must be `.` (repo root) so that both `api/` and `dist/` are accessible during build
+- When `outputDirectory: "dist"` is set, Vercel serves static files from `dist/`
+- API functions in the root `api/` directory are automatically detected and deployed as Vercel Functions
+- No manual copying is needed - Vercel natively handles both `dist/` (static) and `api/` (functions)
+- Vercel Root Directory must be `.` (repo root) so that both `api/` and `dist/` are accessible
 
 **Verification:**
 After deployment, verify API endpoints return JSON:

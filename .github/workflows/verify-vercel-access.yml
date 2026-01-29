@@ -1,0 +1,36 @@
+name: Verify Vercel Access
+
+on:
+  workflow_dispatch: # Allows manual trigger
+  schedule:
+    - cron: '0 0 * * 1' # Run weekly on Mondays
+
+jobs:
+  verify-access:
+    name: Verify Vercel Token & Scope Access
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify Vercel token + scope access (no secrets printed)
+        run: |
+          echo "ORG_ID=$VERCEL_ORG_ID"
+          npx vercel whoami --token=$VERCEL_TOKEN
+          npx vercel teams ls --token=$VERCEL_TOKEN
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Verification Summary
+        if: success()
+        run: |
+          echo "✅ Vercel token verification successful!"
+          echo "✅ Organization ID is set"
+          echo "✅ Team access verified"

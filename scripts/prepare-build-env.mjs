@@ -65,6 +65,11 @@ function main() {
   // Always set process.env for current shell children, though main use is file-based loading
   process.env.VITE_BUILD_ID = buildId
   process.env.VITE_BUILD_TIME = buildTime
+  
+  // Propagate NEXT_PUBLIC_PUBLIC_MODE → VITE_PUBLIC_MODE for client builds
+  if (process.env.NEXT_PUBLIC_PUBLIC_MODE && !process.env.VITE_PUBLIC_MODE) {
+    process.env.VITE_PUBLIC_MODE = process.env.NEXT_PUBLIC_PUBLIC_MODE
+  }
 
   const cwd = process.cwd()
   const envBuildPath = resolve(cwd, '.env.build')
@@ -82,9 +87,17 @@ function main() {
   {
     const existing = existsSync(envLocalPath) ? readFileSync(envLocalPath, 'utf8') : ''
     const lines = existing.split(/\r?\n/).filter(Boolean)
-      .filter(l => !l.startsWith('VITE_BUILD_ID=') && !l.startsWith('VITE_BUILD_TIME='))
+      .filter(l => !l.startsWith('VITE_BUILD_ID=') && !l.startsWith('VITE_BUILD_TIME=') && !l.startsWith('VITE_PUBLIC_MODE='))
     upsertEnvVar(lines, 'VITE_BUILD_ID', buildId)
     upsertEnvVar(lines, 'VITE_BUILD_TIME', buildTime)
+    
+    // Propagate NEXT_PUBLIC_PUBLIC_MODE → VITE_PUBLIC_MODE if alias is set
+    if (process.env.NEXT_PUBLIC_PUBLIC_MODE && !process.env.VITE_PUBLIC_MODE) {
+      upsertEnvVar(lines, 'VITE_PUBLIC_MODE', process.env.NEXT_PUBLIC_PUBLIC_MODE)
+    } else if (process.env.VITE_PUBLIC_MODE) {
+      upsertEnvVar(lines, 'VITE_PUBLIC_MODE', process.env.VITE_PUBLIC_MODE)
+    }
+    
     writeFileSync(envLocalPath, lines.join('\n') + '\n', 'utf8')
   }
 

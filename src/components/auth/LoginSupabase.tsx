@@ -18,7 +18,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		return (
 			<div className="max-w-md mx-auto">
 				<Card title="Cloud login unavailable">
-					<div className="text-sm text-gray-300">
+					<div className="text-sm text-gray-300" data-testid="auth-unavailable">
 						Supabase is not configured. Configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to enable cloud login.
 					</div>
 				</Card>

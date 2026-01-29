@@ -4,7 +4,8 @@
 create table if not exists public.waitlist (
   id uuid primary key default gen_random_uuid(),
   email text not null,
-  source text, -- 'landing', 'demo', etc.
+  anon_id text, -- Anonymous user identifier for tracking/analytics
+  source text, -- 'landing', 'demo', 'waitlist_gate', etc.
   utm_source text,
   utm_medium text,
   utm_campaign text,
@@ -13,11 +14,13 @@ create table if not exists public.waitlist (
   created_at timestamptz not null default now()
 );
 
--- Unique constraint on email to prevent duplicates
--- Drop existing index if it exists (non-unique), then create unique constraint
+-- Case-insensitive unique constraint on email to prevent duplicates
+-- Using lower(email) ensures "User@Example.com" and "user@example.com" are treated as duplicates
 drop index if exists idx_waitlist_email;
-create unique index if not exists idx_waitlist_email_unique on public.waitlist(email);
+drop index if exists idx_waitlist_email_unique;
+create unique index if not exists idx_waitlist_email_lower_unique on public.waitlist(lower(email));
 create index if not exists idx_waitlist_created_at on public.waitlist(created_at);
+create index if not exists idx_waitlist_anon_id on public.waitlist(anon_id) where anon_id is not null;
 
 -- Enable RLS (Row Level Security)
 alter table public.waitlist enable row level security;

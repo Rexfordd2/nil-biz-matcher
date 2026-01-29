@@ -12,7 +12,6 @@ import DebugPlacesHooks from '../pages/DebugPlacesHooks'
 import LoginRoute from '../pages/auth/LoginRoute'
 import SignupRoute from '../pages/auth/SignupRoute'
 import ResetRoute from '../pages/auth/ResetRoute'
-import { useAuth } from '../context/AuthContext'
 import { supabaseEnvConfigured } from '../lib/supabaseClient'
 import { isDebugAccessAllowed } from '../lib/debugAccess'
 
@@ -30,6 +29,7 @@ type RouteEntry =
 	| { key: 'debug_discover_recruiting' }
 	| { key: 'debug_build' }
 	| { key: 'debug_places_hooks' }
+	| { key: 'not_found' }
 
 function parseLocation(pathname: string): RouteEntry {
 	if (pathname === '/' || pathname === '') return { key: 'home' }
@@ -45,8 +45,8 @@ function parseLocation(pathname: string): RouteEntry {
 	if (pathname === '/debug/discover-recruiting') return { key: 'debug_discover_recruiting' }
 	if (pathname === '/debug/build') return { key: 'debug_build' }
 	if (pathname === '/debug/places-hooks') return { key: 'debug_places_hooks' }
-	// fallback to home
-	return { key: 'home' }
+	// Unknown route - will redirect to home
+	return { key: 'not_found' }
 }
 
 export function navigate(to: string, replace: boolean = false) {
@@ -63,7 +63,6 @@ export function navigate(to: string, replace: boolean = false) {
 
 export default function RootRouter() {
 	const [loc, setLoc] = useState<RouteEntry>(() => parseLocation(window.location.pathname))
-	const { user } = useAuth()
 
 	useEffect(() => {
 		function onPop() {
@@ -72,6 +71,18 @@ export default function RootRouter() {
 		window.addEventListener('popstate', onPop)
 		return () => window.removeEventListener('popstate', onPop)
 	}, [])
+
+	// Redirect effect: handle unknown routes and denied debug routes
+	useEffect(() => {
+		const hasDebugAccess = isDebugAccessAllowed(window.location.search)
+		const isDebugRoute = loc.key === 'debug_discover_recruiting' || loc.key === 'debug_build' || loc.key === 'debug_places_hooks'
+		const shouldRedirect = loc.key === 'not_found' || (isDebugRoute && !hasDebugAccess)
+
+		if (shouldRedirect && window.location.pathname !== '/') {
+			// Redirect to home (marketing landing)
+			navigate('/', true)
+		}
+	}, [loc])
 
 	// Auth guard removed - allow unauthenticated access to all routes
 	// /app is the main experience and is accessible to anonymous users
@@ -87,19 +98,19 @@ export default function RootRouter() {
 			case 'demo':
 				return <Demo />
 			case 'debug_discover_recruiting':
-				// Protect debug routes: return Home (404-like behavior) if access not allowed
+				// Protect debug routes: redirect to / (handled by effect above)
 				if (!hasDebugAccess) {
 					return <Home />
 				}
 				return <DebugDiscoverRecruiting />
 			case 'debug_build':
-				// Protect debug routes: return Home (404-like behavior) if access not allowed
+				// Protect debug routes: redirect to / (handled by effect above)
 				if (!hasDebugAccess) {
 					return <Home />
 				}
 				return <DebugBuild />
 			case 'debug_places_hooks':
-				// Protect debug routes: return Home (404-like behavior) if access not allowed
+				// Protect debug routes: redirect to / (handled by effect above)
 				if (!hasDebugAccess) {
 					return <Home />
 				}
@@ -122,16 +133,13 @@ export default function RootRouter() {
 				// Render app shell under /app/* - accessible to anonymous users
 				// Components handle null currentUser gracefully using anonId-based behavior
 				return <App />
-			case 'login':
-			case 'signup':
-				// These routes are handled in Home page CTAs and Auth components embedded there if needed.
-				// For now, fallthrough to Home which contains CTAs. If you prefer dedicated pages, you can implement them similarly.
+			case 'not_found':
+				// Unknown route: redirect to / (handled by effect above)
 				return <Home />
 			default:
 				return <Home />
 		}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [loc, user])
+	}, [loc])
 
 	return (
 		<div className="min-h-screen bg-background text-foreground">

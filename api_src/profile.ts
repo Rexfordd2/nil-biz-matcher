@@ -1,10 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import prisma from './_lib/prisma.js'
-import { getCurrentUser, requireUser } from './_lib/auth.js'
+import { requireUserOrBypass } from './_lib/auth.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-	const user = await getCurrentUser(req)
-	if (!requireUser(user, res)) return
+	const result = await requireUserOrBypass(req, res)
+	if (!result) return // 401 already sent
+	const { bypassed, user } = result
+	
+	// Public mode: return empty profile (no DB access)
+	if (bypassed) {
+		res.setHeader('Cache-Control', 'no-store')
+		if (req.method === 'GET') {
+			return res.status(200).json({ profile: {} })
+		}
+		if (req.method === 'POST') {
+			return res.status(503).json({ error: 'Profile storage not available in public mode' })
+		}
+		return res.status(405).json({ error: 'Method Not Allowed' })
+	}
 
 	if (req.method === 'GET') {
 		// If DB is not available, respond with an empty profile rather than erroring

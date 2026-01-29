@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import prisma from '../_lib/prisma'
-import { getCurrentUser, requireUser } from '../_lib/auth'
+import { requireUserOrBypass } from '../_lib/auth'
 
 type JsonValue = any
 
@@ -39,8 +39,22 @@ function deepMerge<T extends JsonValue>(base: T, incoming: Partial<T>): T {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-	const user = await getCurrentUser(req)
-	if (!requireUser(user, res)) return
+	const result = await requireUserOrBypass(req, res)
+	if (!result) return // 401 already sent
+	const { bypassed, user } = result
+	
+	// Public mode: return empty profile (no DB access)
+	if (bypassed) {
+		res.setHeader('Cache-Control', 'no-store')
+		if (req.method === 'GET') {
+			return res.status(200).json({ profile: {}, updatedAt: null })
+		}
+		if (req.method === 'PUT') {
+			return res.status(503).json({ error: 'Profile storage not available in public mode' })
+		}
+		res.setHeader('Allow', 'GET, PUT')
+		return res.status(405).json({ error: 'Method Not Allowed' })
+	}
 
 	if (req.method === 'GET') {
 		// If DB is not available, respond with an empty profile rather than erroring

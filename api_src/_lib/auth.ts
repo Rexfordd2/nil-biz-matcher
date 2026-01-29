@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'crypto'
 import prisma from './prisma'
+import { isPublicModeServer } from './publicMode'
 
 const COOKIE_NAME = 'al_session'
 const TOKEN_VERSION = 'v1'
@@ -102,6 +103,41 @@ export function requireUser(user: any, res: VercelResponse) {
 		return false
 	}
 	return true
+}
+
+/**
+ * Get user with public mode bypass support
+ * Returns { bypassed: true, user: null } when public mode is enabled
+ * Returns { bypassed: false, user } when public mode is disabled
+ */
+export async function getUserOrBypass(req: VercelRequest): Promise<{ bypassed: boolean; user: any }> {
+	// Check public mode first
+	if (isPublicModeServer()) {
+		return { bypassed: true, user: null }
+	}
+	
+	// Normal auth flow
+	const user = await getCurrentUser(req)
+	return { bypassed: false, user }
+}
+
+/**
+ * Require user with public mode bypass support
+ * In public mode: returns { bypassed: true, user: null } and does NOT set 401
+ * In normal mode: returns { bypassed: false, user } or sends 401 and returns null
+ */
+export async function requireUserOrBypass(req: VercelRequest, res: VercelResponse): Promise<{ bypassed: boolean; user: any } | null> {
+	// Check public mode first
+	if (isPublicModeServer()) {
+		return { bypassed: true, user: null }
+	}
+	
+	// Normal auth flow
+	const user = await getCurrentUser(req)
+	if (!requireUser(user, res)) {
+		return null
+	}
+	return { bypassed: false, user }
 }
 
 

@@ -128,27 +128,6 @@ function MainApp() {
 	useEffect(() => {
 		// Observability: initial load
 		Observability.log({ feature: 'ui', route: 'app.mount', status: 'ui_action' })
-		// #region agent log
-		const __dbgMount = {
-			sessionId: 'debug-session',
-			runId: 'initial',
-			hypothesisId: 'B',
-			location: 'src/App.tsx:mount',
-			message: 'App mounted',
-			data: {},
-			timestamp: Date.now()
-		}
-		fetch('http://127.0.0.1:7242/ingest/f93d76cb-ddaa-401d-972f-239de3ada967', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(__dbgMount)
-		}).catch(() => {})
-		fetch('/api/debug/log', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(__dbgMount)
-		}).catch(() => {})
-		// #endregion
 	}, [])
 
 	// Map Supabase user to CurrentUser shape whenever it changes
@@ -816,13 +795,14 @@ function MainApp() {
 						>
 							Board
 						</button>
-						<button
-							type="button"
-							onClick={() => setMobileMenuOpen(true)}
-							className="text-sm px-2 py-2 rounded-md text-gray-300 hover:bg-mid/60"
-						>
-							More
-						</button>
+					<button
+						data-testid="nav-more-button"
+						type="button"
+						onClick={() => setMobileMenuOpen(true)}
+						className="text-sm px-2 py-2 rounded-md text-gray-300 hover:bg-mid/60"
+					>
+						More
+					</button>
 					</div>
 				</nav>
 

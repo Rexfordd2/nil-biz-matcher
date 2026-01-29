@@ -9,7 +9,7 @@ const ENV_MODE: string = (import.meta.env.VITE_ENV as string) || (import.meta.en
 
 const LIVE_FEATURES: string[] = [
 	'Public homepage at `/` with hero video + how-to steps + CTAs',
-	'Auth-gated app under `/app/*` with returnTo redirect',
+	'Anonymous-accessible app under `/app/*` (login optional, not required)',
 	'Terms acceptance required on signup + Terms/Privacy pages',
 	'Role selection + minors guardian acknowledgment',
 	'Onboarding quickstart + reopen link',

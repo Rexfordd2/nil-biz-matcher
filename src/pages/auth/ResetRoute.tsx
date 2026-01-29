@@ -4,8 +4,14 @@ import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabaseClient'
 import { navigate } from '../../routes/RootRouter'
+import { PUBLIC_MODE } from '../../config/publicMode'
+import PublicAuthDisabled from '../../components/auth/PublicAuthDisabled'
 
 export default function ResetRoute() {
+	// In public mode, auth is disabled
+	if (PUBLIC_MODE) {
+		return <PublicAuthDisabled kind="reset" />
+	}
 	const [password, setPassword] = useState('')
 	const [confirm, setConfirm] = useState('')
 	const [showPassword, setShowPassword] = useState(false)
@@ -50,6 +56,24 @@ export default function ResetRoute() {
 			return
 		}
 		navigate('/app', true)
+	}
+
+	// If Supabase isn't configured, show a friendly unavailable message
+	if (!supabase) {
+		return (
+			<div className="mx-auto max-w-md px-4 md:px-6 py-10">
+				<Card title="Set a new password">
+					<div className="space-y-4" data-testid="auth-unavailable">
+						<p className="text-sm text-gray-300">
+							Cloud authentication is not currently available.
+						</p>
+						<p className="text-xs text-gray-400">
+							Password reset requires Supabase configuration. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
+						</p>
+					</div>
+				</Card>
+			</div>
+		)
 	}
 
 	return (

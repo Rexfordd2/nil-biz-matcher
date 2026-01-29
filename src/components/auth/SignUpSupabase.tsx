@@ -19,7 +19,7 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 		return (
 			<div className="max-w-lg mx-auto">
 				<Card title="Cloud signup unavailable">
-					<div className="text-sm text-gray-300">
+					<div className="text-sm text-gray-300" data-testid="auth-unavailable">
 						Supabase is not configured. Configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to enable cloud signup.
 					</div>
 				</Card>
