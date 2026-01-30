@@ -15,11 +15,20 @@ import { existsSync } from 'fs'
  * - { ok: true, status: "already_registered" } - duplicate email (treated as success)
  * - { ok: true, status: "accepted_no_storage" } - accepted but not stored (Supabase not configured)
  * - { ok: false, error: "..." } - validation or server error
+ * 
+ * GET handler:
+ * - Returns { ok: true } for sanity checks
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-	if (req.method !== 'POST') {
-		return res.status(405).json({ ok: false, error: 'Method Not Allowed' })
-	}
+	try {
+		// GET handler for sanity checks
+		if (req.method === 'GET') {
+			return res.status(200).json({ ok: true })
+		}
+
+		if (req.method !== 'POST') {
+			return res.status(405).json({ ok: false, error: 'Method Not Allowed' })
+		}
 
 	// Parse and validate email
 	const { email, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, anon_id, website } = (req.body || {}) as {
@@ -57,6 +66,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	// Prefer service role key (bypasses RLS, more reliable for server-side writes)
 	const supabaseKey = supabaseServiceRoleKey || supabaseAnonKey
 
+	// Check if we're in production/Vercel where Supabase should be configured
+	const isVercel = Boolean(process.env.VERCEL)
+	const requireSupabase = isVercel || process.env.REQUIRE_SUPABASE === 'true'
+
+	// If Supabase is required but not configured, return 503
+	if (requireSupabase && (!supabaseUrl || !supabaseKey)) {
+		console.error('[waitlist] Missing required Supabase configuration')
+		return res.status(503).json({ ok: false, error: 'missing_env' })
+	}
+
 	// Attempt Supabase write when configured
 	if (supabaseUrl && supabaseKey) {
 		try {
@@ -78,30 +97,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				utm_content: utm_content || null
 			}
 
-			const { error } = await supabase.from('waitlist').insert(insertPayload)
+		const { error } = await supabase.from('waitlist').insert(insertPayload)
 
-			if (error) {
-				// Treat duplicate emails as success (unique constraint violation)
-				if (
-					error.code === '23505' ||
-					error.message.includes('duplicate') ||
-					error.message.includes('unique') ||
-					error.message.includes('already exists')
-				) {
-					return res.status(200).json({ ok: true, status: 'already_registered' })
-				}
-
-				// Other database errors
-				console.error('[waitlist] Supabase insert error:', error)
-				return res.status(500).json({ ok: false, error: error.message || 'Failed to save email' })
+		if (error) {
+			// Treat duplicate emails as success (unique constraint violation)
+			if (
+				error.code === '23505' ||
+				error.message.includes('duplicate') ||
+				error.message.includes('unique') ||
+				error.message.includes('already exists')
+			) {
+				return res.status(200).json({ ok: true, status: 'already_registered' })
 			}
 
-			// Success: new email inserted
-			return res.status(200).json({ ok: true, status: 'created' })
-		} catch (err: any) {
-			console.error('[waitlist] Supabase exception:', err)
-			return res.status(500).json({ ok: false, error: err.message || 'Database error' })
+			// Check for table/schema errors (missing table, wrong schema, permission denied)
+			const isSchemaError = 
+				error.code === '42P01' || // undefined_table
+				error.code === '42703' || // undefined_column
+				error.code === '42501' || // insufficient_privilege
+				error.message.includes('relation') && error.message.includes('does not exist') ||
+				error.message.includes('column') && error.message.includes('does not exist') ||
+				error.message.includes('permission denied') ||
+				error.message.includes('schema')
+
+			if (isSchemaError) {
+				console.error('[waitlist] Database schema error:', error)
+				// Truncate error details to avoid exposing too much info
+				const details = (error.message || error.code || 'schema_error').substring(0, 100)
+				return res.status(500).json({ ok: false, error: 'db_error', details })
+			}
+
+			// Other database errors
+			console.error('[waitlist] Supabase insert error:', error)
+			const details = (error.message || 'unknown').substring(0, 100)
+			return res.status(500).json({ ok: false, error: 'db_error', details })
 		}
+
+		// Success: new email inserted
+		return res.status(200).json({ ok: true, status: 'created' })
+	} catch (err: any) {
+		console.error('[waitlist] Supabase exception:', err)
+		// Truncate error details to avoid exposing too much info
+		const details = (err.message || 'unknown').substring(0, 100)
+		return res.status(500).json({ ok: false, error: 'db_error', details })
+	}
 	}
 
 	// Fallback mode: Supabase not configured
@@ -116,12 +155,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 	// Fallback storage enabled: JSON file storage (development/testing)
 	// Use /tmp on Vercel (ephemeral but writable), ./waitlist.json locally
-	const isVercel = Boolean(process.env.VERCEL)
-	const filePath = isVercel ? '/tmp/waitlist.json' : './waitlist.json'
+	const fallbackIsVercel = Boolean(process.env.VERCEL)
+	const filePath = fallbackIsVercel ? '/tmp/waitlist.json' : './waitlist.json'
 
 	try {
 		// Ensure directory exists (only needed for local non-/tmp paths)
-		if (!isVercel) {
+		if (!fallbackIsVercel) {
 			const dir = '.'
 			if (!existsSync(dir)) {
 				await mkdir(dir, { recursive: true })
@@ -168,6 +207,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return res.status(200).json({ ok: true, status: 'created' })
 	} catch (err: any) {
 		console.error('[waitlist] Fallback storage error:', err)
-		return res.status(500).json({ ok: false, error: err.message || 'Failed to save email' })
+		// Truncate error details to avoid exposing too much info
+		const details = (err.message || 'unknown').substring(0, 100)
+		return res.status(500).json({ ok: false, error: 'db_error', details })
+	}
+	} catch (topLevelErr: any) {
+		// Top-level catch to prevent any uncaught exceptions
+		console.error('[waitlist] Uncaught exception:', topLevelErr)
+		// Return a generic error without exposing internal details
+		const details = (topLevelErr.message || 'unknown').substring(0, 100)
+		return res.status(500).json({ ok: false, error: 'server_error', details })
 	}
 }
