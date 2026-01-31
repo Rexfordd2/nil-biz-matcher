@@ -1,0 +1,34 @@
+Fix Vercel: ensure /api/waitlist deploys as Function
+
+Problem:
+- /api/waitlist.ts was returning 404 or HTML instead of JSON
+- Root cause: SPA fallback intercepting /api/* routes before Functions
+- Or: Functions not being detected due to outputDirectory config
+
+Solution:
+- Add explicit routes ordering in vercel.json with "handle: filesystem"
+- SPA fallback regex now excludes /api/* paths: /((?!api/).*)
+- Remove outputDirectory from vercel.json (per DEPLOYMENT_MODEL.md)
+- Functions in root api/ directory now properly detected
+
+Changes:
+- vercel.json: Add routes array with proper ordering and filesystem handle
+- New docs: VERCEL_PROJECT_SETTINGS.md (configuration checklist)
+- New docs: VERCEL_ROLLBACK.md (rollback procedures)
+- New docs: WAITLIST_FIX_SUMMARY.md (implementation summary)
+- New script: deploy-waitlist-fix.ps1 (automated deployment)
+
+Verification:
+- Run: .\deploy-waitlist-fix.ps1
+- Or: npm run smoke:vercel:prod after deployment
+- Expect: /api/waitlist returns JSON with { ok: true, status: "..." }
+
+Required Vercel Settings:
+- Root Directory: . (repo root)
+- Output Directory: dist
+- Environment Variable: VITE_PUBLIC_MODE=true (Production)
+
+Rollback:
+- See VERCEL_ROLLBACK.md if issues occur
+- Quick: vercel rollback (CLI)
+- Or: Dashboard → Deployments → Previous → Promote

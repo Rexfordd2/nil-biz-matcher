@@ -22,6 +22,7 @@
     "test:public-release": "playwright test tests/public-release.spec.ts",
     "test:public-release:ui": "playwright test --ui tests/public-release.spec.ts",
     "smoke:prod": "node scripts/smoke-prod.mjs",
+    "smoke:vercel:prod": "node scripts/smoke-vercel-prod.mjs",
     "seed:recruiting": "node scripts/seedRecruiting.mjs",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
