@@ -3,6 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { writeFile, readFile, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 
+// Force Node.js runtime (not Edge) - required for fs operations
+export const config = {
+	runtime: 'nodejs'
+}
+
 /**
  * Waitlist endpoint: accepts email submissions and stores them.
  * 
@@ -55,6 +60,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const normalizedEmail = (email || '').trim().toLowerCase()
 	if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
 		return res.status(400).json({ ok: false, error: 'Invalid email address' })
+	}
+
+	// Diagnostic: Check for required environment variables
+	const hasSupabaseUrl = Boolean(process.env.SUPABASE_URL)
+	const hasServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+	console.log('[waitlist] Environment check:', { hasSupabaseUrl, hasServiceRoleKey })
+
+	// Require both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in production
+	if (!hasSupabaseUrl || !hasServiceRoleKey) {
+		console.error('[waitlist] Missing required environment variables')
+		return res.status(503).json({ ok: false, error: 'missing_env' })
 	}
 
 	// Check for Supabase configuration
