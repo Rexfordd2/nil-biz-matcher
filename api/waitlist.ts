@@ -51,7 +51,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	// Honeypot check: if website field is filled, it's likely a bot
 	// Return success to avoid revealing the honeypot, but don't store
 	if (website && website.trim() !== '') {
-		console.log('[waitlist] Honeypot triggered:', { website, email, source })
 		// Silent rejection - return success to bot but don't store
 		return res.status(200).json({ ok: true, status: 'honeypot_rejected' })
 	}
@@ -62,14 +61,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return res.status(400).json({ ok: false, error: 'Invalid email address' })
 	}
 
-	// Diagnostic: Check for required environment variables
+	// Check for required environment variables
 	const hasSupabaseUrl = Boolean(process.env.SUPABASE_URL)
 	const hasServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
-	console.log('[waitlist] Environment check:', { hasSupabaseUrl, hasServiceRoleKey })
 
 	// Require both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in production
 	if (!hasSupabaseUrl || !hasServiceRoleKey) {
-		console.error('[waitlist] Missing required environment variables')
 		return res.status(503).json({ ok: false, error: 'missing_env' })
 	}
 
@@ -88,7 +85,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 	// If Supabase is required but not configured, return 503
 	if (requireSupabase && (!supabaseUrl || !supabaseKey)) {
-		console.error('[waitlist] Missing required Supabase configuration')
 		return res.status(503).json({ ok: false, error: 'missing_env' })
 	}
 
@@ -137,14 +133,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				error.message.includes('schema')
 
 			if (isSchemaError) {
-				console.error('[waitlist] Database schema error:', error)
 				// Truncate error details to avoid exposing too much info
 				const details = (error.message || error.code || 'schema_error').substring(0, 100)
 				return res.status(500).json({ ok: false, error: 'db_error', details })
 			}
 
 			// Other database errors
-			console.error('[waitlist] Supabase insert error:', error)
 			const details = (error.message || 'unknown').substring(0, 100)
 			return res.status(500).json({ ok: false, error: 'db_error', details })
 		}
@@ -152,7 +146,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		// Success: new email inserted
 		return res.status(200).json({ ok: true, status: 'created' })
 	} catch (err: any) {
-		console.error('[waitlist] Supabase exception:', err)
 		// Truncate error details to avoid exposing too much info
 		const details = (err.message || 'unknown').substring(0, 100)
 		return res.status(500).json({ ok: false, error: 'db_error', details })
@@ -222,14 +215,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 		return res.status(200).json({ ok: true, status: 'created' })
 	} catch (err: any) {
-		console.error('[waitlist] Fallback storage error:', err)
 		// Truncate error details to avoid exposing too much info
 		const details = (err.message || 'unknown').substring(0, 100)
 		return res.status(500).json({ ok: false, error: 'db_error', details })
 	}
 	} catch (topLevelErr: any) {
 		// Top-level catch to prevent any uncaught exceptions
-		console.error('[waitlist] Uncaught exception:', topLevelErr)
 		// Return a generic error without exposing internal details
 		const details = (topLevelErr.message || 'unknown').substring(0, 100)
 		return res.status(500).json({ ok: false, error: 'server_error', details })
