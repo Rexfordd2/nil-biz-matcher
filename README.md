@@ -251,6 +251,11 @@ Optional (existing and recommended):
 ### Deployment
 Deploy to a platform that supports both static assets and serverless (e.g., Vercel). Set `DATABASE_URL` to a persistent SQLite file or switch providers per Prisma docs. Set `AUTH_SECRET` and any SMTP variables in your host’s environment settings.
 
+#### Vercel Project Wiring
+
+See [VERCEL_PROJECT_WIRING.md](./VERCEL_PROJECT_WIRING.md) for detailed instructions on configuring Vercel projects to prevent accidental cross-project deployments.
+
+
 
 ### Non‑interactive Vercel deployment (PowerShell)
 

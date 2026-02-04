@@ -42,6 +42,7 @@ import LoginPage from './components/LoginPage'
 import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseSessionContext'
 import SectionErrorBoundary from './components/ErrorBoundary'
 import { BUILD_ID } from './constants/build'
+import { APP_INSTANCE } from './config/env'
 import Observability from './lib/obs'
 import DiagnosticsPanel from './components/DiagnosticsPanel'
 import DebugDiscoverRecruiting from './pages/DebugDiscoverRecruiting'
@@ -367,6 +368,8 @@ function MainApp() {
 							<div className="mb-4 p-3 rounded-md border border-border bg-surface text-xs text-gray-200">
 								<div className="flex items-center justify-between">
 									<div>
+										<div>App Instance: <span className="text-white">{APP_INSTANCE}</span></div>
+										<div>Build ID: <span className="text-white">{BUILD_ID}</span></div>
 										<div>User ID: <span className="text-white">{currentUser?.id || '—'}</span></div>
 										<div>Env configured: <span className="text-white">{String(cloudConfigured)}</span></div>
 										<div>Last saved: <span className="text-white">{currentUser ? (autosave.lastSavedAt ? new Date(autosave.lastSavedAt).toLocaleString() : '—') : (anonDraft.lastSavedAt ? new Date(anonDraft.lastSavedAt).toLocaleString() : '—')}</span></div>
@@ -986,6 +989,12 @@ function MainApp() {
 							</div>
 						</div>
 					)}
+					{/* App instance label - always visible in footer */}
+					<div className="mx-auto max-w-6xl px-4 md:px-6 mt-4">
+						<div className="text-center text-xs text-gray-500">
+							Instance: {APP_INSTANCE} | Build: {BUILD_ID}
+						</div>
+					</div>
 				</footer>
 			</div>
 			</ErrorBoundary>

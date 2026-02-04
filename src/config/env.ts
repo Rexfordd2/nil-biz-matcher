@@ -3,6 +3,12 @@
  */
 
 // ============================================================================
+// App Instance Identification
+// ============================================================================
+
+export const APP_INSTANCE = import.meta.env.VITE_APP_INSTANCE ?? 'unknown'
+
+// ============================================================================
 // Google Maps / Places API
 // ============================================================================
 
@@ -70,6 +76,7 @@ export function getGoogleMapsSetupInstructions(): {
 export function logEnvStatus(): void {
 	if (import.meta.env.DEV) {
 		console.log('[Env Config]', {
+			appInstance: APP_INSTANCE,
 			hasGoogleMapsKey,
 			mode: import.meta.env.MODE,
 			dev: import.meta.env.DEV

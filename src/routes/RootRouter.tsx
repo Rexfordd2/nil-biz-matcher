@@ -7,6 +7,7 @@ import Privacy from '../pages/Privacy'
 import Onboarding from '../pages/Onboarding'
 import Status from '../pages/Status'
 import Waitlist from '../pages/Waitlist'
+import Health from '../pages/Health'
 import DebugDiscoverRecruiting from '../pages/DebugDiscoverRecruiting'
 import DebugBuild from '../pages/DebugBuild'
 import DebugPlacesHooks from '../pages/DebugPlacesHooks'
@@ -31,6 +32,7 @@ type RouteEntry =
 	| { key: 'privacy' }
 	| { key: 'onboarding' }
 	| { key: 'status' }
+	| { key: 'health' }
 	| { key: 'app'; subpath: string }
 	| { key: 'debug_discover_recruiting' }
 	| { key: 'debug_build' }
@@ -49,6 +51,7 @@ function parseLocation(pathname: string): RouteEntry {
 	if (pathname.startsWith('/onboarding')) return { key: 'onboarding' }
 	if (pathname.startsWith('/auth/reset')) return { key: 'reset' }
 	if (pathname.startsWith('/status')) return { key: 'status' }
+	if (pathname.startsWith('/health')) return { key: 'health' }
 	if (pathname === '/debug/discover-recruiting') return { key: 'debug_discover_recruiting' }
 	if (pathname === '/debug/build') return { key: 'debug_build' }
 	if (pathname === '/debug/places-hooks') return { key: 'debug_places_hooks' }
@@ -126,6 +129,8 @@ export default function RootRouter() {
 				return <Demo />
 			case 'waitlist':
 				return <Waitlist />
+			case 'health':
+				return <Health />
 			case 'debug_discover_recruiting':
 				// Protect debug routes: redirect to / (handled by effect above)
 				if (!hasDebugAccess) {

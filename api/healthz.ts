@@ -18,6 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return res.status(405).json({ error: 'Method Not Allowed' })
 	}
 	const buildId = deriveBuildId()
+	const appInstance = process.env.VITE_APP_INSTANCE || process.env.APP_INSTANCE || 'unknown'
 	
 	// Environment variable presence checks (booleans only, no secrets)
 	// Note: VITE_* variables are typically client-side only, but may be set as regular env vars
@@ -65,6 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	
 	const payload = {
 		buildId,
+		appInstance,
 		timestamp: new Date().toISOString(),
 		configPresence,
 		supabase: supabaseHealth
