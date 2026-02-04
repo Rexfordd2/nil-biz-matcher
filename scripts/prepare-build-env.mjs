@@ -58,7 +58,37 @@ function upsertEnvVar(lines, key, value) {
   else lines.push(line)
 }
 
+function validateRequiredEnvVars() {
+  const isProduction = process.env.NODE_ENV === 'production'
+  const appMode = process.env.VITE_APP_MODE || process.env.APP_MODE || 'beta'
+  const allowMissingGoogleKey = process.env.VITE_ALLOW_MISSING_GOOGLE_MAPS_KEY === 'true'
+  
+  // In production beta mode, Google Maps key is required unless explicitly opted out
+  if (isProduction && appMode === 'beta' && !allowMissingGoogleKey) {
+    const googleKey = process.env.VITE_GOOGLE_MAPS_API_KEY
+    if (!googleKey || googleKey.trim() === '') {
+      console.error('')
+      console.error('❌ BUILD FAILED: Missing required environment variable')
+      console.error('')
+      console.error('VITE_GOOGLE_MAPS_API_KEY is required for production builds.')
+      console.error('')
+      console.error('To fix this:')
+      console.error('  1. Set VITE_GOOGLE_MAPS_API_KEY in your environment')
+      console.error('  2. For Vercel: Add it in Settings → Environment Variables')
+      console.error('  3. For local builds: Add it to .env or .env.local')
+      console.error('')
+      console.error('To bypass this check (demo builds only):')
+      console.error('  Set VITE_ALLOW_MISSING_GOOGLE_MAPS_KEY=true')
+      console.error('')
+      process.exit(1)
+    }
+  }
+}
+
 function main() {
+  // Validate required env vars before proceeding
+  validateRequiredEnvVars()
+  
   const buildId = deriveBuildId()
   const buildTime = getIsoNow()
 
@@ -69,6 +99,11 @@ function main() {
   // Propagate NEXT_PUBLIC_PUBLIC_MODE → VITE_PUBLIC_MODE for client builds
   if (process.env.NEXT_PUBLIC_PUBLIC_MODE && !process.env.VITE_PUBLIC_MODE) {
     process.env.VITE_PUBLIC_MODE = process.env.NEXT_PUBLIC_PUBLIC_MODE
+  }
+  
+  // Propagate APP_MODE → VITE_APP_MODE for client builds
+  if (process.env.APP_MODE && !process.env.VITE_APP_MODE) {
+    process.env.VITE_APP_MODE = process.env.APP_MODE
   }
 
   const cwd = process.cwd()
@@ -87,7 +122,7 @@ function main() {
   {
     const existing = existsSync(envLocalPath) ? readFileSync(envLocalPath, 'utf8') : ''
     const lines = existing.split(/\r?\n/).filter(Boolean)
-      .filter(l => !l.startsWith('VITE_BUILD_ID=') && !l.startsWith('VITE_BUILD_TIME=') && !l.startsWith('VITE_PUBLIC_MODE='))
+      .filter(l => !l.startsWith('VITE_BUILD_ID=') && !l.startsWith('VITE_BUILD_TIME=') && !l.startsWith('VITE_PUBLIC_MODE=') && !l.startsWith('VITE_APP_MODE='))
     upsertEnvVar(lines, 'VITE_BUILD_ID', buildId)
     upsertEnvVar(lines, 'VITE_BUILD_TIME', buildTime)
     
@@ -96,6 +131,13 @@ function main() {
       upsertEnvVar(lines, 'VITE_PUBLIC_MODE', process.env.NEXT_PUBLIC_PUBLIC_MODE)
     } else if (process.env.VITE_PUBLIC_MODE) {
       upsertEnvVar(lines, 'VITE_PUBLIC_MODE', process.env.VITE_PUBLIC_MODE)
+    }
+    
+    // Propagate APP_MODE → VITE_APP_MODE if set
+    if (process.env.APP_MODE && !process.env.VITE_APP_MODE) {
+      upsertEnvVar(lines, 'VITE_APP_MODE', process.env.APP_MODE)
+    } else if (process.env.VITE_APP_MODE) {
+      upsertEnvVar(lines, 'VITE_APP_MODE', process.env.VITE_APP_MODE)
     }
     
     writeFileSync(envLocalPath, lines.join('\n') + '\n', 'utf8')

@@ -71,9 +71,16 @@ export async function saveBusiness(business: NormalizedPlace, details: {
 
 export async function listSavedBusinesses(): Promise<{ rows: SavedBusinessRow[]; error?: string; code?: string; permission?: boolean }> {
 	if (!supabaseEnvConfigured || !supabase) return { rows: [], error: 'Supabase not configured' }
+	
+	// Require authentication
+	const { data: userData } = await supabase.auth.getUser()
+	if (!userData.user) return { rows: [], error: 'Not authenticated', permission: true }
+	const uid = userData.user.id
+	
 	const { data, error } = await supabase
 		.from('saved_businesses')
 		.select('*')
+		.eq('user_id', uid)
 		.order('created_at', { ascending: false })
 	if (error) {
 		const info = parseSupabaseError(error)
@@ -84,10 +91,17 @@ export async function listSavedBusinesses(): Promise<{ rows: SavedBusinessRow[];
 
 export async function removeSavedBusiness(placeId: string): Promise<{ ok: true } | { ok: false; reason: string; code?: string; permission?: boolean }> {
 	if (!supabaseEnvConfigured || !supabase) return { ok: false, reason: 'Supabase not configured' }
+	
+	// Require authentication
+	const { data: userData } = await supabase.auth.getUser()
+	if (!userData.user) return { ok: false, reason: 'Not authenticated', permission: true }
+	const uid = userData.user.id
+	
 	const { error, status } = await supabase
 		.from('saved_businesses')
 		.delete()
 		.eq('place_id', placeId)
+		.eq('user_id', uid)
 	if (error) {
 		const info = parseSupabaseError(error)
 		return { ok: false, reason: info.message || 'Delete failed', code: info.code, permission: info.isPermission }

@@ -38,6 +38,9 @@
     "verify:vercel": "node scripts/verify-vercel.mjs",
     "vercel:env": "node scripts/vercel-env-setup.mjs",
     "supabase:migrate": "node scripts/supabase-migrate.mjs",
+    "diag:profile": "node scripts/diagnose-athlete-profile.mjs",
+    "diag:profile:cli": "node scripts/diagnose-athlete-profile.mjs --email=$SUPABASE_TEST_EMAIL --password=$SUPABASE_TEST_PASSWORD",
+    "diag:profile:prompt": "node scripts/diagnose-athlete-profile.mjs --prompt",
     "launch:status": "node scripts/launch-status.mjs"
   },
   "dependencies": {

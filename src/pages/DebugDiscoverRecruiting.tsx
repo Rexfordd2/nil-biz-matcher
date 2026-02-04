@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import Observability, { generateRequestId } from '../lib/obs'
 import { searchBusinesses } from '../services/search'
 import { searchPrograms } from '../recruiting/search'
-import { loadGoogleMaps } from '../lib/googleMapsLoader'
+import { loadGoogleMaps } from '../lib/google/loader'
 
 type Target = 'discover' | 'recruiting' | 'explore_map'
 

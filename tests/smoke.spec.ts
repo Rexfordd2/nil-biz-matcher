@@ -35,12 +35,13 @@ test.describe('Production smoke checks', () => {
 		await expect(waitlistSection).toBeInViewport()
 	})
 
-	test('/app loads in anonymous mode (public release)', async ({ page }) => {
+	test('/app shows Auth Gate when logged out', async ({ page }) => {
 		await page.goto('/app')
 		// Should load /app without redirect
 		await expect(page).toHaveURL(/\/app/)
-		// Anonymous mode indicator should be visible
-		await expect(page.getByText('No login required')).toBeVisible()
+		// Auth Gate should be visible with login options
+		await expect(page.getByTestId('auth-gate-login')).toBeVisible()
+		await expect(page.getByTestId('auth-gate-signup')).toBeVisible()
 	})
 
 	test('/terms and /privacy return 200 and contain headings', async ({ page }) => {

@@ -114,12 +114,14 @@ export default function RecruitingBlast({ athlete }: Props) {
 				.from('orgs')
 				.select('id, name')
 				.in('id', orgIds)
+				.eq('user_id', user.id)
 			const orgNameById = new Map<string, string>((orgsData || []).map((o: any) => [String(o.id), String(o.name || 'Org')]))
 			// 3) Load contacts with emails
 			const { data: contactsData } = await supabase
 				.from('org_contacts')
 				.select('id, org_id, name, email')
 				.in('org_id', orgIds)
+				.eq('user_id', user.id)
 			const next: Recipient[] = (contactsData || [])
 				.filter((c: any) => typeof c?.email === 'string' && c.email.trim())
 				.map((c: any) => ({

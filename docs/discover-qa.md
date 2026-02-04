@@ -3,7 +3,8 @@
 Use this checklist to verify the Discover Businesses feature end-to-end.
 
 ### Setup
-- Ensure `.env` contains a valid `VITE_GOOGLE_MAPS_API_KEY` (Maps JS + Places enabled).
+- Ensure `.env.local` contains a valid `VITE_GOOGLE_MAPS_API_KEY` (Maps JS + Places enabled).
+- For detailed setup instructions, see: [docs/google-maps-setup.md](./google-maps-setup.md)
 - Restart dev server after changing environment variables.
 
 ### Load & Script

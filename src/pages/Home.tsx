@@ -7,13 +7,14 @@ import { BUILD_ID } from '../lib/buildInfo'
 import Observability from '../lib/obs'
 import { setOpenGraphTags } from '../lib/metaTags'
 import WaitlistForm from '../components/WaitlistForm'
-
-const WAITLIST_CONFIRMED_KEY = 'al_waitlist_confirmed'
+import WaitlistEmbed from '../components/WaitlistEmbed'
+import { isDemoMode, isBetaMode } from '../config/appMode'
+import { hasWaitlistJoined } from '../lib/waitlistState'
 
 export default function Home() {
 	const { user } = useAuth()
 	const [waitlistConfirmed, setWaitlistConfirmed] = useState(() => {
-		return localStorage.getItem(WAITLIST_CONFIRMED_KEY) === 'true'
+		return hasWaitlistJoined()
 	})
 
 	const embedUrl = import.meta.env.VITE_WAITLIST_EMBED_URL
@@ -42,7 +43,8 @@ export default function Home() {
 	}
 
 	function handleConfirmWaitlist() {
-		localStorage.setItem(WAITLIST_CONFIRMED_KEY, 'true')
+		// This is called when user manually confirms they joined via the embed
+		// The actual form submission handles persistence via markWaitlistJoined()
 		setWaitlistConfirmed(true)
 		Observability.log({
 			feature: 'ui',
@@ -100,8 +102,10 @@ export default function Home() {
 					<div className="flex items-center gap-2">
 						{user ? (
 							<Button data-testid="header-dashboard-button" onClick={() => navigate('/app')} className="red-glow">Go to Dashboard</Button>
-						) : (
+						) : isDemoMode() ? (
 							<Button data-testid="header-save-progress-button" onClick={handleSaveProgress} className="red-glow">Save my progress</Button>
+						) : (
+							<Button data-testid="header-login-button" onClick={() => navigate('/auth/login')} className="red-glow">Log In</Button>
 						)}
 					</div>
 				</div>
@@ -115,14 +119,29 @@ export default function Home() {
 						Build your athlete profile, discover local businesses, and track NIL opportunities—all with safety and compliance built in.
 					</p>
 					<div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-						<Button data-testid="try-demo-button" onClick={handleTryDemo} className="red-glow">
-							Try Demo
-						</Button>
-						<Button data-testid="save-progress-button" onClick={handleSaveProgress} variant="secondary">
-							Save my progress
-						</Button>
+						{isDemoMode() ? (
+							<>
+								<Button data-testid="try-demo-button" onClick={handleTryDemo} className="red-glow">
+									Try Demo
+								</Button>
+								<Button data-testid="save-progress-button" onClick={handleSaveProgress} variant="secondary">
+									Save my progress
+								</Button>
+							</>
+						) : (
+							<>
+								<Button data-testid="get-started-button" onClick={() => navigate('/app')} className="red-glow">
+									Get Started
+								</Button>
+								<Button data-testid="login-button" onClick={() => navigate('/auth/login')} variant="secondary">
+									Log In
+								</Button>
+							</>
+						)}
 					</div>
-					<p className="text-sm text-gray-600 mt-2">No login required. Save progress with email.</p>
+					<p className="text-sm text-gray-600 mt-2">
+						{isDemoMode() ? 'No login required. Save progress with email.' : 'Create an account or log in to get started.'}
+					</p>
 					<div className="aspect-video w-full max-w-3xl mx-auto rounded-lg overflow-hidden border border-border bg-mid">
 						<iframe
 							className="w-full h-full"
@@ -135,21 +154,37 @@ export default function Home() {
 					</div>
 				</section>
 
-				{/* Waitlist Form */}
-				<section id="waitlist-form" className="card p-6 max-w-md mx-auto">
-					<h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">Get Early Access</h3>
-					{waitlistConfirmed ? (
-						<div className="text-center space-y-4">
-							<p className="text-green-600 font-medium text-lg">✓ You're in!</p>
-							<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
-						</div>
-					) : (
-						<WaitlistForm
-							source="landing"
-							onSuccess={handleConfirmWaitlist}
-						/>
-					)}
-				</section>
+				{/* Waitlist Form - only show in DEMO mode */}
+				{isDemoMode() && (
+					<section id="waitlist-form" className="card p-6 max-w-md mx-auto">
+						<h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">Get Early Access</h3>
+						{waitlistConfirmed ? (
+							<div className="text-center space-y-4">
+								<p className="text-green-600 font-medium text-lg">✓ You're on the list</p>
+								<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
+								<div className="flex flex-col gap-2">
+									<Button
+										onClick={() => navigate('/auth/login?returnTo=/app')}
+										className="w-full red-glow"
+										data-testid="home-waitlist-success-login"
+									>
+										Log In
+									</Button>
+									<Button
+										onClick={() => navigate('/demo')}
+										variant="secondary"
+										className="w-full"
+										data-testid="home-waitlist-success-demo"
+									>
+										Back to Demo
+									</Button>
+								</div>
+							</div>
+						) : (
+							<WaitlistEmbed source="landing" />
+						)}
+					</section>
+				)}
 
 				<section className="space-y-4">
 					<h3 data-testid="how-it-works-heading" className="headline text-xl text-gray-900 text-center">How it works</h3>
@@ -217,10 +252,15 @@ export default function Home() {
 			<section className="text-center">
 				{user ? (
 					<Button data-testid="footer-dashboard-button" onClick={() => navigate('/app')} className="red-glow">Go to Dashboard</Button>
-				) : (
+				) : isDemoMode() ? (
 					<div className="flex flex-col items-center justify-center gap-3">
 						<Button data-testid="footer-save-progress-button" onClick={handleSaveProgress} className="red-glow">Save my progress</Button>
 						<p className="text-sm text-gray-600">No login required. Save progress with email.</p>
+					</div>
+				) : (
+					<div className="flex flex-col items-center justify-center gap-3">
+						<Button data-testid="footer-get-started-button" onClick={() => navigate('/app')} className="red-glow">Get Started</Button>
+						<p className="text-sm text-gray-600">Create an account to save your progress.</p>
 					</div>
 				)}
 			</section>

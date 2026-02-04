@@ -46,3 +46,9 @@ create policy "Allow users to update own profile"
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
+drop policy if exists "Allow users to delete own profile" on public.athlete_profiles;
+create policy "Allow users to delete own profile"
+  on public.athlete_profiles
+  for delete
+  using (user_id = auth.uid());
+

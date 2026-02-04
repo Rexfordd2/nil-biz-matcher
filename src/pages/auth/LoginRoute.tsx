@@ -34,6 +34,26 @@ export default function LoginRoute() {
 					</p>
 				</div>
 			)}
+			
+			<div className="max-w-md mx-auto text-center space-y-2">
+				<div className="flex items-center justify-center gap-4 text-sm">
+					<button
+						onClick={() => navigate('/app')}
+						className="text-gray-300 hover:text-white underline"
+						data-testid="login-back-to-gate"
+					>
+						Back to access gate
+					</button>
+					<span className="text-gray-500">•</span>
+					<button
+						onClick={() => navigate('/')}
+						className="text-gray-300 hover:text-white underline"
+						data-testid="login-back-home"
+					>
+						Back home
+					</button>
+				</div>
+			</div>
 		</div>
 	)
 }

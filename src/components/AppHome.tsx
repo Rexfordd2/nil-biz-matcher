@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import Button from './ui/Button'
 import { friendlyMessageForProfilesError } from '../lib/supabaseErrors'
 import type { ProfileRow } from '../types'
+import { navigate } from '../routes/RootRouter'
 
 type Props = {
 	onEditProfile?: () => void
@@ -61,7 +62,7 @@ export default function AppHome({ onEditProfile, onLogout }: Props) {
 			const { data: profile, error: profErr } = await supabase
 				.from('profiles')
 				.select('display_name, role')
-				.eq('id', u.id)
+				.eq('user_id', u.id)
 				.maybeSingle<ProfileRow>()
 
 			if (!mounted) return
@@ -86,9 +87,27 @@ export default function AppHome({ onEditProfile, onLogout }: Props) {
 
 	async function handleLogout() {
 		try {
+			// 1. Sign out from Supabase
 			await supabase?.auth.signOut()
 		} catch {}
+		
+		// 2. Clear any cached profile data from localStorage
+		try {
+			// Clear user-specific profile drafts
+			Object.keys(localStorage).forEach(key => {
+				if (key.startsWith('athleteProfileDraft:')) {
+					localStorage.removeItem(key)
+				}
+			})
+		} catch {
+			// Silently fail if localStorage is unavailable
+		}
+		
+		// 3. Notify parent component (will clear React state)
 		onLogout?.()
+		
+		// 4. Navigate with replace to prevent back button returning to app shell
+		window.location.replace('/auth/login')
 	}
 
 	return (

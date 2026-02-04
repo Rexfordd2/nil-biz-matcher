@@ -19,37 +19,57 @@ export async function saveUserData(data_type: string, payload: any): Promise<voi
 		return
 	}
 
+	// Check if user is authenticated
+	let userId: string | null = null
+	try {
+		const { data: userData } = await supabase.auth.getUser()
+		if (userData.user) {
+			userId = userData.user.id
+		}
+	} catch {
+		// Silently handle auth check failure
+	}
+
 	const anonId = getAnonId()
 	
-	// Skip if anon_id is invalid (SSR or localStorage unavailable)
-	if (anonId === 'ssr-temp-id' || anonId === 'localStorage-unavailable') {
+	// Skip if anon_id is invalid (SSR or localStorage unavailable) and no authenticated user
+	if (!userId && (anonId === 'ssr-temp-id' || anonId === 'localStorage-unavailable')) {
 		return
 	}
 
 	try {
-		// Upsert anon_sessions to update last_seen
+		// Upsert anon_sessions to update last_seen (only if using anon_id)
 		// Use the helper function via RPC which bypasses RLS (security definer)
-		const { error: sessionError } = await supabase.rpc('update_anon_session_last_seen', {
-			anon_id_param: anonId
-		})
-
-		if (sessionError) {
-			// Log but don't throw - session update failure shouldn't block data save
-			Observability.log({
-				feature: 'user_data',
-				route: 'anon_sessions.update.error',
-				status: 'error',
-				errorMessage: sessionError.message,
-				meta: { anonId: anonId.substring(0, 8) + '***', code: sessionError.code }
+		if (!userId) {
+			const { error: sessionError } = await supabase.rpc('update_anon_session_last_seen', {
+				anon_id_param: anonId
 			})
+
+			if (sessionError) {
+				// Log but don't throw - session update failure shouldn't block data save
+				Observability.log({
+					feature: 'user_data',
+					route: 'anon_sessions.update.error',
+					status: 'error',
+					errorMessage: sessionError.message,
+					meta: { anonId: anonId.substring(0, 8) + '***', code: sessionError.code }
+				})
+			}
 		}
 
-		// Insert user_data record
-		const { error: dataError } = await supabase.from('user_data').insert({
-			anon_id: anonId,
+		// Insert user_data record with user_id if authenticated, otherwise use anon_id
+		const insertData: any = {
 			data_type,
 			payload
-		})
+		}
+		
+		if (userId) {
+			insertData.user_id = userId
+		} else {
+			insertData.anon_id = anonId
+		}
+
+		const { error: dataError } = await supabase.from('user_data').insert(insertData)
 
 		if (dataError) {
 			// Log but don't throw - data save failure shouldn't block UI
@@ -60,7 +80,8 @@ export async function saveUserData(data_type: string, payload: any): Promise<voi
 				errorMessage: dataError.message,
 				meta: {
 					data_type,
-					anonId: anonId.substring(0, 8) + '***',
+					hasUserId: Boolean(userId),
+					anonId: userId ? null : anonId.substring(0, 8) + '***',
 					code: dataError.code
 				}
 			})
@@ -70,7 +91,7 @@ export async function saveUserData(data_type: string, payload: any): Promise<voi
 				feature: 'user_data',
 				route: 'user_data.insert.success',
 				status: 'ok',
-				meta: { data_type }
+				meta: { data_type, hasUserId: Boolean(userId) }
 			})
 		}
 	} catch (err: any) {

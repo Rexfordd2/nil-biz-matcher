@@ -4,6 +4,9 @@ import Input from './ui/Input'
 import { submitWaitlistEmail } from '../lib/waitlist'
 import Observability from '../lib/obs'
 import { MIN_FORM_INTERACTION_TIME } from '../config/honeypot'
+import { markWaitlistJoined } from '../lib/waitlistState'
+import { navigate } from '../routes/RootRouter'
+import { isDemoMode } from '../config/appMode'
 
 type Props = {
 	onSuccess?: () => void
@@ -65,6 +68,7 @@ export default function WaitlistForm({ onSuccess, source = 'landing' }: Props) {
 
 			if (result.ok) {
 				setSuccess(true)
+				markWaitlistJoined() // Persist joined state
 				Observability.log({
 					feature: 'ui',
 					route: 'landing.waitlist.submit',
@@ -95,10 +99,28 @@ export default function WaitlistForm({ onSuccess, source = 'landing' }: Props) {
 	}
 
 	if (success) {
+		const isDemo = isDemoMode()
 		return (
 			<div className="text-center space-y-4">
-				<p className="text-green-600 font-medium text-lg">✓ You're in!</p>
+				<p className="text-green-600 font-medium text-lg">✓ You're on the list</p>
 				<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
+				<div className="flex flex-col gap-2">
+					<Button
+						onClick={() => navigate('/auth/login?returnTo=/app')}
+						className="w-full red-glow"
+						data-testid="waitlist-success-login"
+					>
+						Log In
+					</Button>
+					<Button
+						onClick={() => navigate(isDemo ? '/demo' : '/')}
+						variant="secondary"
+						className="w-full"
+						data-testid="waitlist-success-back"
+					>
+						{isDemo ? 'Back to Demo' : 'Back Home'}
+					</Button>
+				</div>
 			</div>
 		)
 	}

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { createClient } from '@supabase/supabase-js'
 
 function deriveBuildId(): string {
 	const raw =
@@ -34,10 +35,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		hasVercelGitCommitSha: Boolean(process.env.VERCEL_GIT_COMMIT_SHA),
 	}
 	
+	// Supabase connection test using anon key (safe & fast)
+	let supabaseHealth: any = { configured: false }
+	if (configPresence.hasViteSupabaseUrl && configPresence.hasViteSupabaseAnonKey) {
+		try {
+			// Use anon key for a harmless auth check
+			const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+			const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
+			
+			const sb = createClient(supabaseUrl, supabaseAnonKey)
+			
+			// Attempt a harmless request - auth.getSession() is safe and fast
+			const { error } = await sb.auth.getSession()
+			
+			supabaseHealth = {
+				configured: true,
+				connected: !error,
+				error: error ? (error.message.slice(0, 100) || 'Unknown error') : null
+			}
+		} catch (err: any) {
+			const errorMsg = err?.message || 'Connection failed'
+			supabaseHealth = {
+				configured: true,
+				connected: false,
+				error: errorMsg.slice(0, 100) // Trim error messages
+			}
+		}
+	}
+	
 	const payload = {
 		buildId,
 		timestamp: new Date().toISOString(),
-		configPresence
+		configPresence,
+		supabase: supabaseHealth
 	}
 	
 	// Cache-busting headers

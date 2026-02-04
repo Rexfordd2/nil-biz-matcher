@@ -51,7 +51,8 @@ test.describe('Public Release Acceptance Tests', () => {
 
 	test('2. No route redirects to /login (no forced redirect to login routes)', async ({ page }) => {
 		// Test each public route directly - none should redirect to /login or /auth/login
-		const publicRoutes = ['/app', '/demo', '/status', '/terms', '/privacy', '/onboarding']
+		// Note: /app now shows Auth Gate instead of redirecting
+		const publicRoutes = ['/demo', '/status', '/terms', '/privacy', '/onboarding']
 		
 		for (const route of publicRoutes) {
 			await page.goto(route)
@@ -67,6 +68,12 @@ test.describe('Public Release Acceptance Tests', () => {
 			expect(bodyText).toBeTruthy()
 			expect(bodyText!.length).toBeGreaterThan(0)
 		}
+		
+		// Special case: /app should stay at /app and show Auth Gate (not redirect)
+		await page.goto('/app')
+		await expect(page).toHaveURL(/\/app/)
+		// Should show Auth Gate with login options
+		await expect(page.getByTestId('auth-gate-login')).toBeVisible()
 		
 		// Optional edge case: visit /login and confirm no redirect loop
 		await page.goto('/login')
@@ -225,31 +232,25 @@ test.describe('Public Release Acceptance Tests', () => {
 		//           all page components (graceful degradation)
 	})
 
-	test('8. Anonymous user can use /app without authentication', async ({ page }) => {
+	test('8. Anonymous user sees Auth Gate on /app', async ({ page }) => {
 		// Go directly to /app without logging in
 		await page.goto('/app')
 		
 		// Should stay at /app (not redirect to login)
 		await expect(page).toHaveURL(/\/app/)
 		
-		// Should show anonymous mode indicators
+		// Should show Auth Gate with clear navigation options
+		await expect(page.getByTestId('auth-gate-login')).toBeVisible()
+		await expect(page.getByTestId('auth-gate-signup')).toBeVisible()
+		await expect(page.getByTestId('auth-gate-waitlist')).toBeVisible()
+		await expect(page.getByTestId('auth-gate-back-home')).toBeVisible()
+		
+		// Should show welcome message
 		const bodyText = await page.locator('body').textContent()
+		expect(bodyText).toContain('Welcome to Athlete Ledger')
 		
-		// Look for anonymous/demo mode indicators
-		const hasAnonIndicators = bodyText?.includes('No login required') ||
-		                          bodyText?.includes('Demo') ||
-		                          bodyText?.includes('anonymous')
-		
-		// App should be functional - check for main UI elements
-		// (profile section, navigation, etc.)
-		const hasAppUI = await page.locator('body').textContent().then(text => 
-			text && text.length > 100 // Has substantial content
-		)
-		
-		expect(hasAppUI).toBeTruthy()
-		
-		// Validates: src/routes/RootRouter.tsx (no auth guard on /app),
-		//           src/App.tsx (anonymous mode support)
+		// Validates: src/routes/RootRouter.tsx (renders Auth Gate on /app when logged out),
+		//           src/components/AuthGate.tsx (Auth Gate component)
 	})
 })
 

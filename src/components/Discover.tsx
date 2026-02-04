@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import Input from './ui/Input'
-import { loadGoogleMaps } from '../lib/googleMapsLoader'
 import { usePlacesSearch, type NormalizedPlace } from '../hooks/usePlacesSearch'
 import { usePlaceDetails } from '../hooks/usePlaceDetails'
 import PlacesMap from './PlacesMap'
@@ -12,12 +11,11 @@ import { supabaseEnvConfigured } from '../lib/supabaseClient'
 import { useSupabaseSession } from '../context/SupabaseSessionContext'
 import { saveUserData } from '../lib/userData'
 import { normalizeError } from '../lib/errorHandling'
+import { hasGoogleMapsKey, loadGoogleMaps } from '../lib/google/maps'
+import GoogleMapsDisabledNotice from './GoogleMapsDisabledNotice'
 
 export default function Discover() {
-	const hasClientKey = useMemo(() => {
-		const k = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
-		return !!(k && k.trim() !== '')
-	}, [])
+	const hasClientKey = hasGoogleMapsKey
 
 	// Editable inputs
 	const [whatText, setWhatText] = useState('')
@@ -187,11 +185,7 @@ export default function Discover() {
 					{loading ? 'Searching…' : 'Search'}
 				</Button>
 			}>
-				{!hasClientKey && (
-					<p className="text-yellow-300 text-sm mb-2">
-						Missing <code>VITE_GOOGLE_MAPS_API_KEY</code>. Add it to your <code>.env</code> to enable search.
-					</p>
-				)}
+				{!hasClientKey && <GoogleMapsDisabledNotice className="mb-3" />}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 					<Input
 						data-testid="discover-what-input"

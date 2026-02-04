@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { loadGoogleMaps } from '../lib/googleMapsLoader'
+import { loadGoogleMaps, getPlaceDetails, hasGoogleMapsKey } from '../lib/google/maps'
 import { normalizeError, getUserErrorMessage } from '../lib/errorHandling'
 
 type Details = {
@@ -35,46 +35,42 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 			setDetails(null)
 			return
 		}
+
+		// Early return if Google Maps API key is not configured
+		if (!hasGoogleMapsKey) {
+			setDetails(null)
+			return
+		}
+
 		async function run() {
 			setLoading(true)
 			setError(null)
 			const myId = ++requestIdRef.current
 			try {
-				const google = await loadGoogleMaps()
+				// Ensure Google Maps is loaded
+				await loadGoogleMaps()
 				if (ac.signal.aborted || myId !== requestIdRef.current) return
-				const svc = new google.maps.places.PlacesService(document.createElement('div'))
-				await new Promise<void>((resolve, reject) => {
-					svc.getDetails(
-						{
-							placeId: placeId!,
-							fields: ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'international_phone_number', 'website', 'opening_hours', 'url']
-						},
-						(res: any, status: any) => {
-							if (status === google.maps.places.PlacesServiceStatus.OK && res) {
-								const d: Details = {
-									placeId: res.place_id,
-									name: res.name,
-									formattedAddress: res.formatted_address,
-									phone: res.formatted_phone_number || res.international_phone_number,
-									website: res.website || undefined,
-									openingHours: res.opening_hours?.weekday_text || undefined,
-									googleMapsUrl: res.url || undefined
-								}
-								if (!ac.signal.aborted && myId === requestIdRef.current) {
-									setDetails(d)
-								}
-								resolve()
-							} else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-								if (!ac.signal.aborted && myId === requestIdRef.current) {
-									setDetails(null)
-								}
-								resolve()
-							} else {
-								reject(new Error(`Places getDetails failed: ${status}`))
-							}
-						}
-					)
-				})
+				
+				// Get place details using shared utility
+				const fields = ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'international_phone_number', 'website', 'opening_hours', 'url']
+				const res = await getPlaceDetails(placeId!, fields, ac.signal)
+				
+				if (ac.signal.aborted || myId !== requestIdRef.current) return
+				
+				if (res) {
+					const d: Details = {
+						placeId: res.place_id!,
+						name: res.name,
+						formattedAddress: res.formatted_address,
+						phone: res.formatted_phone_number || res.international_phone_number,
+						website: res.website || undefined,
+						openingHours: res.opening_hours?.weekday_text || undefined,
+						googleMapsUrl: res.url || undefined
+					}
+					setDetails(d)
+				} else {
+					setDetails(null)
+				}
 			} catch (e: any) {
 				// Ignore abortion as error - don't set error state for aborted requests
 				if (ac.signal.aborted || myId !== requestIdRef.current) return

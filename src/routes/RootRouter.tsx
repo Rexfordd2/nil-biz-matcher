@@ -6,18 +6,24 @@ import Terms from '../pages/Terms'
 import Privacy from '../pages/Privacy'
 import Onboarding from '../pages/Onboarding'
 import Status from '../pages/Status'
+import Waitlist from '../pages/Waitlist'
 import DebugDiscoverRecruiting from '../pages/DebugDiscoverRecruiting'
 import DebugBuild from '../pages/DebugBuild'
 import DebugPlacesHooks from '../pages/DebugPlacesHooks'
 import LoginRoute from '../pages/auth/LoginRoute'
 import SignupRoute from '../pages/auth/SignupRoute'
 import ResetRoute from '../pages/auth/ResetRoute'
+import AuthGate from '../components/AuthGate'
 import { supabaseEnvConfigured } from '../lib/supabaseClient'
 import { isDebugAccessAllowed } from '../lib/debugAccess'
+import { isDemoMode, isBetaMode } from '../config/appMode'
+import { useAuth } from '../context/AuthContext'
+import { PUBLIC_MODE } from '../config/publicMode'
 
 type RouteEntry =
 	| { key: 'home' }
 	| { key: 'demo' }
+	| { key: 'waitlist' }
 	| { key: 'login' }
 	| { key: 'signup' }
 	| { key: 'reset' }
@@ -34,6 +40,7 @@ type RouteEntry =
 function parseLocation(pathname: string): RouteEntry {
 	if (pathname === '/' || pathname === '') return { key: 'home' }
 	if (pathname.startsWith('/demo')) return { key: 'demo' }
+	if (pathname.startsWith('/waitlist')) return { key: 'waitlist' }
 	if (pathname.startsWith('/auth/login')) return { key: 'login' }
 	if (pathname.startsWith('/auth/signup')) return { key: 'signup' }
 	if (pathname.startsWith('/terms')) return { key: 'terms' }
@@ -63,6 +70,7 @@ export function navigate(to: string, replace: boolean = false) {
 
 export default function RootRouter() {
 	const [loc, setLoc] = useState<RouteEntry>(() => parseLocation(window.location.pathname))
+	const { user, initializing } = useAuth()
 
 	useEffect(() => {
 		function onPop() {
@@ -72,21 +80,40 @@ export default function RootRouter() {
 		return () => window.removeEventListener('popstate', onPop)
 	}, [])
 
-	// Redirect effect: handle unknown routes and denied debug routes
+	// Redirect effect: handle unknown routes, denied debug routes, and app mode restrictions
 	useEffect(() => {
 		const hasDebugAccess = isDebugAccessAllowed(window.location.search)
 		const isDebugRoute = loc.key === 'debug_discover_recruiting' || loc.key === 'debug_build' || loc.key === 'debug_places_hooks'
-		const shouldRedirect = loc.key === 'not_found' || (isDebugRoute && !hasDebugAccess)
+		let shouldRedirect = loc.key === 'not_found' || (isDebugRoute && !hasDebugAccess)
+		let redirectTarget = '/'
 
-		if (shouldRedirect && window.location.pathname !== '/') {
-			// Redirect to home (marketing landing)
-			navigate('/', true)
+		// APP_MODE restrictions
+		if (isDemoMode()) {
+			// In DEMO mode: redirect /app to /demo
+			if (loc.key === 'app') {
+				shouldRedirect = true
+				redirectTarget = '/demo'
+			}
+		} else if (isBetaMode()) {
+			// In BETA mode: redirect /demo to /
+			if (loc.key === 'demo') {
+				shouldRedirect = true
+				redirectTarget = '/'
+			}
+		}
+
+		if (shouldRedirect && window.location.pathname !== redirectTarget) {
+			navigate(redirectTarget, true)
 		}
 	}, [loc])
 
-	// Auth guard removed - allow unauthenticated access to all routes
-	// /app is the main experience and is accessible to anonymous users
-	// /demo is an optional marketing demo, also accessible without authentication
+	// Auth guard: protect /app route when not in PUBLIC_MODE
+	// Note: Now handled by rendering AuthGate instead of redirecting
+	// Keeping this effect for future non-PUBLIC_MODE scenarios if needed
+	useEffect(() => {
+		// No redirect needed - AuthGate renders in place for unauthenticated users
+		// This effect is now a no-op but kept for structure
+	}, [loc, user, initializing])
 
 	const outlet = useMemo(() => {
 		// Check debug access for debug routes
@@ -97,6 +124,8 @@ export default function RootRouter() {
 				return <Home />
 			case 'demo':
 				return <Demo />
+			case 'waitlist':
+				return <Waitlist />
 			case 'debug_discover_recruiting':
 				// Protect debug routes: redirect to / (handled by effect above)
 				if (!hasDebugAccess) {
@@ -129,10 +158,13 @@ export default function RootRouter() {
 				return <ResetRoute />
 			case 'status':
 				return <Status />
-			case 'app':
-				// Render app shell under /app/* - accessible to anonymous users
-				// Components handle null currentUser gracefully using anonId-based behavior
-				return <App />
+		case 'app':
+			// Render app shell under /app/* - show AuthGate if not authenticated
+			// If authenticated or still initializing, render the app
+			if (!user && !initializing) {
+				return <AuthGate returnTo={window.location.pathname} />
+			}
+			return <App />
 			case 'not_found':
 				// Unknown route: redirect to / (handled by effect above)
 				return <Home />

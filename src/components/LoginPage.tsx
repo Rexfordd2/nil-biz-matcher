@@ -2,13 +2,13 @@ import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { supabase } from '../lib/supabaseClient'
 import { useSupabaseSession } from '../context/SupabaseSessionContext'
-import { getBuildStamp } from '../config/env'
+import { BUILD_ID } from '../lib/buildInfo'
 
 const LoginPage: React.FC = () => {
   const { loading } = useSupabaseSession()
   return (
     <div className="min-h-screen">
-      <div className="fixed top-2 right-3 text-xs text-foreground/60">{getBuildStamp()}</div>
+      <div className="fixed top-2 right-3 text-xs text-foreground/60">Build: {BUILD_ID}</div>
       {loading ? (
         <div className="flex justify-center items-center min-h-screen">
           <p>Loading…</p>

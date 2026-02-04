@@ -1,5 +1,5 @@
 import { TERMS_VERSION } from '../constants/legal'
-import { BUILD_ID } from '../config/env'
+import { BUILD_ID } from '../lib/buildInfo'
 import { useEffect, useState } from 'react'
 import { supabase, supabaseEnvConfigured } from '../lib/supabaseClient'
 import { friendlyMessageForProfilesError } from '../lib/supabaseErrors'

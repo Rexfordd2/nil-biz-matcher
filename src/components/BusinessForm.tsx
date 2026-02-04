@@ -11,7 +11,7 @@ import { importBusinessFromUrl } from '../utils/importer'
 import { searchBusinesses } from '../services/search'
 import type { ExternalBusiness } from '../services/businessSearchProvider'
 import { mapExternalToBusiness } from '../services/mappers'
-import { isBusinessSearchEnabled } from '../config/env'
+import { hasGoogleMapsKey } from '../config/env'
 
 type Props = {
 	onAdd: (b: Business) => void
@@ -30,7 +30,7 @@ export default function BusinessForm({ onAdd }: Props) {
 	const [searchLoc, setSearchLoc] = useState('')
 	const [searching, setSearching] = useState(false)
 	const [results, setResults] = useState<ExternalBusiness[]>([])
-	const searchEnabled = isBusinessSearchEnabled()
+	const searchEnabled = hasGoogleMapsKey
 
 	const socialLinks = useMemo(() => {
 		return social.split(',').map(s => s.trim()).filter(Boolean)

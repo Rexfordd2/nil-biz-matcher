@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'crypto'
 import { prisma } from '../_lib/prisma'
 import { sendMail, getEmailTransporter } from '../_lib/email'
+import { getAuthenticatedSupabaseUser } from '../_lib/getAuthenticatedSupabaseUser'
 
 type CoachInput = { name: string; email: string; id?: string }
 type AthleteInput = { fullName: string; email: string; id?: string }
@@ -9,6 +10,14 @@ type AthleteInput = { fullName: string; email: string; id?: string }
 export default async function handler(req: VercelRequest, res: VercelResponse) {
 	if (req.method !== 'POST') {
 		return res.status(405).json({ error: 'Method Not Allowed' })
+	}
+
+	// Authenticate user (or bypass in public mode)
+	const { bypassed, user: authedUser } = await getAuthenticatedSupabaseUser(req, res)
+	
+	// If not in public mode and not authenticated, reject
+	if (!bypassed && !authedUser) {
+		return res.status(401).json({ error: 'Unauthorized - authentication required' })
 	}
 
 	const appUrl = process.env.APP_URL
@@ -46,8 +55,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 		// If prisma-style inputs provided (athlete.id, clipId, coachIds), use DB
 		if (prisma && athlete?.id && clipId && Array.isArray(coachIds) && coachIds.length > 0) {
+			// Verify ownership: athlete.id must match authenticated user (unless bypassed)
+			if (!bypassed && authedUser && athlete.id !== authedUser.id) {
+				return res.status(403).json({ error: 'Forbidden - athlete ID does not match authenticated user' })
+			}
+
 			const clip = await prisma.highlightClip.findUnique({ where: { id: clipId } })
 			if (!clip) return res.status(404).json({ error: 'Clip not found' })
+
+			// Verify ownership: clip must belong to the athlete (unless bypassed)
+			if (!bypassed && authedUser && clip.athleteId !== authedUser.id) {
+				return res.status(403).json({ error: 'Forbidden - clip does not belong to authenticated user' })
+			}
+
 			const dbCoaches = await prisma.coach.findMany({ where: { id: { in: coachIds } } })
 			for (const coach of dbCoaches) {
 				const trackToken = crypto.randomBytes(16).toString('hex')

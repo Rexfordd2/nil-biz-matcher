@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { loadGoogleMaps } from '../lib/googleMapsLoader'
+import { loadGoogleMaps, textSearch, getPlaceDetails, hasGoogleMapsKey } from '../lib/google/maps'
 import Observability, { generateRequestId } from '../lib/obs'
 import { normalizeError, getUserErrorMessage, shouldShowCachedWithRetry, shouldPreserveState } from '../lib/errorHandling'
 
@@ -65,6 +65,13 @@ export function usePlacesSearch(input: Input): Return {
 			return
 		}
 
+		// Early return if Google Maps API key is not configured
+		if (!hasGoogleMapsKey) {
+			setResults([])
+			setSelected(null)
+			return
+		}
+
 		async function run() {
 			setLoading(true)
 			setError(null)
@@ -82,16 +89,10 @@ export function usePlacesSearch(input: Input): Return {
 
 				// Resolve the location to a lat/lng using PlaceId or Geocoding
 				if (normalizedInput.locationPlaceId) {
-					originLatLng = await new Promise<google.maps.LatLng | null>((resolve) => {
-						const svc = new google.maps.places.PlacesService(document.createElement('div'))
-						svc.getDetails({ placeId: normalizedInput.locationPlaceId!, fields: ['geometry'] }, (place, status) => {
-							if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-								resolve(place.geometry.location)
-							} else {
-								resolve(null)
-							}
-						})
-					})
+					const place = await getPlaceDetails(normalizedInput.locationPlaceId, ['geometry'], ac.signal)
+					if (place?.geometry?.location) {
+						originLatLng = place.geometry.location
+					}
 				} else if (normalizedInput.locationText) {
 					originLatLng = await new Promise<google.maps.LatLng | null>((resolve) => {
 						const geocoder = new google.maps.Geocoder()
@@ -107,35 +108,14 @@ export function usePlacesSearch(input: Input): Return {
 
 				if (ac.signal.aborted || myId !== requestIdRef.current) return
 
-				// Perform text search with simple exponential backoff for transient statuses
-				const textSearchResults = await (async () => {
-					const svc = new google.maps.places.PlacesService(document.createElement('div'))
-					const request: google.maps.places.TextSearchRequest = { query: normalizedInput.query }
-					if (originLatLng) {
-						request.location = originLatLng
-						request.radius = 20000
-					}
-					const attempt = (tryNum: number): Promise<google.maps.places.PlaceResult[]> => new Promise((resolve, reject) => {
-						svc.textSearch(request, async (res, status) => {
-							if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(res)) {
-								return resolve(res)
-							}
-							if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-								return resolve([])
-							}
-							// Treat OVER_QUERY_LIMIT or UNKNOWN_ERROR as transient
-							const transient = status === google.maps.places.PlacesServiceStatus.OVER_QUERY_LIMIT || status === google.maps.places.PlacesServiceStatus.UNKNOWN_ERROR
-							if (transient && tryNum < 3) {
-								const base = 250 * Math.pow(2, tryNum)
-								const jitter = Math.floor(Math.random() * 100)
-								await new Promise(r => setTimeout(r, base + jitter))
-								return resolve(attempt(tryNum + 1))
-							}
-							return reject(new Error(`Places textSearch failed: ${status}`))
-						})
-					})
-					return attempt(0)
-				})()
+				// Perform text search using shared utility (includes retry logic)
+				const request: google.maps.places.TextSearchRequest = { query: normalizedInput.query }
+				if (originLatLng) {
+					request.location = originLatLng
+					request.radius = 20000
+				}
+				
+				const textSearchResults = await textSearch(request, ac.signal)
 
 				if (ac.signal.aborted || myId !== requestIdRef.current) return
 

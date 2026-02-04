@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import { AthleteProfile, AthleteSport, Professionalism, SchoolLevel, SocialHandle, SupportContact, TrustedContact, AcademicProfile, AvailabilityWindow, PerformanceStory, TrainingLogEntry } from '../types'
@@ -424,6 +424,91 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 		collectiveNotes
 	])
 
+	// Track the last synced value ID to detect when we need to rehydrate
+	const lastSyncedValueRef = useRef<string>('')
+	
+	// Sync form state when value prop changes (rehydration from DB)
+	useEffect(() => {
+		if (!value) return
+		
+		// Create a stable key from the value to detect actual changes
+		// Use createdAt + name + key fields to detect when this is a fresh DB load
+		const valueKey = `${value.createdAt}-${value.name}-${value.school}-${value.sports?.length || 0}`
+		
+		// Skip if we've already synced this exact value
+		if (valueKey === lastSyncedValueRef.current) return
+		
+		console.log('[AthleteProfileForm] Rehydrating from value prop (DB load detected)', {
+			name: value.name,
+			keyCount: Object.keys(value).length,
+			hasMediaKit: !!value.mediaKit,
+			hasSupportTeam: !!(value.supportTeam?.length),
+			hasTrustedCircle: !!(value.trustedCircle?.length)
+		})
+		
+		// Rehydrate all state from value prop
+		setName(value.name || '')
+		setSchool(value.school || '')
+		setSchoolLevel(value.schoolLevel || 'High School')
+		setHeroImages(value.mediaKit?.heroImages || [])
+		setLogos(value.mediaKit?.logos || [])
+		setBrandColors(value.mediaKit?.brandColors || [])
+		setSamplePostsText((value.mediaKit?.samplePosts || []).join('\n'))
+		setExternalDeckUrl(value.mediaKit?.externalDeckUrl || '')
+		
+		const rehydratedSports: AthleteSport[] =
+			value.sports && value.sports.length
+				? value.sports
+				: (value as any).sport
+				? [{ sportName: (value as any).sport, positions: ((value as any).position ? [(value as any).position] : []) }]
+				: []
+		setSports(rehydratedSports)
+		
+		setLocation(value.location || '')
+		setSocialHandles(
+			value.socialHandles && value.socialHandles.length
+				? value.socialHandles
+				: value.social
+				? [{ platform: 'Other', handle: value.social.handle || '', url: value.social.link || undefined }]
+				: []
+		)
+		setFollowers(value.social?.followers ?? '')
+		setContentStyles(value.contentStyles || [])
+		setPersonality(value.personality || '')
+		setValues((value.values || []).join(', '))
+		setTimePerWeekHours(value.timePerWeekHours ?? 3)
+		setProfessionalism(value.professionalism || 'Developing')
+		setSupportTeam(value.supportTeam || [])
+		setTrustedCircle(value.trustedCircle || [])
+		setAcademic(value.academicProfile || { schoolName: value.school || '', level: value.level, academicInterests: [] })
+		setAvailability(value.availability || [])
+		setInternationalFlag(!!value.internationalFlag)
+		setPerformanceStory(value.performanceStory || { keyMilestones: [], currentFocus: '', futureGoals: [] })
+		setTrainingEntries(value.trainingLog?.entries || [])
+		setMonetizationInterests(value.monetizationInterests || [])
+		setComplianceEmail(value.nil?.complianceContactEmail || '')
+		setPolicyUrl(value.nil?.schoolNILPolicyUrl || '')
+		setCollectiveName(value.nil?.associatedCollective?.name || '')
+		setCollectiveContactName(value.nil?.associatedCollective?.contactName || '')
+		setCollectiveContactEmail(value.nil?.associatedCollective?.contactEmail || '')
+		setCollectiveNotes(value.nil?.associatedCollective?.notes || '')
+		
+		const pa = value.physicalAttributes
+		setHeightFeet(pa?.heightInches ? Math.floor(pa.heightInches / 12) : '')
+		setHeightInchesPart(pa?.heightInches ? pa.heightInches % 12 : '')
+		setWeightLbs(pa?.weightLbs ?? '')
+		setWingspanInches(pa?.wingspanInches ?? '')
+		setHandSizeInches(pa?.handSizeInches ?? '')
+		setDominantHand(pa?.dominantHand || '')
+		
+		setSportMetrics(value.sportMetrics || [])
+		setGameFilm(value.gameFilm || [])
+		
+		// Mark this value as synced
+		lastSyncedValueRef.current = valueKey
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [value])
+	
 	// Notify parent on any change (debounced save handled by parent)
 	useEffect(() => {
 		if (onChange) onChange(currentDraft)
@@ -435,7 +520,7 @@ export default function AthleteProfileForm({ value, onSave, onChange }: Props) {
 			return
 		}
 		onSave(currentDraft)
-		show('Athlete profile saved')
+		// Note: Success toast is now shown by parent (App.tsx) after save completes
 	}
 
 	return (

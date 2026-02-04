@@ -8,8 +8,11 @@ import DemoDiscover from '../components/DemoDiscover'
 import DemoRecruiting from '../components/DemoRecruiting'
 import { installDemoNetworkGuard } from '../lib/demoNetworkGuard'
 import { setOpenGraphTags } from '../lib/metaTags'
+import { isDemoMode } from '../config/appMode'
+import { useAuth } from '../context/AuthContext'
 
 export default function Demo() {
+	const { user } = useAuth()
 	const [activeTab, setActiveTab] = useState<'discover' | 'recruiting'>('discover')
 	const [searchParams, setSearchParams] = useState<{ what?: string; where?: string; sport?: string; location?: string }>({})
 
@@ -97,32 +100,48 @@ export default function Demo() {
 					</div>
 					<div className="flex items-center gap-2">
 						<Button onClick={() => navigate('/')} variant="ghost">Back to Home</Button>
-						<Button onClick={() => {
-							Observability.log({
-								feature: 'ui',
-								route: 'demo.cta.save_progress',
-								status: 'ui_action'
-							})
-							navigate('/')
-							// Small delay to ensure page loads before scrolling
-							setTimeout(() => {
-								document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
-							}, 100)
-						}} className="red-glow">Save my progress</Button>
+						{!user && (
+							<Button 
+								data-testid="demo-header-login-button" 
+								onClick={() => navigate('/auth/login')} 
+								className="red-glow"
+							>
+								Sign In
+							</Button>
+						)}
+						{user && (
+							<Button onClick={() => navigate('/app')} className="red-glow">Go to Dashboard</Button>
+						)}
+						{!user && isDemoMode() && (
+							<Button onClick={() => {
+								Observability.log({
+									feature: 'ui',
+									route: 'demo.cta.save_progress',
+									status: 'ui_action'
+								})
+								navigate('/')
+								// Small delay to ensure page loads before scrolling
+								setTimeout(() => {
+									document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
+								}, 100)
+							}} variant="secondary">Save my progress</Button>
+						)}
 					</div>
 				</div>
 			</header>
 
-			<div className="bg-yellow-50 border-b border-yellow-200 py-2">
-				<div className="mx-auto max-w-6xl px-4 md:px-6 text-sm text-yellow-800 text-center">
-					<strong>Demo mode</strong> — Limited data. No login required. <button onClick={() => {
-						navigate('/')
-						setTimeout(() => {
-							document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
-						}, 100)
-					}} className="underline font-semibold">Save progress with email</button>.
+			{isDemoMode() && (
+				<div className="bg-yellow-50 border-b border-yellow-200 py-2">
+					<div className="mx-auto max-w-6xl px-4 md:px-6 text-sm text-yellow-800 text-center">
+						<strong>Demo mode</strong> — Limited data. No login required. <button onClick={() => {
+							navigate('/')
+							setTimeout(() => {
+								document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
+							}, 100)
+						}} className="underline font-semibold">Save progress with email</button>.
+					</div>
 				</div>
-			</div>
+			)}
 
 			<main className="mx-auto max-w-6xl px-4 md:px-6 py-6">
 				<div className="flex items-center gap-2 mb-6">

@@ -1,5 +1,10 @@
 # Recruiting Explore + Targets QA
 
+## Setup
+- Ensure `.env.local` contains a valid `VITE_GOOGLE_MAPS_API_KEY` for map-based search features.
+- For detailed setup instructions, see: [docs/google-maps-setup.md](./google-maps-setup.md)
+- Restart dev server after changing environment variables.
+
 ## Explore (Map)
 - Refresh results can be clicked repeatedly without locking the UI.
 - While loading, the button shows “Searching…” and is disabled; it re-enables on completion or error.

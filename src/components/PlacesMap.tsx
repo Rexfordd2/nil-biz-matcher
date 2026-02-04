@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { loadGoogleMaps } from '../lib/googleMapsLoader'
+import { loadGoogleMaps } from '../lib/google/maps'
 import type { NormalizedPlace } from '../hooks/usePlacesSearch'
 
 type Props = {

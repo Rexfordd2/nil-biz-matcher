@@ -48,6 +48,9 @@ import DebugDiscoverRecruiting from './pages/DebugDiscoverRecruiting'
 import DebugBuild from './pages/DebugBuild'
 import { navigate } from './routes/RootRouter'
 import WaitlistGate from './components/WaitlistGate'
+import BetaWaitlistModal from './components/BetaWaitlistModal'
+import { isBetaMode, isDemoMode } from './config/appMode'
+import AthleteProfileDebugPanel from './components/AthleteProfileDebugPanel'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -107,6 +110,7 @@ function MainApp() {
 	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 	const [userMenuOpen, setUserMenuOpen] = useState(false)
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+	const [waitlistOpen, setWaitlistOpen] = useState(false)
 	const { user, loading } = useSupabaseSession()
 	const autosave = useAutosaveProfile({ user, debounceMs: 800 })
 	const anonDraft = useAnonProfileDraft({ debounceMs: 800 })
@@ -128,6 +132,17 @@ function MainApp() {
 	useEffect(() => {
 		// Observability: initial load
 		Observability.log({ feature: 'ui', route: 'app.mount', status: 'ui_action' })
+		
+		// Log env config status in dev mode
+		if (import.meta.env.DEV) {
+			import('./config/env').then(({ hasGoogleMapsKey }) => {
+				console.log('[App] Environment config:', {
+					hasGoogleMapsKey,
+					hasSupabase: supabaseEnvConfigured,
+					mode: import.meta.env.MODE
+				})
+			})
+		}
 	}, [])
 
 	// Map Supabase user to CurrentUser shape whenever it changes
@@ -247,17 +262,58 @@ function MainApp() {
 
 	async function handleLogout() {
 		try {
+			// 1. Sign out from Supabase
 			await signOut()
 		} catch {}
+		
+		// 2. Clear React state
 		setCurrentUser(null)
 		setUserMenuOpen(false)
-		show('Logged out')
+		setAthlete(null)
+		
+		// 3. Clear any cached profile data from localStorage
+		try {
+			// Clear user-specific profile drafts
+			Object.keys(localStorage).forEach(key => {
+				if (key.startsWith('athleteProfileDraft:')) {
+					localStorage.removeItem(key)
+				}
+			})
+		} catch {
+			// Silently fail if localStorage is unavailable
+		}
+		
+		show('Logged out successfully')
+		
+		// 4. Navigate with replace to prevent back button returning to app shell
+		window.location.replace('/auth/login')
+	}
+
+	// BETA mode auth gate: redirect unauthenticated users to /auth/login
+	useEffect(() => {
+		if (isBetaMode() && !loading && !user) {
+			navigate('/auth/login', true)
+		}
+	}, [user, loading])
+
+	// In BETA mode, if not authenticated, render nothing while redirecting
+	if (isBetaMode() && !loading && !user) {
+		return (
+			<ToastProvider>
+				<div className="min-h-screen bg-background light-theme flex items-center justify-center">
+					<div className="text-gray-400">Redirecting to login...</div>
+				</div>
+			</ToastProvider>
+		)
 	}
 
 	return (
 		<ToastProvider>
 			<ErrorBoundary>
-			<WaitlistGate />
+			{/* Only show WaitlistGate in DEMO mode */}
+			{isDemoMode() && <WaitlistGate />}
+			{/* Beta waitlist modal */}
+			{isBetaMode() && <BetaWaitlistModal open={waitlistOpen} onClose={() => setWaitlistOpen(false)} />}
 			<div className="min-h-screen bg-background light-theme">
 				<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
 					<div className="mx-auto max-w-6xl px-4 md:px-6 py-4 flex items-center justify-between">
@@ -285,8 +341,26 @@ function MainApp() {
 							<div className="text-xs text-black">
 								{`Build: ${BUILD_ID}`}
 							</div>
+							{!currentUser && (
+								<Button 
+									data-testid="app-header-login-button" 
+									onClick={() => navigate('/auth/login')} 
+									className="red-glow"
+								>
+									Sign In
+								</Button>
+							)}
 							{currentUser ? (
 								<div className="flex items-center gap-3">
+									{isBetaMode() && (
+										<Button
+											onClick={() => setWaitlistOpen(true)}
+											variant="secondary"
+											data-testid="beta-waitlist-cta"
+										>
+											Join Waitlist
+										</Button>
+									)}
 									<button
 										type="button"
 										onClick={() => setUserMenuOpen(v => !v)}
@@ -302,23 +376,7 @@ function MainApp() {
 										</div>
 									)}
 								</div>
-							) : (
-								<div className="flex flex-col items-end gap-1">
-									<Button onClick={() => {
-										Observability.log({
-											feature: 'ui',
-											route: 'app.cta.save_progress',
-											status: 'ui_action'
-										})
-										navigate('/')
-										// Small delay to ensure page loads before scrolling
-										setTimeout(() => {
-											document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
-										}, 100)
-									}} className="red-glow">Save my progress</Button>
-									<p className="text-xs text-gray-400">No login required</p>
-								</div>
-							)}
+							) : null}
 						</div>
 					</div>
 				</header>
@@ -336,6 +394,16 @@ function MainApp() {
 										<div>Last saved: <span className="text-white">{currentUser ? (autosave.lastSavedAt ? new Date(autosave.lastSavedAt).toLocaleString() : '—') : (anonDraft.lastSavedAt ? new Date(anonDraft.lastSavedAt).toLocaleString() : '—')}</span></div>
 										<div>Status: <span className="text-white">{currentUser ? (autosave.statusText || '—') : (anonDraft.statusText || '—')}</span></div>
 										{currentUser && autosave.error && <div>Error: <span className="text-amber-300">{autosave.error}</span></div>}
+										{currentUser && autosave.errorRaw && (
+											<div className="mt-2 p-2 bg-red-900/20 border border-red-700 rounded text-xs">
+												<div className="font-semibold text-red-400 mb-1">Raw Supabase Error:</div>
+												{autosave.errorRaw.code && <div>Code: <span className="text-white">{autosave.errorRaw.code}</span></div>}
+												{autosave.errorRaw.status && <div>Status: <span className="text-white">{autosave.errorRaw.status}</span></div>}
+												{autosave.errorRaw.message && <div>Message: <span className="text-white">{autosave.errorRaw.message}</span></div>}
+												{autosave.errorRaw.details && <div>Details: <span className="text-white">{autosave.errorRaw.details}</span></div>}
+												{autosave.errorRaw.hint && <div>Hint: <span className="text-white">{autosave.errorRaw.hint}</span></div>}
+											</div>
+										)}
 										{(healthResult.sessionOk !== null || healthResult.dbOk !== null) && (
 											<div className="mt-2 space-y-1">
 												<div>Health Session: <span className={healthResult.sessionOk ? 'text-green-300' : 'text-amber-300'}>{healthResult.sessionOk ? 'pass' : 'fail'}</span> {healthResult.sessionError ? `- ${healthResult.sessionError}` : ''}</div>
@@ -410,6 +478,17 @@ function MainApp() {
 					)}
 					{tab === 'Athlete' && (
 						<>
+							{/* Dedicated Debug Panel for Athlete Profile (only shows with ?debug=1) */}
+							<AthleteProfileDebugPanel
+								user={currentUser ? user : null}
+								profileFetched={currentUser ? autosave.profileFetched : anonDraft.profileFetched}
+								lastSaveAttempt={currentUser ? autosave.lastSaveAttempt : anonDraft.lastSaveAttempt}
+								lastSavedAt={currentUser ? autosave.lastSavedAt : anonDraft.lastSavedAt}
+								status={currentUser ? autosave.status : anonDraft.status}
+								error={currentUser ? autosave.error : anonDraft.error}
+								errorRaw={currentUser ? autosave.errorRaw : anonDraft.errorRaw}
+							/>
+
 							<div className="flex items-center justify-between">
 								<div className="text-sm text-gray-400">
 									{currentUser ? (
@@ -438,9 +517,18 @@ function MainApp() {
 									if (currentUser) {
 										autosave.onDraftChange(a)
 										await autosave.saveNow()
+										// Show success/failure based on save result
+										if (autosave.status === 'saved') {
+											show('Athlete profile saved')
+										} else if (autosave.status === 'error') {
+											show(`Save failed: ${autosave.error || 'Unknown error'}`)
+										}
 									} else {
 										anonDraft.onDraftChange(a)
 										await anonDraft.saveNow()
+										if (anonDraft.status === 'saved') {
+											show('Athlete profile saved locally')
+										}
 									}
 								}}
 								onChange={(draft) => {
@@ -725,26 +813,43 @@ function MainApp() {
 									</div>
 								) : (
 									<div className="space-y-4">
-										<div className="border border-border rounded-lg p-4 bg-mid/30">
-											<h3 className="text-white font-semibold mb-2">Anonymous Mode</h3>
-											<p className="text-gray-300 text-sm mb-4">
-												You're using anonymous mode. Your progress is saved to this device.
-											</p>
-											<Button
-												onClick={() => {
-													navigate('/')
-													setTimeout(() => {
-														document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
-													}, 100)
-												}}
-												className="red-glow"
-											>
-												Join waitlist to save progress to email
-											</Button>
-										</div>
-										<div className="text-sm text-gray-400">
-											<p>To access your data across devices and enable cloud sync, join the waitlist and claim your account when available.</p>
-										</div>
+										{isDemoMode() ? (
+											<>
+												<div className="border border-border rounded-lg p-4 bg-mid/30">
+													<h3 className="text-white font-semibold mb-2">Anonymous Mode</h3>
+													<p className="text-gray-300 text-sm mb-4">
+														You're using anonymous mode. Your progress is saved to this device.
+													</p>
+													<Button
+														onClick={() => {
+															navigate('/')
+															setTimeout(() => {
+																document.getElementById('waitlist-form')?.scrollIntoView({ behavior: 'smooth' })
+															}, 100)
+														}}
+														className="red-glow"
+													>
+														Join waitlist to save progress to email
+													</Button>
+												</div>
+												<div className="text-sm text-gray-400">
+													<p>To access your data across devices and enable cloud sync, join the waitlist and claim your account when available.</p>
+												</div>
+											</>
+										) : (
+											<div className="border border-border rounded-lg p-4 bg-mid/30">
+												<h3 className="text-white font-semibold mb-2">Not Logged In</h3>
+												<p className="text-gray-300 text-sm mb-4">
+													Log in to save your progress and access your data across devices.
+												</p>
+												<Button
+													onClick={() => goToTab('Log In')}
+													className="red-glow"
+												>
+													Log In
+												</Button>
+											</div>
+										)}
 									</div>
 								)}
 							</div>
@@ -875,7 +980,7 @@ function MainApp() {
 				{(Observability as any).isDiagnosticsEnabled?.() && <DiagnosticsPanel />}
 
 				<footer className="py-10">
-					{!currentUser && (
+					{!currentUser && isDemoMode() && (
 						<div className="mx-auto max-w-6xl px-4 md:px-6">
 							<div className="card p-4 bg-mid/30 border border-border">
 								<div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">

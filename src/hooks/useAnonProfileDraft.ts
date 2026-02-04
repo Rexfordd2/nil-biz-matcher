@@ -20,6 +20,10 @@ export function useAnonProfileDraft(params?: {
 	status: Status
 	statusText: string
 	lastSavedAt: number | null
+	lastSaveAttempt: number | null
+	profileFetched: boolean
+	error: string | null
+	errorRaw: any
 	onDraftChange: (draft: AthleteProfile) => void
 	saveNow: () => Promise<void>
 } {
@@ -191,6 +195,10 @@ export function useAnonProfileDraft(params?: {
 		status,
 		statusText,
 		lastSavedAt,
+		lastSaveAttempt: null, // anon mode doesn't track save attempts
+		profileFetched: true, // anon mode always has profile from localStorage
+		error: null, // anon mode doesn't have server errors
+		errorRaw: null, // anon mode doesn't have server errors
 		onDraftChange,
 		saveNow
 	}

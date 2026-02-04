@@ -12,10 +12,12 @@ import Papa from 'papaparse'
 import { isGoogleCseConfigured, searchContacts, type CseResult } from '../services/googleCse'
 import { buildSearchLinks } from '../utils/searchLinks'
 import PlacesMap from './PlacesMap'
-import { loadGoogleMaps } from '../lib/googleMapsLoader'
 import type { NormalizedPlace } from '../hooks/usePlacesSearch'
 import { usePlaceDetails } from '../hooks/usePlaceDetails'
 import Observability, { generateRequestId } from '../lib/obs'
+import { hasGoogleMapsKey, textSearch, loadGoogleMaps } from '../lib/google/maps'
+import GoogleMapsDisabledNotice from './GoogleMapsDisabledNotice'
+import RecruitingSearchFilters, { type LocationFilter } from './RecruitingSearchFilters'
 
 type Org = {
   id: string
@@ -39,6 +41,7 @@ type Org = {
 type OrgContact = {
   id: string
   org_id: string
+  user_id?: string | null
   role: string | null
   name: string | null
   email: string | null
@@ -108,26 +111,35 @@ export default function Recruiting() {
 
 // Explore Panel (Map-based discovery via Google Places)
 function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: boolean }) {
-  const [sport, setSport] = useState<string>('')
-  const [sportOther, setSportOther] = useState<string>('')
-  const [level, setLevel] = useState<string>('')
-  const [orgType, setOrgType] = useState<string>('')
-  const [searchThisArea, setSearchThisArea] = useState<boolean>(true)
-  const [refreshToken, setRefreshToken] = useState<number>(0)
+	const [sport, setSport] = useState<string>('')
+	const [sportOther, setSportOther] = useState<string>('')
+	const [level, setLevel] = useState<string>('')
+	const [orgType, setOrgType] = useState<string>('')
+	const [searchThisArea, setSearchThisArea] = useState<boolean>(true)
+	const [refreshToken, setRefreshToken] = useState<number>(0)
 
-  const [places, setPlaces] = useState<NormalizedPlace[]>([])
-  const [loading, setLoading] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
-  const [isStale, setIsStale] = useState<boolean>(false)
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
-  const [lastGoodPlaces, setLastGoodPlaces] = useState<NormalizedPlace[]>([])
+	// Location-based filtering
+	const [locationFilter, setLocationFilter] = useState<LocationFilter>({
+		locationText: '',
+		lat: null,
+		lng: null,
+		radiusMiles: 25
+	})
 
-  const latestCenterRef = useRef<{ lat: number, lng: number }>({ lat: 39.5, lng: -98.35 })
-  const latestZoomRef = useRef<number>(5)
-  const searchTokenRef = useRef<number>(0)
-  const abortControllerRef = useRef<AbortController | null>(null)
+	const [places, setPlaces] = useState<NormalizedPlace[]>([])
+	const [unfilteredPlaces, setUnfilteredPlaces] = useState<NormalizedPlace[]>([])
+	const [loading, setLoading] = useState<boolean>(false)
+	const [error, setError] = useState<string | null>(null)
+	const [isStale, setIsStale] = useState<boolean>(false)
+	const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
+	const [lastGoodPlaces, setLastGoodPlaces] = useState<NormalizedPlace[]>([])
 
-  const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
+	const latestCenterRef = useRef<{ lat: number, lng: number }>({ lat: 39.5, lng: -98.35 })
+	const latestZoomRef = useRef<number>(5)
+	const searchTokenRef = useRef<number>(0)
+	const abortControllerRef = useRef<AbortController | null>(null)
+
+	const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
 
   function computeRadiusMeters(zoom: number): number {
     // Approx mapping; smaller zoom => larger radius
@@ -137,6 +149,38 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     if (zoom >= 9) return 20000
     if (zoom >= 7) return 40000
     return 60000
+  }
+
+  // Calculate distance between two coordinates in miles using Haversine formula
+  function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 3959 // Earth's radius in miles
+    const dLat = (lat2 - lat1) * (Math.PI / 180)
+    const dLng = (lng2 - lng1) * (Math.PI / 180)
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
+
+  // Filter places by location and radius
+  function filterPlacesByLocation(allPlaces: NormalizedPlace[]): NormalizedPlace[] {
+    if (locationFilter.lat === null || locationFilter.lng === null) {
+      return allPlaces
+    }
+
+    return allPlaces.filter((place) => {
+      const distance = calculateDistance(
+        locationFilter.lat!,
+        locationFilter.lng!,
+        place.location.lat,
+        place.location.lng
+      )
+      return distance <= locationFilter.radiusMiles
+    })
   }
 
   function buildKeyword(): string {
@@ -198,6 +242,14 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
   }
 
   async function runPlacesSearch(center: { lat: number, lng: number }, zoom: number) {
+    // Early return if Google Maps API key is not configured
+    if (!hasGoogleMapsKey) {
+      setError('Google Maps API key not configured')
+      setPlaces([])
+      setSelectedPlaceId(null)
+      return
+    }
+
     // Cancel any in-flight request
     try {
       abortControllerRef.current?.abort()
@@ -222,40 +274,19 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     })
     
     try {
+      // Ensure Google Maps is loaded (validates API key)
       const google = await loadGoogleMaps()
       if (ac.signal.aborted) return
       if (token !== searchTokenRef.current) return
       
-      if (!google?.maps?.places) {
-        throw new Error('Google Places not available')
-      }
-      const svc = new google.maps.places.PlacesService(document.createElement('div'))
-
+      // Perform text search using shared utility (includes retry logic)
       const request: google.maps.places.TextSearchRequest = {
         query: buildKeyword(),
         location: new google.maps.LatLng(center.lat, center.lng),
         radius: computeRadiusMeters(zoom)
       }
 
-      const firstPage = await new Promise<google.maps.places.PlaceResult[]>((resolve, reject) => {
-        if (ac.signal.aborted) {
-          reject(new Error('Aborted'))
-          return
-        }
-        svc.textSearch(request, (res, status) => {
-          if (ac.signal.aborted) {
-            reject(new Error('Aborted'))
-            return
-          }
-          if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(res)) {
-            resolve(res)
-          } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-            resolve([])
-          } else {
-            reject(new Error(`Places textSearch failed: ${status}`))
-          }
-        })
-      })
+      const firstPage = await textSearch(request, ac.signal)
 
       if (ac.signal.aborted || token !== searchTokenRef.current) return
 
@@ -278,11 +309,17 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       // Only update state if this is still the latest request
       if (token !== searchTokenRef.current) return
       
-      setPlaces(normalized)
-      setLastGoodPlaces(normalized)
+      // Store unfiltered results
+      setUnfilteredPlaces(normalized)
+      
+      // Apply location-based filtering
+      const filtered = filterPlacesByLocation(normalized)
+      
+      setPlaces(filtered)
+      setLastGoodPlaces(filtered)
       setIsStale(false)
-      if (normalized.length > 0) {
-        setSelectedPlaceId(normalized[0].placeId)
+      if (filtered.length > 0) {
+        setSelectedPlaceId(filtered[0].placeId)
       } else {
         setSelectedPlaceId(null)
       }
@@ -357,6 +394,20 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sport, sportOther, level, orgType, searchThisArea])
 
+  // Re-filter existing results when location filter changes
+  useEffect(() => {
+    if (unfilteredPlaces.length > 0) {
+      const filtered = filterPlacesByLocation(unfilteredPlaces)
+      setPlaces(filtered)
+      if (filtered.length > 0 && !filtered.find(p => p.placeId === selectedPlaceId)) {
+        setSelectedPlaceId(filtered[0].placeId)
+      } else if (filtered.length === 0) {
+        setSelectedPlaceId(null)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationFilter.lat, locationFilter.lng, locationFilter.radiusMiles])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -377,7 +428,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     const { data: existing, error: exErr } = await supabase!
       .from('orgs')
       .select('id')
-      .eq('owner_id', userId)
+      .eq('user_id', userId)
       .eq('place_id', selectedPlaceId)
       .limit(1)
       .maybeSingle()
@@ -406,7 +457,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       const { data: again } = await supabase!
         .from('orgs')
         .select('id')
-        .eq('owner_id', userId)
+        .eq('user_id', userId)
         .eq('place_id', selectedPlaceId)
         .limit(1)
         .maybeSingle()
@@ -424,7 +475,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       setSavedOrgId(orgId)
       await supabase!.from('user_targets').upsert({ user_id: userId, org_id: orgId }, { onConflict: 'user_id,org_id' })
       // load contacts
-      const { data: c } = await supabase!.from('org_contacts').select('*').eq('org_id', orgId).order('created_at', { ascending: true })
+      const { data: c } = await supabase!.from('org_contacts').select('*').eq('org_id', orgId).eq('user_id', userId).order('created_at', { ascending: true })
       setContacts(Array.isArray(c) ? (c as OrgContact[]) : [])
     } finally {
       setSaving(false)
@@ -446,6 +497,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     try {
       const payload = {
         org_id: savedOrgId,
+        user_id: userId,
         role: contactRole || null,
         name: contactName || null,
         email: contactEmail || null,
@@ -455,7 +507,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       } as any
       const { error } = await supabase!.from('org_contacts').insert([payload])
       if (!error) {
-        const { data: c } = await supabase!.from('org_contacts').select('*').eq('org_id', savedOrgId).order('created_at', { ascending: true })
+        const { data: c } = await supabase!.from('org_contacts').select('*').eq('org_id', savedOrgId).eq('user_id', userId).order('created_at', { ascending: true })
         setContacts(Array.isArray(c) ? (c as OrgContact[]) : [])
         setContactRole(''); setContactName(''); setContactEmail(''); setContactPhone(''); setContactUrl(''); setContactNotes('')
       }
@@ -470,12 +522,23 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 
   const selected = places.find(p => p.placeId === (selectedPlaceId || '')) || null
 
-  return (
-    <Card title="Explore Map">
-      <div className="grid grid-cols-1 md:grid-cols-[360px,1fr] gap-6">
-        {/* Filters Panel */}
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-3">
+	return (
+		<Card title="Explore Map">
+			{!hasGoogleMapsKey && <GoogleMapsDisabledNotice className="mb-4" />}
+			<div className="grid grid-cols-1 md:grid-cols-[360px,1fr] gap-6">
+				{/* Filters Panel */}
+				<div className="space-y-3">
+					<div className="grid grid-cols-1 gap-3">
+            {/* Location-based filtering */}
+            <div className="border border-border rounded-lg p-3 bg-mid/20">
+              <div className="font-medium mb-3 text-sm">Location Filter</div>
+              <RecruitingSearchFilters
+                value={locationFilter}
+                onChange={setLocationFilter}
+                disabled={loading}
+              />
+            </div>
+
             <div>
               <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Sport</div>
               <Select value={sport} onChange={e => { setSport(e.target.value); if (e.target.value !== 'other') setSportOther('') }}>
@@ -503,10 +566,13 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
               <input type="checkbox" checked={searchThisArea} onChange={e => setSearchThisArea(e.target.checked)} />
               <span>Search this map area</span>
             </label>
-            <div className="flex gap-2">
-              <Button onClick={refresh} disabled={loading || !userId}>{loading ? 'Searching…' : 'Refresh results'}</Button>
-              <Button variant="secondary" onClick={() => { setSport(''); setSportOther(''); setLevel(''); setOrgType(''); setRefreshToken(v => v + 1) }}>Clear</Button>
-            </div>
+							<div className="flex gap-2">
+								<Button onClick={refresh} disabled={loading || !userId || !hasGoogleMapsKey}>{loading ? 'Searching…' : 'Refresh results'}</Button>
+								<Button variant="secondary" onClick={() => { setSport(''); setSportOther(''); setLevel(''); setOrgType(''); setRefreshToken(v => v + 1) }}>Clear</Button>
+							</div>
+							{!hasGoogleMapsKey && (
+								<div className="text-xs text-amber-300">Search disabled: Google Maps API key not configured</div>
+							)}
             <div className="text-xs text-foreground/60">Results powered by Google</div>
             {error && (
               <div className={`text-sm ${isStale ? 'text-amber-600' : 'text-red-600'}`}>
@@ -523,15 +589,32 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 
           {/* Results List (optional) */}
           <div className="border border-border rounded-md divide-y divide-border overflow-hidden">
-            {places.length === 0 && (
+            {places.length === 0 && unfilteredPlaces.length > 0 && locationFilter.lat !== null && (
+              <div className="p-3 text-amber-600">
+                No results within {locationFilter.radiusMiles} miles of {locationFilter.locationText}. Try increasing the radius or adjusting your location.
+              </div>
+            )}
+            {places.length === 0 && unfilteredPlaces.length === 0 && (
               <div className="p-3 text-foreground/70">{loading ? 'Loading…' : 'No results yet. Pan/zoom the map and refresh.'}</div>
             )}
-            {places.map(p => (
-              <button key={p.placeId} type="button" onClick={() => setSelectedPlaceId(p.placeId)} className={`w-full text-left p-3 hover:bg-mid/60 ${selectedPlaceId === p.placeId ? 'bg-mid/60' : ''}`}>
-                <div className="font-medium">{p.name}</div>
-                <div className="text-sm text-foreground/70">{p.formattedAddress}</div>
-              </button>
-            ))}
+            {places.map(p => {
+              const distance = locationFilter.lat !== null && locationFilter.lng !== null
+                ? calculateDistance(locationFilter.lat, locationFilter.lng, p.location.lat, p.location.lng)
+                : null
+              return (
+                <button key={p.placeId} type="button" onClick={() => setSelectedPlaceId(p.placeId)} className={`w-full text-left p-3 hover:bg-mid/60 ${selectedPlaceId === p.placeId ? 'bg-mid/60' : ''}`}>
+                  <div className="font-medium">{p.name}</div>
+                  <div className="text-sm text-foreground/70">
+                    {p.formattedAddress}
+                    {distance !== null && (
+                      <span className="ml-2 text-xs text-blue-500">
+                        ({distance.toFixed(1)} mi)
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -715,7 +798,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
     setLoading(true)
     setOrgLoadError(null)
     try {
-      let query = supabase!.from('orgs').select('*').order('created_at', { ascending: false })
+      let query = supabase!.from('orgs').select('*').eq('user_id', userId as string).order('created_at', { ascending: false })
       if (q) {
         query = query.ilike('name', `%${q}%`)
       }
@@ -760,7 +843,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
   }, [userId])
 
   async function loadContacts(orgId: string) {
-    const { data, error } = await supabase!.from('org_contacts').select('*').eq('org_id', orgId).order('created_at', { ascending: true })
+    const { data, error } = await supabase!.from('org_contacts').select('*').eq('org_id', orgId).eq('user_id', userId as string).order('created_at', { ascending: true })
     if (error) throw error
 		setContacts(Array.isArray(data) ? (data as OrgContact[]) : [])
   }
@@ -809,6 +892,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
     try {
       const payload = {
         org_id: selected.id,
+        user_id: userId,
         contact_url: url
       }
       const { error } = await supabase!.from('org_contacts').insert([payload as any])
@@ -839,9 +923,9 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
       const orgIds = (inserted as Org[]).map(o => o.id)
       // Add simple contacts
       const contactsToInsert: Omit<OrgContact, 'id'>[] = [
-        { org_id: orgIds[0], role: 'Director', name: 'Alex Morgan', email: 'alex@metrofc.com', phone: '+1 310-555-0199', contact_url: 'https://linkedin.com/in/alexm' },
-        { org_id: orgIds[1], role: 'Head Coach', name: 'Jamie Lee', email: 'coach.lee@psu.edu', phone: '+1 206-555-0177', contact_url: 'https://psu.example.edu/athletics/staff/lee' },
-        { org_id: orgIds[2], role: 'GM', name: 'Jordan Smith', email: 'jsmith@wolves.ca', phone: '+1 604-555-0120', contact_url: null }
+        { org_id: orgIds[0], user_id: userId, role: 'Director', name: 'Alex Morgan', email: 'alex@metrofc.com', phone: '+1 310-555-0199', contact_url: 'https://linkedin.com/in/alexm' },
+        { org_id: orgIds[1], user_id: userId, role: 'Head Coach', name: 'Jamie Lee', email: 'coach.lee@psu.edu', phone: '+1 206-555-0177', contact_url: 'https://psu.example.edu/athletics/staff/lee' },
+        { org_id: orgIds[2], user_id: userId, role: 'GM', name: 'Jordan Smith', email: 'jsmith@wolves.ca', phone: '+1 604-555-0120', contact_url: null }
       ]
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { error: cErr } = await supabase!.from('org_contacts').insert(contactsToInsert)
@@ -880,6 +964,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
     try {
       const payload = {
         org_id: selected.id,
+        user_id: userId,
         role: contactRole || null,
         name: contactName || null,
         email: contactEmail || null,
@@ -1255,6 +1340,7 @@ function DirectoryPanel({ userId, isMobile }: { userId: string | null, isMobile:
                             for (const c of contacts) {
                               contactsIns.push({
                                 org_id: org.id,
+                                user_id: userId,
                                 role: c.role ?? null,
                                 name: c.name ?? null,
                                 email: c.email ?? null,
@@ -1374,6 +1460,7 @@ function TargetsPanel({ userId }: { userId: string | null }) {
       const { data, error } = await supabase!
         .from('user_targets')
         .select('*, orgs:org_id(*)')
+        .eq('user_id', userId)
         .order('updated_at', { ascending: false })
       if (error) throw error
 			const safe = Array.isArray(data) ? (data as any[]).map(sanitizeTargetRow) : []
@@ -1390,7 +1477,8 @@ function TargetsPanel({ userId }: { userId: string | null }) {
   }, [userId])
 
   async function updateRow(id: string, patch: Partial<TargetRow>) {
-    const { error } = await supabase!.from('user_targets').update(patch).eq('id', id)
+    if (!userId) return
+    const { error } = await supabase!.from('user_targets').update(patch).eq('id', id).eq('user_id', userId)
     if (error) return
     await loadTargets()
   }
