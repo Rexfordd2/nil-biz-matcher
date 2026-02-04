@@ -59,6 +59,7 @@ export default function RecruitingSearchFilters({ value, onChange, disabled }: P
       throw new Error('Google Maps API key not configured')
     }
 
+    // Ensure Google Maps is loaded before using Geocoder
     const google = await loadGoogleMaps()
     const geocoder = new google.maps.Geocoder()
 
@@ -240,7 +241,7 @@ export default function RecruitingSearchFilters({ value, onChange, disabled }: P
                 handleApplyLocation()
               }
             }}
-            disabled={disabled || isGeocoding || isGeolocating}
+            disabled={false}
           />
           <Button
             onClick={handleApplyLocation}
@@ -274,7 +275,7 @@ export default function RecruitingSearchFilters({ value, onChange, disabled }: P
           <Button
             variant="secondary"
             onClick={handleClearLocation}
-            disabled={disabled}
+            disabled={false}
           >
             Clear
           </Button>
@@ -290,7 +291,7 @@ export default function RecruitingSearchFilters({ value, onChange, disabled }: P
           onChange={(e) =>
             onChange({ ...value, radiusMiles: Number(e.target.value) })
           }
-          disabled={disabled}
+          disabled={false}
         >
           {RADIUS_OPTIONS.map((miles) => (
             <option key={miles} value={miles}>

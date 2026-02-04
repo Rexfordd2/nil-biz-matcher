@@ -51,6 +51,8 @@ import WaitlistGate from './components/WaitlistGate'
 import BetaWaitlistModal from './components/BetaWaitlistModal'
 import { isBetaMode, isDemoMode } from './config/appMode'
 import AthleteProfileDebugPanel from './components/AthleteProfileDebugPanel'
+import AuthDebugPanel from './components/AuthDebugPanel'
+import { goToLogin, goToLogout } from './lib/auth/navigation'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -261,32 +263,8 @@ function MainApp() {
 	const cloudAvailable = cloudConfigured && Boolean(currentUser) && !Boolean(autosave.error)
 
 	async function handleLogout() {
-		try {
-			// 1. Sign out from Supabase
-			await signOut()
-		} catch {}
-		
-		// 2. Clear React state
-		setCurrentUser(null)
-		setUserMenuOpen(false)
-		setAthlete(null)
-		
-		// 3. Clear any cached profile data from localStorage
-		try {
-			// Clear user-specific profile drafts
-			Object.keys(localStorage).forEach(key => {
-				if (key.startsWith('athleteProfileDraft:')) {
-					localStorage.removeItem(key)
-				}
-			})
-		} catch {
-			// Silently fail if localStorage is unavailable
-		}
-		
-		show('Logged out successfully')
-		
-		// 4. Navigate with replace to prevent back button returning to app shell
-		window.location.replace('/auth/login')
+		// Use centralized logout function for consistent behavior
+		await goToLogout()
 	}
 
 	// BETA mode auth gate: redirect unauthenticated users to /auth/login
@@ -344,7 +322,7 @@ function MainApp() {
 							{!currentUser && (
 								<Button 
 									data-testid="app-header-login-button" 
-									onClick={() => navigate('/auth/login')} 
+									onClick={() => goToLogin()} 
 									className="red-glow"
 								>
 									Sign In
@@ -487,6 +465,7 @@ function MainApp() {
 								status={currentUser ? autosave.status : anonDraft.status}
 								error={currentUser ? autosave.error : anonDraft.error}
 								errorRaw={currentUser ? autosave.errorRaw : anonDraft.errorRaw}
+								queueState={currentUser ? autosave._debugQueueState : anonDraft._debugQueueState}
 							/>
 
 							<div className="flex items-center justify-between">
@@ -978,6 +957,9 @@ function MainApp() {
 
 				{/* Diagnostics (dev only or when VITE_DIAGNOSTICS=true) */}
 				{(Observability as any).isDiagnosticsEnabled?.() && <DiagnosticsPanel />}
+
+				{/* Auth Debug Panel (visible with ?debug=1) */}
+				<AuthDebugPanel />
 
 				<footer className="py-10">
 					{!currentUser && isDemoMode() && (

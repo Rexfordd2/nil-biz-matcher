@@ -10,6 +10,8 @@ import WaitlistForm from '../components/WaitlistForm'
 import WaitlistEmbed from '../components/WaitlistEmbed'
 import { isDemoMode, isBetaMode } from '../config/appMode'
 import { hasWaitlistJoined } from '../lib/waitlistState'
+import { goToLogin } from '../lib/auth/navigation'
+import AuthDebugPanel from '../components/AuthDebugPanel'
 
 export default function Home() {
 	const { user } = useAuth()
@@ -105,7 +107,7 @@ export default function Home() {
 						) : isDemoMode() ? (
 							<Button data-testid="header-save-progress-button" onClick={handleSaveProgress} className="red-glow">Save my progress</Button>
 						) : (
-							<Button data-testid="header-login-button" onClick={() => navigate('/auth/login')} className="red-glow">Log In</Button>
+							<Button data-testid="header-login-button" onClick={() => goToLogin('/app')} className="red-glow">Log In</Button>
 						)}
 					</div>
 				</div>
@@ -133,7 +135,7 @@ export default function Home() {
 								<Button data-testid="get-started-button" onClick={() => navigate('/app')} className="red-glow">
 									Get Started
 								</Button>
-								<Button data-testid="login-button" onClick={() => navigate('/auth/login')} variant="secondary">
+								<Button data-testid="login-button" onClick={() => goToLogin('/app')} variant="secondary">
 									Log In
 								</Button>
 							</>
@@ -162,14 +164,14 @@ export default function Home() {
 							<div className="text-center space-y-4">
 								<p className="text-green-600 font-medium text-lg">✓ You're on the list</p>
 								<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
-								<div className="flex flex-col gap-2">
-									<Button
-										onClick={() => navigate('/auth/login?returnTo=/app')}
-										className="w-full red-glow"
-										data-testid="home-waitlist-success-login"
-									>
-										Log In
-									</Button>
+							<div className="flex flex-col gap-2">
+								<Button
+									onClick={() => goToLogin('/app')}
+									className="w-full red-glow"
+									data-testid="home-waitlist-success-login"
+								>
+									Log In
+								</Button>
 									<Button
 										onClick={() => navigate('/demo')}
 										variant="secondary"
@@ -271,6 +273,9 @@ export default function Home() {
 					<a className="underline" onClick={() => navigate('/status')}>Status</a>
 				</div>
 			</footer>
+
+			{/* Auth Debug Panel (visible with ?debug=1) */}
+			<AuthDebugPanel />
 		</div>
 	)
 }

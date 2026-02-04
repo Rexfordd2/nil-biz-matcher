@@ -4,6 +4,7 @@ import Input from './ui/Input'
 import { submitWaitlistEmail } from '../lib/waitlist'
 import { markWaitlistJoined } from '../lib/waitlistState'
 import { navigate } from '../routes/RootRouter'
+import { goToLogin } from '../lib/auth/navigation'
 
 type Props = {
 	open: boolean
@@ -99,7 +100,7 @@ export default function BetaWaitlistModal({ open, onClose }: Props) {
 							<Button
 								onClick={() => {
 									handleClose()
-									navigate('/auth/login?returnTo=/app')
+									goToLogin('/app')
 								}}
 								className="w-full red-glow"
 								data-testid="beta-waitlist-success-login"

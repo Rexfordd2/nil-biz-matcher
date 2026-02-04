@@ -7,6 +7,7 @@ import { MIN_FORM_INTERACTION_TIME } from '../config/honeypot'
 import { markWaitlistJoined } from '../lib/waitlistState'
 import { navigate } from '../routes/RootRouter'
 import { isDemoMode } from '../config/appMode'
+import { goToLogin } from '../lib/auth/navigation'
 
 type Props = {
 	onSuccess?: () => void
@@ -106,7 +107,7 @@ export default function WaitlistForm({ onSuccess, source = 'landing' }: Props) {
 				<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
 				<div className="flex flex-col gap-2">
 					<Button
-						onClick={() => navigate('/auth/login?returnTo=/app')}
+						onClick={() => goToLogin('/app')}
 						className="w-full red-glow"
 						data-testid="waitlist-success-login"
 					>

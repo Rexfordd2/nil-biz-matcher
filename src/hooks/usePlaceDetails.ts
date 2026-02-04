@@ -26,19 +26,29 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 	const controllerRef = useRef<AbortController | null>(null)
 
 	useEffect(() => {
-		// Cancel any in-flight request
-		try { controllerRef.current?.abort() } catch {}
+		// Cancel any in-flight request before starting a new one
+		if (controllerRef.current) {
+			try { 
+				controllerRef.current.abort() 
+			} catch (err) {
+				// Ignore abort errors
+			}
+		}
 		const ac = new AbortController()
 		controllerRef.current = ac
 
 		if (!placeId) {
 			setDetails(null)
+			setLoading(false)
+			setError(null)
 			return
 		}
 
 		// Early return if Google Maps API key is not configured
 		if (!hasGoogleMapsKey) {
 			setDetails(null)
+			setLoading(false)
+			setError(null)
 			return
 		}
 
@@ -83,8 +93,16 @@ export function usePlaceDetails(placeId: string | undefined): Return {
 			}
 		}
 		run()
+		
+		// Cleanup: abort on unmount or when placeId changes
 		return () => {
-			try { controllerRef.current?.abort() } catch {}
+			if (controllerRef.current) {
+				try { 
+					controllerRef.current.abort() 
+				} catch (err) {
+					// Ignore abort errors
+				}
+			}
 		}
 	}, [placeId])
 

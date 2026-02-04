@@ -30,34 +30,56 @@ export default function Discover() {
 
 	// Attach Places Autocomplete to the "Where" input
 	const whereInputRef = useRef<HTMLInputElement | null>(null)
+	const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+	const listenerRef = useRef<google.maps.MapsEventListener | null>(null)
+	
 	useEffect(() => {
-		let cleanup: (() => void) | undefined
-		loadGoogleMaps().then((google) => {
-			if (!whereInputRef.current) return
-			const autocomplete = new google.maps.places.Autocomplete(whereInputRef.current, {
-				// General location search; keep it broad
-				types: ['geocode']
-			})
-			autocomplete.setFields(['place_id', 'name', 'formatted_address', 'geometry'])
-			const listener = autocomplete.addListener('place_changed', () => {
-				const place = autocomplete.getPlace()
-				if (place) {
-					setWhereText(place.formatted_address || place.name || whereInputRef.current?.value || '')
-					if (place.place_id) {
-						setWherePlaceId(place.place_id)
+		if (!hasClientKey || !whereInputRef.current) return
+		
+		let mounted = true
+		
+		loadGoogleMaps()
+			.then((google) => {
+				if (!mounted || !whereInputRef.current) return
+				
+				const autocomplete = new google.maps.places.Autocomplete(whereInputRef.current, {
+					types: ['geocode'] // General location search
+				})
+				autocomplete.setFields(['place_id', 'name', 'formatted_address', 'geometry'])
+				
+				const listener = autocomplete.addListener('place_changed', () => {
+					const place = autocomplete.getPlace()
+					if (place && mounted) {
+						setWhereText(place.formatted_address || place.name || whereInputRef.current?.value || '')
+						if (place.place_id) {
+							setWherePlaceId(place.place_id)
+						}
 					}
+				})
+				
+				autocompleteRef.current = autocomplete
+				listenerRef.current = listener
+			})
+			.catch((err) => {
+				// Autocomplete will simply not be enabled if Google Maps fails to load
+				if (import.meta.env.DEV) {
+					console.warn('[Discover] Failed to initialize autocomplete:', err)
 				}
 			})
-			cleanup = () => {
-				listener.remove()
-			}
-		}).catch(() => {
-			// Autocomplete will simply not be enabled if script fails
-		})
+		
 		return () => {
-			try { cleanup?.() } catch {}
+			mounted = false
+			if (listenerRef.current) {
+				try {
+					listenerRef.current.remove()
+				} catch (err) {
+					// Ignore cleanup errors
+				}
+			}
+			autocompleteRef.current = null
+			listenerRef.current = null
 		}
-	}, [])
+	}, [hasClientKey])
 
 	const { results, loading, error, isStale, selected, setSelected, retry } = usePlacesSearch(searchParams)
 	const [hasSearched, setHasSearched] = useState(false)
@@ -192,6 +214,7 @@ export default function Discover() {
 						value={whatText}
 						onChange={e => setWhatText(e.target.value)}
 						placeholder="What (pizza, gym, store...)"
+						disabled={false}
 					/>
 					<Input
 						data-testid="discover-where-input"
@@ -199,6 +222,7 @@ export default function Discover() {
 						value={whereText}
 						onChange={e => { setWhereText(e.target.value); setWherePlaceId(undefined) }}
 						placeholder="Where (City, ST or zip)"
+						disabled={false}
 					/>
 					<div className="flex items-center">
 						<Button data-testid="discover-search-button" onClick={onSearch} className="w-full" disabled={!hasClientKey || loading || !whatText || !whereText}>
@@ -207,9 +231,23 @@ export default function Discover() {
 					</div>
 				</div>
 				{error && (
-					<div data-testid="discover-error-banner" className="mt-3 text-sm text-red-300 flex items-center justify-between">
-						<span>{isStale ? 'Showing cached results — ' : ''}{error}</span>
-						<Button variant="secondary" onClick={() => retry()} disabled={loading}>Retry</Button>
+					<div data-testid="discover-error-banner" className={`mt-3 text-sm ${isStale ? 'text-amber-300' : 'text-red-300'}`}>
+						<div className="flex items-center justify-between gap-2">
+							<span>{isStale ? '⚠️ Showing cached results — ' : ''}{error}</span>
+							<Button variant="secondary" onClick={() => retry()} disabled={loading} className="shrink-0">
+								Retry
+							</Button>
+						</div>
+						{import.meta.env.DEV && (
+							<div className="text-xs mt-2 opacity-70 font-mono bg-black/20 p-2 rounded border border-white/10">
+								<div className="font-bold mb-1">Debug Info:</div>
+								<div>Error: {error}</div>
+								<div>Stale: {isStale ? 'Yes' : 'No'}</div>
+								<div>Query: {searchParams.query}</div>
+								<div>Location: {searchParams.locationText}</div>
+								<div>PlaceId: {searchParams.locationPlaceId || 'None'}</div>
+							</div>
+						)}
 					</div>
 				)}
 			</Card>

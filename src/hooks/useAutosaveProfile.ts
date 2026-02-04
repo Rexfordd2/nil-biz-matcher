@@ -6,6 +6,18 @@ import Observability, { generateRequestId } from '../lib/obs'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error' | 'loading'
 
+type QueuedSave = {
+	profile: AthleteProfile
+	requestId: string
+	queuedAt: number
+}
+
+type SaveQueueState = {
+	isInFlight: boolean
+	queuedSave: QueuedSave | null
+	lastAttemptCount: number
+}
+
 /**
  * Deep merge utility: merges patch into base recursively
  * - Primitive values in patch overwrite base
@@ -111,6 +123,8 @@ export function useAutosaveProfile(params: {
 	onDraftChange: (draft: AthleteProfile) => void
 	saveNow: () => Promise<void>
 	refresh: () => void
+	// Debug info for ?debug=1
+	_debugQueueState?: SaveQueueState
 } {
 	const userId = params.user?.id || null
 	const debounceMs = params.debounceMs ?? 800
@@ -123,11 +137,24 @@ export function useAutosaveProfile(params: {
 	const [error, setError] = useState<string | null>(null)
 	const [errorRaw, setErrorRaw] = useState<SupabaseErrorRaw | null>(null)
 	const [hadSupabaseError, setHadSupabaseError] = useState(false)
+	const [debugQueueState, setDebugQueueState] = useState<SaveQueueState>({
+		isInFlight: false,
+		queuedSave: null,
+		lastAttemptCount: 0
+	})
 
 	const timerRef = useRef<number | null>(null)
 	const latestDraftRef = useRef<string>('') // serialized
 	const lastSentRef = useRef<string>('') // serialized
 	const lastKnownServerProfile = useRef<AthleteProfile | null>(null) // Track server state for merge validation
+	const lastKnownServerUpdatedAt = useRef<number>(0) // Track server timestamp for version control
+	
+	// Queue management refs
+	const saveQueueRef = useRef<SaveQueueState>({
+		isInFlight: false,
+		queuedSave: null,
+		lastAttemptCount: 0
+	})
 
 	const lsKey = useMemo(() => (userId ? `athleteProfileDraft:${userId}` : null), [userId])
 
@@ -233,6 +260,7 @@ export function useAutosaveProfile(params: {
 				const profileJson = (data as any)?.profile || {}
 				cloudProfile = profileJson as AthleteProfile
 				cloudUpdatedAt = (data as any).updated_at ? new Date((data as any).updated_at as string).getTime() : 0
+				lastKnownServerUpdatedAt.current = cloudUpdatedAt // Track for version control
 			} else {
 				// Ensure row exists for this user (with fresh user_id)
 				const up = await supabase
@@ -331,6 +359,276 @@ export function useAutosaveProfile(params: {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [params.user?.id])
 
+	/**
+	 * Core save implementation with retry logic
+	 * Returns true if save succeeded, false otherwise
+	 */
+	const executeSave = useCallback(async (body: AthleteProfile, attemptNumber: number = 1): Promise<boolean> => {
+		if (!supabase) return false
+		
+		const MAX_RETRIES = 2
+		const requestId = generateRequestId()
+		
+		try {
+			// Always get fresh auth user to ensure user_id matches auth.uid()
+			const { data: userData, error: authError } = await supabase.auth.getUser()
+			if (authError || !userData?.user) {
+				setStatus('error')
+				setError('Not authenticated')
+				return false
+			}
+			
+			const freshUserId = userData.user.id
+			
+			Observability.log({
+				feature: 'profile',
+				route: 'autosave.save',
+				status: 'start',
+				requestId,
+				userId: freshUserId,
+				meta: { attemptNumber }
+			})
+			
+			// Build payload with explicit user_id (uuid) as required by schema
+			const payload = {
+				user_id: freshUserId, // uuid type, references auth.users(id)
+				profile: body // jsonb type
+			}
+			
+			// Log payload structure in dev mode with DEEP inspection of critical fields
+			if (import.meta.env.DEV) {
+				const criticalFields = {
+					name: body?.name,
+					school: body?.school,
+					schoolLevel: body?.schoolLevel,
+					sports: body?.sports,
+					location: body?.location,
+					socialHandles: body?.socialHandles,
+					social: body?.social,
+					contentStyles: body?.contentStyles,
+					personality: body?.personality,
+					values: body?.values,
+					professionalism: body?.professionalism,
+					timePerWeekHours: body?.timePerWeekHours,
+					supportTeam: body?.supportTeam ? `[${body.supportTeam.length} contacts]` : undefined,
+					trustedCircle: body?.trustedCircle ? `[${body.trustedCircle.length} contacts]` : undefined,
+					academicProfile: body?.academicProfile,
+					availability: body?.availability ? `[${body.availability.length} windows]` : undefined,
+					performanceStory: body?.performanceStory,
+					trainingLog: body?.trainingLog ? `[${body.trainingLog.entries?.length || 0} entries]` : undefined,
+					monetizationInterests: body?.monetizationInterests,
+					mediaKit: body?.mediaKit ? {
+						heroImages: body.mediaKit.heroImages?.length || 0,
+						logos: body.mediaKit.logos?.length || 0,
+						brandColors: body.mediaKit.brandColors?.length || 0,
+						samplePosts: body.mediaKit.samplePosts?.length || 0,
+						externalDeckUrl: body.mediaKit.externalDeckUrl ? 'set' : undefined
+					} : undefined,
+					physicalAttributes: body?.physicalAttributes,
+					sportMetrics: body?.sportMetrics ? `[${body.sportMetrics.length} metrics]` : undefined,
+					gameFilm: body?.gameFilm ? `[${body.gameFilm.length} films]` : undefined,
+					nil: body?.nil
+				}
+				
+				console.log('[Profile Save] Payload Details:', {
+					user_id: freshUserId,
+					profile_keys: Object.keys(body || {}),
+					profile_size: JSON.stringify(body).length,
+					critical_fields: criticalFields,
+					attemptNumber
+				})
+				
+				// Store in window for debug panel access
+				;(window as any).__lastProfileSavePayload = {
+					timestamp: Date.now(),
+					keys: Object.keys(body || {}),
+					criticalFields,
+					fullSize: JSON.stringify(body).length,
+					attemptNumber
+				}
+				
+				// Validate critical fields are present (dev warning)
+				const missingCritical = []
+				if (!body?.name) missingCritical.push('name')
+				if (!body?.school) missingCritical.push('school')
+				if (!body?.sports || body.sports.length === 0) missingCritical.push('sports')
+				
+				if (missingCritical.length > 0) {
+					console.warn('[Profile Save] ⚠️ Missing critical fields:', missingCritical)
+					console.warn('[Profile Save] Full payload keys:', Object.keys(body || {}))
+				}
+			}
+			
+			// Upsert with explicit conflict target (user_id is primary key)
+			const { error: upsertError } = await supabase
+				.from('athlete_profiles')
+				.upsert(payload, { onConflict: 'user_id' })
+			
+			if (upsertError) {
+				const payloadKeys = body ? Object.keys(body) : []
+				throw { ...upsertError, _payloadKeys: payloadKeys, _userId: freshUserId }
+			}
+			
+			// Immediately verify the row was saved by re-selecting it
+			const { data: verifyData, error: verifyError } = await supabase
+				.from('athlete_profiles')
+				.select('user_id, updated_at')
+				.eq('user_id', freshUserId)
+				.maybeSingle()
+			
+			if (verifyError) {
+				// Log verification failure but don't fail the save
+				Observability.log({
+					feature: 'profile',
+					route: 'autosave.save.verify',
+					status: 'error',
+					requestId,
+					userId: freshUserId,
+					errorMessage: verifyError.message,
+					meta: {
+						errorCode: verifyError.code
+					}
+				})
+				console.warn('[Profile Save] Upsert succeeded but verify failed:', verifyError)
+			} else if (!verifyData) {
+				Observability.log({
+					feature: 'profile',
+					route: 'autosave.save.verify',
+					status: 'error',
+					requestId,
+					userId: freshUserId,
+					errorMessage: 'Row not found after upsert'
+				})
+				console.error('[Profile Save] Row not found after upsert')
+				throw new Error('Profile upsert succeeded but row not found on verify')
+			} else {
+				// Verification passed - update version tracking
+				const newUpdatedAt = new Date(verifyData.updated_at as string).getTime()
+				lastKnownServerUpdatedAt.current = newUpdatedAt
+				
+				Observability.log({
+					feature: 'profile',
+					route: 'autosave.save.verify',
+					status: 'ok',
+					requestId,
+					userId: freshUserId,
+					meta: {
+						rowUpdatedAt: verifyData.updated_at
+					}
+				})
+				
+				if (import.meta.env.DEV) {
+					console.log('[Profile Save] Verified:', {
+						user_id: verifyData.user_id,
+						updated_at: verifyData.updated_at,
+						timestamp: newUpdatedAt
+					})
+				}
+			}
+			
+			// Success - update tracking
+			const serialized = JSON.stringify(body)
+			setLastSavedAt(Date.now())
+			setStatus('saved')
+			lastSentRef.current = serialized
+			lastKnownServerProfile.current = body
+			
+			// mark localStorage as synced
+			const freshLsKey = `athleteProfileDraft:${freshUserId}`
+			if (freshLsKey) {
+				try {
+					localStorage.setItem(freshLsKey, JSON.stringify({ 
+						data: body, 
+						updatedAt: lastKnownServerUpdatedAt.current, 
+						dirty: false 
+					}))
+				} catch {}
+			}
+			
+			Observability.log({
+				feature: 'profile',
+				route: 'autosave.save',
+				status: 'ok',
+				requestId,
+				userId: freshUserId
+			})
+			
+			return true
+			
+		} catch (err: any) {
+			// Determine if error is retryable
+			const isRLSError = err?.code === '42501' || err?.code === 'PGRST301'
+			const is403 = err?.status === 403
+			const isAuthError = err?.message?.toLowerCase().includes('not authenticated')
+			const isNonRetryable = isRLSError || is403 || isAuthError
+			
+			const userId = err?._userId || params.user?.id
+			const payloadKeys = err?._payloadKeys || []
+			const rawError = extractSupabaseErrorRaw(err, { userId, payloadKeys })
+			
+			// Check if we should retry
+			if (!isNonRetryable && attemptNumber <= MAX_RETRIES) {
+				const backoffMs = attemptNumber === 1 ? 500 : 1000
+				console.warn(`[Profile Save] Attempt ${attemptNumber} failed, retrying in ${backoffMs}ms...`, rawError)
+				
+				Observability.log({
+					feature: 'profile',
+					route: 'autosave.save.retry',
+					status: 'warning',
+					requestId,
+					userId,
+					meta: {
+						attemptNumber,
+						backoffMs,
+						errorCode: err?.code,
+						errorRaw: rawError
+					}
+				})
+				
+				// Wait and retry
+				await new Promise(resolve => setTimeout(resolve, backoffMs))
+				return executeSave(body, attemptNumber + 1)
+			}
+			
+			// Final failure - update error state
+			setStatus('error')
+			setHadSupabaseError(true)
+			setErrorRaw(rawError)
+			setError(formatSupabaseError(err) || 'Save error')
+			
+			if (import.meta.env.DEV) {
+				console.error('[Profile Save Error] Final failure after retries:', {
+					timestamp: new Date().toISOString(),
+					userId,
+					payloadKeys,
+					attemptNumber,
+					error: rawError
+				})
+			}
+			
+			Observability.log({
+				feature: 'profile',
+				route: 'autosave.save',
+				status: 'error',
+				requestId,
+				errorName: err?.name,
+				errorMessage: err?.message,
+				userId,
+				meta: {
+					errorCode: err?.code,
+					errorRaw: rawError,
+					payloadKeys,
+					attemptNumber
+				}
+			})
+			
+			return false
+		}
+	}, [params.user?.id])
+
+	/**
+	 * Single-writer queue: ensures only one save is in-flight at a time
+	 */
 	const flushSave = useCallback(async () => {
 		if (!supabase) return
 		
@@ -349,9 +647,8 @@ export function useAutosaveProfile(params: {
 		const serverProfile = lastKnownServerProfile.current
 		const serverKeyCount = serverProfile ? countSignificantKeys(serverProfile) : 0
 		
-		// If current payload has significantly fewer keys than server, this might be a partial update bug
-		const MINIMUM_PROFILE_KEYS = 5 // name, school, sports, etc.
-		const SUSPICIOUS_RATIO = 0.5 // Less than 50% of previous keys is suspicious
+		const MINIMUM_PROFILE_KEYS = 5
+		const SUSPICIOUS_RATIO = 0.5
 		
 		if (serverKeyCount > 10 && currentKeyCount < MINIMUM_PROFILE_KEYS) {
 			const errorMsg = `[Profile Save] BLOCKED: Refusing to overwrite profile with ${serverKeyCount} keys with partial object containing only ${currentKeyCount} keys`
@@ -388,236 +685,67 @@ export function useAutosaveProfile(params: {
 				currentKeys: Object.keys(body),
 				lostFields: Object.keys(serverProfile || {}).filter(k => !(k in body))
 			})
-			
-			Observability.log({
-				feature: 'profile',
-				route: 'autosave.save.warning',
-				status: 'warning',
-				meta: {
-					currentKeyCount,
-					serverKeyCount,
-					ratio: currentKeyCount / serverKeyCount
-				}
-			})
 		}
 		
-		const requestId = generateRequestId()
+		// If a save is already in-flight, queue this one
+		if (saveQueueRef.current.isInFlight) {
+			const queuedSave: QueuedSave = {
+				profile: body,
+				requestId: generateRequestId(),
+				queuedAt: Date.now()
+			}
+			saveQueueRef.current.queuedSave = queuedSave
+			saveQueueRef.current.lastAttemptCount++
+			setDebugQueueState({ ...saveQueueRef.current })
+			
+			if (import.meta.env.DEV) {
+				console.log('[Profile Save] Save already in-flight, queuing...', {
+					queuedAt: new Date(queuedSave.queuedAt).toISOString(),
+					queueDepth: 1
+				})
+			}
+			return
+		}
+		
+		// Mark as in-flight
+		saveQueueRef.current.isInFlight = true
+		saveQueueRef.current.lastAttemptCount++
+		setDebugQueueState({ ...saveQueueRef.current })
 		
 		setStatus('saving')
 		setError(null)
 		setErrorRaw(null)
 		setHadSupabaseError(false)
 		setLastSaveAttempt(Date.now())
-		try {
-			// Always get fresh auth user to ensure user_id matches auth.uid()
-			const { data: userData, error: authError } = await supabase.auth.getUser()
-			if (authError || !userData?.user) {
-				setStatus('error')
-				setError('Not authenticated')
-				return
-			}
-			
-			const freshUserId = userData.user.id
-			
-			Observability.log({
-				feature: 'profile',
-				route: 'autosave.save',
-				status: 'start',
-				requestId,
-				userId: freshUserId
-			})
-			
-		// Build payload with explicit user_id (uuid) as required by schema
-		const payload = {
-			user_id: freshUserId, // uuid type, references auth.users(id)
-			profile: body // jsonb type
-		}
 		
-		// Log payload structure in dev mode with DEEP inspection of critical fields
-		if (import.meta.env.DEV) {
-			const criticalFields = {
-				name: body?.name,
-				school: body?.school,
-				schoolLevel: body?.schoolLevel,
-				sports: body?.sports,
-				location: body?.location,
-				socialHandles: body?.socialHandles,
-				social: body?.social,
-				contentStyles: body?.contentStyles,
-				personality: body?.personality,
-				values: body?.values,
-				professionalism: body?.professionalism,
-				timePerWeekHours: body?.timePerWeekHours,
-				supportTeam: body?.supportTeam ? `[${body.supportTeam.length} contacts]` : undefined,
-				trustedCircle: body?.trustedCircle ? `[${body.trustedCircle.length} contacts]` : undefined,
-				academicProfile: body?.academicProfile,
-				availability: body?.availability ? `[${body.availability.length} windows]` : undefined,
-				performanceStory: body?.performanceStory,
-				trainingLog: body?.trainingLog ? `[${body.trainingLog.entries?.length || 0} entries]` : undefined,
-				monetizationInterests: body?.monetizationInterests,
-				mediaKit: body?.mediaKit ? {
-					heroImages: body.mediaKit.heroImages?.length || 0,
-					logos: body.mediaKit.logos?.length || 0,
-					brandColors: body.mediaKit.brandColors?.length || 0,
-					samplePosts: body.mediaKit.samplePosts?.length || 0,
-					externalDeckUrl: body.mediaKit.externalDeckUrl ? 'set' : undefined
-				} : undefined,
-				physicalAttributes: body?.physicalAttributes,
-				sportMetrics: body?.sportMetrics ? `[${body.sportMetrics.length} metrics]` : undefined,
-				gameFilm: body?.gameFilm ? `[${body.gameFilm.length} films]` : undefined,
-				nil: body?.nil
-			}
+		// Execute the save
+		const success = await executeSave(body)
+		
+		// Mark as complete
+		saveQueueRef.current.isInFlight = false
+		
+		// Check if there's a queued save
+		const queued = saveQueueRef.current.queuedSave
+		if (queued) {
+			saveQueueRef.current.queuedSave = null
+			setDebugQueueState({ ...saveQueueRef.current })
 			
-			console.log('[Profile Save] Payload Details:', {
-				user_id: freshUserId,
-				profile_keys: Object.keys(body || {}),
-				profile_size: JSON.stringify(body).length,
-				critical_fields: criticalFields
-			})
-			
-			// Store in window for debug panel access
-			;(window as any).__lastProfileSavePayload = {
-				timestamp: Date.now(),
-				keys: Object.keys(body || {}),
-				criticalFields,
-				fullSize: JSON.stringify(body).length
-			}
-			
-			// Validate critical fields are present (dev warning)
-			const missingCritical = []
-			if (!body?.name) missingCritical.push('name')
-			if (!body?.school) missingCritical.push('school')
-			if (!body?.sports || body.sports.length === 0) missingCritical.push('sports')
-			
-			if (missingCritical.length > 0) {
-				console.warn('[Profile Save] ⚠️ Missing critical fields:', missingCritical)
-				console.warn('[Profile Save] Full payload keys:', Object.keys(body || {}))
-			}
-		}
-			
-			// Upsert with explicit conflict target (user_id is primary key)
-			const { error: upsertError } = await supabase
-				.from('athlete_profiles')
-				.upsert(payload, { onConflict: 'user_id' })
-			
-			if (upsertError) {
-				// Extract payload keys for debugging (avoid logging full profile data)
-				const payloadKeys = body ? Object.keys(body) : []
-				throw { ...upsertError, _payloadKeys: payloadKeys, _userId: freshUserId }
-			}
-			
-			// Immediately verify the row was saved by re-selecting it
-			const { data: verifyData, error: verifyError } = await supabase
-				.from('athlete_profiles')
-				.select('user_id, updated_at')
-				.eq('user_id', freshUserId)
-				.maybeSingle()
-			
-			if (verifyError) {
-				// Log verification failure but don't fail the save
-				// (save may have succeeded even if verify fails due to RLS SELECT policy)
-			Observability.log({
-				feature: 'profile',
-				route: 'autosave.save.verify',
-				status: 'error',
-				requestId,
-				userId: freshUserId,
-				errorMessage: verifyError.message,
-				meta: {
-					errorCode: verifyError.code
-				}
-			})
-				console.warn('[Profile Save] Upsert succeeded but verify failed:', verifyError)
-			} else if (!verifyData) {
-				// Row not found after upsert - this is a problem
-				Observability.log({
-					feature: 'profile',
-					route: 'autosave.save.verify',
-					status: 'error',
-					requestId,
-					userId: freshUserId,
-					errorMessage: 'Row not found after upsert'
-				})
-				console.error('[Profile Save] Row not found after upsert')
-				throw new Error('Profile upsert succeeded but row not found on verify')
-			} else {
-				// Verification passed - row exists
-			Observability.log({
-				feature: 'profile',
-				route: 'autosave.save.verify',
-				status: 'ok',
-				requestId,
-				userId: freshUserId,
-				meta: {
-					rowUpdatedAt: verifyData.updated_at
-				}
-			})
-				if (import.meta.env.DEV) {
-					console.log('[Profile Save] Verified:', {
-						user_id: verifyData.user_id,
-						updated_at: verifyData.updated_at
-					})
-				}
-			}
-			
-			setLastSavedAt(Date.now())
-			setStatus('saved')
-			lastSentRef.current = serialized
-			lastKnownServerProfile.current = body // Update server state tracking after successful save
-			
-			// mark localStorage as synced (use fresh user id for key)
-			const freshLsKey = `athleteProfileDraft:${freshUserId}`
-			if (freshLsKey) {
-				try {
-					localStorage.setItem(freshLsKey, JSON.stringify({ data: body, updatedAt: Date.now(), dirty: false }))
-				} catch {}
-			}
-			
-			Observability.log({
-				feature: 'profile',
-				route: 'autosave.save',
-				status: 'ok',
-				requestId,
-				userId: freshUserId
-			})
-		} catch (err: any) {
-			setStatus('error')
-			setHadSupabaseError(true)
-			
-			// Extract context from error
-			const userId = err?._userId || params.user?.id
-			const payloadKeys = err?._payloadKeys || []
-			
-			const rawError = extractSupabaseErrorRaw(err, { userId, payloadKeys })
-			setErrorRaw(rawError)
-			setError(formatSupabaseError(err) || 'Save error')
-			
-			// Log to console in dev mode for immediate visibility
 			if (import.meta.env.DEV) {
-				console.error('[Profile Save Error]', {
-					timestamp: new Date().toISOString(),
-					userId,
-					payloadKeys,
-					error: rawError
+				console.log('[Profile Save] Processing queued save...', {
+					queuedAt: new Date(queued.queuedAt).toISOString(),
+					waitTime: Date.now() - queued.queuedAt
 				})
 			}
 			
-			Observability.log({
-				feature: 'profile',
-			route: 'autosave.save',
-			status: 'error',
-			requestId,
-			errorName: (err as any)?.name,
-			errorMessage: (err as any)?.message,
-			userId,
-			meta: {
-				errorCode: (err as any)?.code,
-				errorRaw: rawError,
-				payloadKeys
-			}
-			})
+			// Update refs with queued profile
+			latestDraftRef.current = JSON.stringify(queued.profile)
+			
+			// Recursively process the queued save
+			setTimeout(() => flushSave(), 0)
+		} else {
+			setDebugQueueState({ ...saveQueueRef.current })
 		}
-	}, [])
+	}, [executeSave, params.user?.id])
 
 	const onDraftChange = useCallback(async (draft: AthleteProfile) => {
 		// Deep merge incoming draft with last known state to handle partial updates
@@ -678,7 +806,29 @@ export function useAutosaveProfile(params: {
 			window.clearTimeout(timerRef.current)
 			timerRef.current = null
 		}
+		
+		// Trigger the save
 		await flushSave()
+		
+		// Wait for queue to drain (poll until no save in-flight and no queued save)
+		const pollInterval = 100
+		const maxWaitMs = 10000 // 10 seconds max
+		const startTime = Date.now()
+		
+		while (saveQueueRef.current.isInFlight || saveQueueRef.current.queuedSave) {
+			if (Date.now() - startTime > maxWaitMs) {
+				console.error('[Profile Save] saveNow timeout waiting for queue to drain')
+				break
+			}
+			await new Promise(resolve => setTimeout(resolve, pollInterval))
+		}
+		
+		// Final verification: check that lastSentRef matches latestDraftRef
+		if (latestDraftRef.current !== lastSentRef.current) {
+			console.warn('[Profile Save] saveNow complete but drafts do not match - may need another save')
+		} else if (import.meta.env.DEV) {
+			console.log('[Profile Save] saveNow complete - all changes saved')
+		}
 	}, [flushSave])
 
 	return {
@@ -692,7 +842,8 @@ export function useAutosaveProfile(params: {
 		errorRaw,
 		onDraftChange,
 		saveNow,
-		refresh
+		refresh,
+		_debugQueueState: debugQueueState
 	}
 }
 

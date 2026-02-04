@@ -26,6 +26,7 @@ export function useAnonProfileDraft(params?: {
 	errorRaw: any
 	onDraftChange: (draft: AthleteProfile) => void
 	saveNow: () => Promise<void>
+	_debugQueueState?: undefined
 } {
 	const debounceMs = params?.debounceMs ?? 800
 
@@ -200,6 +201,7 @@ export function useAnonProfileDraft(params?: {
 		error: null, // anon mode doesn't have server errors
 		errorRaw: null, // anon mode doesn't have server errors
 		onDraftChange,
-		saveNow
+		saveNow,
+		_debugQueueState: undefined // anon mode doesn't use queue
 	}
 }

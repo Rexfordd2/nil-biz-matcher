@@ -52,8 +52,14 @@ export function usePlacesSearch(input: Input): Return {
 	}), [input.query, input.locationText, input.locationPlaceId, input.requestId, rerunFlagRef.current])
 
 	useEffect(() => {
-		// Cancel any in-flight request
-		try { controllerRef.current?.abort() } catch {}
+		// Cancel any in-flight request before starting a new one
+		if (controllerRef.current) {
+			try { 
+				controllerRef.current.abort() 
+			} catch (err) {
+				// Ignore abort errors
+			}
+		}
 		const ac = new AbortController()
 		controllerRef.current = ac
 
@@ -62,6 +68,7 @@ export function usePlacesSearch(input: Input): Return {
 		if (!hasQuery || !hasWhere) {
 			setResults([])
 			setSelected(null)
+			setLoading(false)
 			return
 		}
 
@@ -69,6 +76,7 @@ export function usePlacesSearch(input: Input): Return {
 		if (!hasGoogleMapsKey) {
 			setResults([])
 			setSelected(null)
+			setLoading(false)
 			return
 		}
 
@@ -198,8 +206,16 @@ export function usePlacesSearch(input: Input): Return {
 		}
 
 		run()
+		
+		// Cleanup: abort on unmount or when dependencies change
 		return () => {
-			try { controllerRef.current?.abort() } catch {}
+			if (controllerRef.current) {
+				try { 
+					controllerRef.current.abort() 
+				} catch (err) {
+					// Ignore abort errors
+				}
+			}
 		}
 	}, [normalizedInput.query, normalizedInput.locationText, normalizedInput.locationPlaceId])
 

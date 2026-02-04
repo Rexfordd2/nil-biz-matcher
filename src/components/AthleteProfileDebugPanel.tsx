@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { SupabaseErrorRaw } from '../hooks/useAutosaveProfile'
 
+type SaveQueueState = {
+	isInFlight: boolean
+	queuedSave: { profile: any; requestId: string; queuedAt: number } | null
+	lastAttemptCount: number
+}
+
 type Props = {
 	user: User | null
 	profileFetched: boolean
@@ -10,6 +16,7 @@ type Props = {
 	status: string
 	error: string | null
 	errorRaw: SupabaseErrorRaw | null
+	queueState?: SaveQueueState
 }
 
 // Component to show last save payload details
@@ -91,7 +98,8 @@ export default function AthleteProfileDebugPanel({
 	lastSavedAt,
 	status,
 	error,
-	errorRaw
+	errorRaw,
+	queueState
 }: Props) {
 	const [expanded, setExpanded] = useState(true)
 
@@ -255,6 +263,56 @@ export default function AthleteProfileDebugPanel({
 							) : '—'}
 						</div>
 					</div>
+
+					{/* Queue State */}
+					{queueState && (
+						<div className="bg-cyan-950/30 rounded p-3 border border-cyan-700 space-y-2">
+							<div className="text-cyan-400 font-semibold">⚡ Save Queue State</div>
+							
+							<div className="grid grid-cols-3 gap-2">
+								<div className="bg-surface/50 rounded p-2 border border-border">
+									<div className="text-gray-400 mb-1">In-Flight</div>
+									<div className="flex items-center gap-2">
+										<span className={`inline-block w-2 h-2 rounded-full ${queueState.isInFlight ? 'bg-yellow-400 animate-pulse' : 'bg-gray-400'}`} />
+										<span className="text-white text-[10px]">
+											{queueState.isInFlight ? 'Yes' : 'No'}
+										</span>
+									</div>
+								</div>
+								<div className="bg-surface/50 rounded p-2 border border-border">
+									<div className="text-gray-400 mb-1">Queued</div>
+									<div className="flex items-center gap-2">
+										<span className={`inline-block w-2 h-2 rounded-full ${queueState.queuedSave ? 'bg-orange-400' : 'bg-gray-400'}`} />
+										<span className="text-white text-[10px]">
+											{queueState.queuedSave ? 'Yes' : 'No'}
+										</span>
+									</div>
+								</div>
+								<div className="bg-surface/50 rounded p-2 border border-border">
+									<div className="text-gray-400 mb-1">Total Attempts</div>
+									<div className="text-white font-mono">
+										{queueState.lastAttemptCount}
+									</div>
+								</div>
+							</div>
+
+							{queueState.queuedSave && (
+								<div className="bg-orange-950/30 rounded p-2 border border-orange-700">
+									<div className="text-orange-400 font-semibold mb-1">⏳ Queued Save</div>
+									<div className="text-orange-200 text-[10px]">
+										Queued at: {new Date(queueState.queuedSave.queuedAt).toLocaleTimeString()}
+										<span className="ml-2 text-gray-400">
+											(waiting {Math.round((Date.now() - queueState.queuedSave.queuedAt) / 1000)}s)
+										</span>
+									</div>
+								</div>
+							)}
+
+							<div className="text-cyan-200 text-[10px] bg-cyan-950/50 p-2 rounded">
+								<strong>Queue Strategy:</strong> Only one save in-flight at a time. If a save is triggered while another is running, the newest payload is queued and will execute immediately after.
+							</div>
+						</div>
+					)}
 
 					{/* Error Display */}
 					{error && (

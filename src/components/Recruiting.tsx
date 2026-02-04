@@ -264,13 +264,31 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     setError(null)
     setIsStale(false)
     
+    // Use location filter as search center if available, otherwise use map center
+    const searchCenter = locationFilter.lat !== null && locationFilter.lng !== null
+      ? { lat: locationFilter.lat, lng: locationFilter.lng }
+      : center
+    
+    // Use location filter radius if available, otherwise compute from zoom
+    const searchRadius = locationFilter.lat !== null && locationFilter.lng !== null
+      ? locationFilter.radiusMiles * 1609.34 // Convert miles to meters
+      : computeRadiusMeters(zoom)
+    
     Observability.log({
       feature: 'recruitment',
       route: 'ui.explore_map.search',
       status: 'start',
       requestId,
       userId: userId ?? undefined,
-      meta: { center, zoom, sport, level, orgType }
+      meta: { 
+        center: searchCenter, 
+        radius: searchRadius,
+        zoom, 
+        sport, 
+        level, 
+        orgType,
+        usingLocationFilter: locationFilter.lat !== null
+      }
     })
     
     try {
@@ -282,8 +300,8 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       // Perform text search using shared utility (includes retry logic)
       const request: google.maps.places.TextSearchRequest = {
         query: buildKeyword(),
-        location: new google.maps.LatLng(center.lat, center.lng),
-        radius: computeRadiusMeters(zoom)
+        location: new google.maps.LatLng(searchCenter.lat, searchCenter.lng),
+        radius: searchRadius
       }
 
       const firstPage = await textSearch(request, ac.signal)
@@ -312,7 +330,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       // Store unfiltered results
       setUnfilteredPlaces(normalized)
       
-      // Apply location-based filtering
+      // Apply additional client-side filtering if needed (for precision)
       const filtered = filterPlacesByLocation(normalized)
       
       setPlaces(filtered)
@@ -329,7 +347,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
         route: 'ui.explore_map.search',
         status: normalized.length === 0 ? 'empty' : 'ok',
         requestId,
-        meta: { count: normalized.length }
+        meta: { count: normalized.length, filtered: filtered.length }
       })
     } catch (e: any) {
       // Ignore abortion as error
@@ -385,28 +403,14 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     setRefreshToken(v => v + 1) // force re-render for any dependent UI
   }
 
-  // Trigger search when filters change
+  // Trigger search when filters change (including location filter)
   useEffect(() => {
     if (searchThisArea) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sport, sportOther, level, orgType, searchThisArea])
-
-  // Re-filter existing results when location filter changes
-  useEffect(() => {
-    if (unfilteredPlaces.length > 0) {
-      const filtered = filterPlacesByLocation(unfilteredPlaces)
-      setPlaces(filtered)
-      if (filtered.length > 0 && !filtered.find(p => p.placeId === selectedPlaceId)) {
-        setSelectedPlaceId(filtered[0].placeId)
-      } else if (filtered.length === 0) {
-        setSelectedPlaceId(null)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationFilter.lat, locationFilter.lng, locationFilter.radiusMiles])
+  }, [sport, sportOther, level, orgType, searchThisArea, locationFilter.lat, locationFilter.lng, locationFilter.radiusMiles])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -575,9 +579,33 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 							)}
             <div className="text-xs text-foreground/60">Results powered by Google</div>
             {error && (
-              <div className={`text-sm ${isStale ? 'text-amber-600' : 'text-red-600'}`}>
-                {error}
-                {isStale && <span className="ml-2 font-semibold">(Showing last known good results)</span>}
+              <div className={`${isStale ? 'text-amber-600' : 'text-red-600'}`}>
+                <div className="text-sm flex items-center justify-between gap-2">
+                  <span>
+                    {isStale ? '⚠️ ' : '❌ '}{error}
+                    {isStale && <span className="ml-2 font-semibold">(Showing last known good results)</span>}
+                  </span>
+                  <Button 
+                    variant="secondary" 
+                    onClick={refresh} 
+                    disabled={loading}
+                    className="shrink-0"
+                  >
+                    Retry
+                  </Button>
+                </div>
+                {import.meta.env.DEV && (
+                  <div className="text-xs mt-2 opacity-70 font-mono bg-black/20 p-2 rounded border border-white/10">
+                    <div className="font-bold mb-1">Debug Info:</div>
+                    <div>Error: {error}</div>
+                    <div>Stale: {isStale ? 'Yes' : 'No'}</div>
+                    <div>Sport: {sport || 'All'}</div>
+                    <div>Level: {level || 'All'}</div>
+                    <div>OrgType: {orgType || 'All'}</div>
+                    <div>Location Filter: {locationFilter.lat ? `${locationFilter.locationText} (${locationFilter.radiusMiles}mi)` : 'None'}</div>
+                    <div>Results: {places.length} shown, {unfilteredPlaces.length} unfiltered</div>
+                  </div>
+                )}
               </div>
             )}
             {isStale && !error && (

@@ -1,6 +1,7 @@
 import { navigate } from '../routes/RootRouter'
 import Button from './ui/Button'
 import { isDemoMode } from '../config/appMode'
+import { goToLogin } from '../lib/auth/navigation'
 
 type Props = {
 	returnTo?: string
@@ -24,7 +25,7 @@ export default function AuthGate({ returnTo = '/app', mode }: Props) {
 					<div className="space-y-3">
 						<Button
 							data-testid="auth-gate-login"
-							onClick={() => navigate(`/auth/login?returnTo=${encodeURIComponent(returnTo)}`)}
+							onClick={() => goToLogin(returnTo)}
 							className="w-full red-glow"
 						>
 							Log In

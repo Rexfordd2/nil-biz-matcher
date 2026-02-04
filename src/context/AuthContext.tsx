@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { CurrentUser } from '../utils/auth'
 import { authLogin, authLogout, authRegister } from '../utils/auth'
 import { supabase } from '../lib/supabaseClient'
+import { goToLogout } from '../lib/auth/navigation'
 
 type AuthContextValue = {
 	user: CurrentUser | null
@@ -191,26 +192,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	}, [])
 
 	const logout = useCallback(async () => {
-		// 1. Sign out from Supabase
-		await authLogout()
-		
-		// 2. Clear React state
-		setUser(null)
-		
-		// 3. Clear any cached profile data from localStorage
-		try {
-			// Clear user-specific profile drafts (we don't know the userId here, so we'll clear all matching keys)
-			Object.keys(localStorage).forEach(key => {
-				if (key.startsWith('athleteProfileDraft:')) {
-					localStorage.removeItem(key)
-				}
-			})
-		} catch {
-			// Silently fail if localStorage is unavailable
-		}
-		
-		// 4. Navigate with replace to prevent back button returning to app shell
-		window.location.replace('/auth/login')
+		// Use centralized logout function for consistent behavior
+		await goToLogout()
 	}, [])
 
 	const value = useMemo<AuthContextValue>(() => ({ user, initializing, login, signup, logout, refresh }), [user, initializing, login, signup, logout, refresh])

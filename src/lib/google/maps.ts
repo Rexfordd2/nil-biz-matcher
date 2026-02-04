@@ -3,11 +3,11 @@
  * Single source of truth for Google Maps loading and Places service creation
  */
 
-import { loadGoogleMaps, isGoogleMapsReady } from './loader'
+import { loadGoogleMaps, isGoogleMapsReady, getGoogleMapsStatus } from './loader'
 import { hasGoogleMapsKey, assertGoogleMapsKey } from '../../config/env'
 
 // Re-export core loading functions and config
-export { loadGoogleMaps, isGoogleMapsReady, hasGoogleMapsKey }
+export { loadGoogleMaps, isGoogleMapsReady, getGoogleMapsStatus, hasGoogleMapsKey }
 
 /**
  * Create a PlacesService instance

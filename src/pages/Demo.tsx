@@ -10,6 +10,8 @@ import { installDemoNetworkGuard } from '../lib/demoNetworkGuard'
 import { setOpenGraphTags } from '../lib/metaTags'
 import { isDemoMode } from '../config/appMode'
 import { useAuth } from '../context/AuthContext'
+import { goToLogin } from '../lib/auth/navigation'
+import AuthDebugPanel from '../components/AuthDebugPanel'
 
 export default function Demo() {
 	const { user } = useAuth()
@@ -103,7 +105,7 @@ export default function Demo() {
 						{!user && (
 							<Button 
 								data-testid="demo-header-login-button" 
-								onClick={() => navigate('/auth/login')} 
+								onClick={() => goToLogin('/app')} 
 								className="red-glow"
 							>
 								Sign In
@@ -194,6 +196,9 @@ export default function Demo() {
 					/>
 				)}
 			</main>
+
+			{/* Auth Debug Panel (visible with ?debug=1) */}
+			<AuthDebugPanel />
 		</div>
 	)
 }

@@ -6,6 +6,7 @@ import { BUILD_ID } from '../lib/buildInfo'
 import { setOpenGraphTags } from '../lib/metaTags'
 import { hasWaitlistJoined, markWaitlistJoined } from '../lib/waitlistState'
 import { isDemoMode } from '../config/appMode'
+import { goToLogin } from '../lib/auth/navigation'
 
 export default function Waitlist() {
 	const [joined, setJoined] = useState(() => hasWaitlistJoined())
@@ -63,7 +64,7 @@ export default function Waitlist() {
 							<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
 							<div className="flex flex-col gap-2">
 								<Button
-									onClick={() => navigate('/auth/login?returnTo=/app')}
+									onClick={() => goToLogin('/app')}
 									className="w-full red-glow"
 									data-testid="waitlist-page-success-login"
 								>

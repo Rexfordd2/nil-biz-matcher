@@ -4,6 +4,7 @@ import Button from './ui/Button'
 import { friendlyMessageForProfilesError } from '../lib/supabaseErrors'
 import type { ProfileRow } from '../types'
 import { navigate } from '../routes/RootRouter'
+import { goToLogout } from '../lib/auth/navigation'
 
 type Props = {
 	onEditProfile?: () => void
@@ -86,28 +87,11 @@ export default function AppHome({ onEditProfile, onLogout }: Props) {
 	}, [])
 
 	async function handleLogout() {
-		try {
-			// 1. Sign out from Supabase
-			await supabase?.auth.signOut()
-		} catch {}
-		
-		// 2. Clear any cached profile data from localStorage
-		try {
-			// Clear user-specific profile drafts
-			Object.keys(localStorage).forEach(key => {
-				if (key.startsWith('athleteProfileDraft:')) {
-					localStorage.removeItem(key)
-				}
-			})
-		} catch {
-			// Silently fail if localStorage is unavailable
-		}
-		
-		// 3. Notify parent component (will clear React state)
+		// Notify parent component (will clear React state)
 		onLogout?.()
 		
-		// 4. Navigate with replace to prevent back button returning to app shell
-		window.location.replace('/auth/login')
+		// Use centralized logout function for consistent behavior
+		await goToLogout()
 	}
 
 	return (
