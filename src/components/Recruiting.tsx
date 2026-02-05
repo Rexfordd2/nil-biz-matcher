@@ -15,7 +15,9 @@ import PlacesMap from './PlacesMap'
 import type { NormalizedPlace } from '../hooks/usePlacesSearch'
 import { usePlaceDetails } from '../hooks/usePlaceDetails'
 import Observability, { generateRequestId } from '../lib/obs'
-import { hasGoogleMapsKey, textSearch, loadGoogleMaps } from '../lib/google/maps'
+import { hasGoogleMapsKey } from '../lib/google/maps'
+import { placesProxySearch } from '../lib/google/placesProxy'
+import { normalizeGoogleProxyError, isRetryable as isRetryableError } from '../lib/google/errors'
 import GoogleMapsDisabledNotice from './GoogleMapsDisabledNotice'
 import RecruitingSearchFilters, { type LocationFilter } from './RecruitingSearchFilters'
 
@@ -292,37 +294,35 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     })
     
     try {
-      // Ensure Google Maps is loaded (validates API key)
-      const google = await loadGoogleMaps()
-      if (ac.signal.aborted) return
-      if (token !== searchTokenRef.current) return
-      
-      // Perform text search using shared utility (includes retry logic)
-      const request: google.maps.places.TextSearchRequest = {
-        query: buildKeyword(),
-        location: new google.maps.LatLng(searchCenter.lat, searchCenter.lng),
-        radius: searchRadius
-      }
-
-      const firstPage = await textSearch(request, ac.signal)
+      // Use server-side proxy (no Google JS required for search)
+      const proxyResult = await placesProxySearch(
+        {
+          q: buildKeyword(),
+          location: `${searchCenter.lat},${searchCenter.lng}`,
+          radius: searchRadius
+        },
+        {
+          signal: ac.signal,
+          requestId,
+          feature: 'recruiting',
+          userAction: 'map_search'
+        }
+      )
 
       if (ac.signal.aborted || token !== searchTokenRef.current) return
 
-      const normalized: NormalizedPlace[] = (firstPage || []).map((p) => {
-        const lat = typeof p.geometry?.location?.lat === 'function' ? p.geometry.location.lat() : undefined
-        const lng = typeof p.geometry?.location?.lng === 'function' ? p.geometry.location.lng() : undefined
-        const photoUrl = p.photos && p.photos[0] ? p.photos[0].getUrl({ maxWidth: 400, maxHeight: 400 }) : undefined
-        return {
-          placeId: p.place_id!,
-          name: p.name || '',
-          formattedAddress: p.formatted_address,
-          location: { lat: lat ?? 0, lng: lng ?? 0 },
-          rating: p.rating,
-          userRatingsTotal: p.user_ratings_total as number | undefined,
-          types: p.types,
-          photoUrl
-        }
-      }).filter(p => !!p.placeId && typeof p.location.lat === 'number' && typeof p.location.lng === 'number')
+      // Convert proxy results to NormalizedPlace format
+      // Note: photoUrl requires Google Maps JS; omitted when using proxy
+      const normalized: NormalizedPlace[] = proxyResult.results.map((p) => ({
+        placeId: p.placeId,
+        name: p.name,
+        formattedAddress: p.formattedAddress,
+        location: p.location,
+        rating: p.rating,
+        userRatingsTotal: p.userRatingsTotal,
+        types: p.types,
+        photoUrl: undefined // Photos require Maps JS
+      }))
 
       // Only update state if this is still the latest request
       if (token !== searchTokenRef.current) return
@@ -350,36 +350,30 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
         meta: { count: normalized.length, filtered: filtered.length }
       })
     } catch (e: any) {
-      // Ignore abortion as error
-      if (ac.signal.aborted) return
+      // Ignore abortion as error - don't set user-visible error for aborted requests
+      if (ac.signal.aborted || e?.message === 'Aborted' || e?.name === 'AbortError') return
       if (token !== searchTokenRef.current) return
       
-      // On failure, show last known good if present
-      if (lastGoodPlaces && lastGoodPlaces.length > 0) {
+      // Normalize proxy error
+      const normalized = e?.normalized ? e.normalized : normalizeGoogleProxyError({
+        code: e?.code,
+        userMessage: e?.message,
+        devDetails: e?.stack || e?.message || String(e)
+      })
+      
+      const hasLastGood = lastGoodPlaces && lastGoodPlaces.length > 0
+      
+      // On failure, show last known good if present and error is retryable
+      if (hasLastGood && isRetryableError(normalized.code)) {
         setPlaces(lastGoodPlaces)
         setIsStale(true)
-        setError(() => {
-          if (navigator && navigator.onLine === false) return "You're offline"
-          const msg: string = e?.message || 'Search failed'
-          if (msg.includes('OVER_QUERY_LIMIT')) return 'Server is rate limiting (429)'
-          return msg
-        })
+        setError(normalized.userMessage)
       } else {
-        setError(typeof e?.message === 'string' ? e.message : String(e || 'Search failed'))
+        setError(normalized.userMessage)
         setPlaces([])
         setSelectedPlaceId(null)
         setIsStale(false)
       }
-      
-      Observability.log({
-        feature: 'recruitment',
-        route: 'ui.explore_map.search',
-        status: 'error',
-        requestId,
-        errorName: e?.name,
-        errorMessage: e?.message,
-        errorStack: e?.stack
-      })
     } finally {
       // Only clear loading if this is the latest request
       if (token === searchTokenRef.current) {

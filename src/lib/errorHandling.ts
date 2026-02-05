@@ -1,21 +1,82 @@
 import { ValidationError } from '../validation/validators'
+import { GoogleError } from './google/telemetry'
 
 /**
  * Normalized error structure for consistent error handling across Discover and Recruiting
  */
 export type NormalizedError = {
-	kind: 'offline' | 'rate_limited' | 'unauthorized' | 'validation_error' | 'server_error' | 'unknown'
+	kind: 'offline' | 'rate_limited' | 'unauthorized' | 'validation_error' | 'server_error' | 'google_quota' | 'google_restricted' | 'google_invalid' | 'unknown'
 	statusCode?: number
 	requestId?: string
 	message: string
 	retryAfter?: number // seconds
 	originalError?: unknown
+	googleStatus?: string
 }
 
 /**
  * Normalize various error types into a consistent structure
  */
 export function normalizeError(error: unknown, requestId?: string): NormalizedError {
+	// Handle GoogleError specifically
+	if (error instanceof GoogleError) {
+		const googleStatus = error.googleStatus
+		
+		// Map Google status strings to normalized error kinds
+		if (googleStatus === 'OVER_QUERY_LIMIT') {
+			return {
+				kind: 'google_quota',
+				statusCode: 429,
+				requestId: error.requestId || requestId,
+				message: 'Google API quota exceeded',
+				googleStatus,
+				originalError: error
+			}
+		}
+		
+		if (googleStatus === 'REQUEST_DENIED') {
+			return {
+				kind: 'google_restricted',
+				statusCode: 403,
+				requestId: error.requestId || requestId,
+				message: 'Google API key restricted or invalid',
+				googleStatus,
+				originalError: error
+			}
+		}
+		
+		if (googleStatus === 'INVALID_REQUEST') {
+			return {
+				kind: 'google_invalid',
+				statusCode: 400,
+				requestId: error.requestId || requestId,
+				message: 'Invalid request to Google API',
+				googleStatus,
+				originalError: error
+			}
+		}
+		
+		if (googleStatus === 'UNKNOWN_ERROR' || googleStatus === 'ERROR') {
+			return {
+				kind: 'server_error',
+				statusCode: 500,
+				requestId: error.requestId || requestId,
+				message: 'Google API error',
+				googleStatus,
+				originalError: error
+			}
+		}
+		
+		// Default for other Google statuses
+		return {
+			kind: 'unknown',
+			requestId: error.requestId || requestId,
+			message: error.message,
+			googleStatus,
+			originalError: error
+		}
+	}
+	
 	// Handle ValidationError
 	if (error instanceof ValidationError) {
 		return {
@@ -93,13 +154,36 @@ export function normalizeError(error: unknown, requestId?: string): NormalizedEr
 			}
 		}
 
-		// Check for Google Places API rate limiting
-		if (message.includes('OVER_QUERY_LIMIT') || message.includes('rate limiting')) {
+		// Check for Google status strings in generic error messages
+		if (message.includes('OVER_QUERY_LIMIT')) {
 			return {
-				kind: 'rate_limited',
+				kind: 'google_quota',
 				statusCode: 429,
 				requestId,
-				message: 'Server is rate limiting (429)',
+				message: 'Google API quota exceeded',
+				googleStatus: 'OVER_QUERY_LIMIT',
+				originalError: error
+			}
+		}
+		
+		if (message.includes('REQUEST_DENIED')) {
+			return {
+				kind: 'google_restricted',
+				statusCode: 403,
+				requestId,
+				message: 'Google API key restricted or invalid',
+				googleStatus: 'REQUEST_DENIED',
+				originalError: error
+			}
+		}
+		
+		if (message.includes('INVALID_REQUEST')) {
+			return {
+				kind: 'google_invalid',
+				statusCode: 400,
+				requestId,
+				message: 'Invalid request to Google API',
+				googleStatus: 'INVALID_REQUEST',
 				originalError: error
 			}
 		}
@@ -183,14 +267,23 @@ export async function withRetry<T>(
 export function getUserErrorMessage(error: NormalizedError, hasLastGood: boolean = false): string {
 	switch (error.kind) {
 		case 'offline':
-			return "You're offline"
+			return "You're offline. Check your connection."
+		case 'google_quota':
+			if (hasLastGood) {
+				return 'Showing cached results—quota exceeded, retrying...'
+			}
+			return 'Google API quota exceeded. Please try again in a few minutes.'
+		case 'google_restricted':
+			return 'Google API key is restricted or invalid. Please contact support.'
+		case 'google_invalid':
+			return 'Invalid search request. Please try different search terms.'
 		case 'rate_limited':
 			if (hasLastGood) {
 				return 'Showing cached results—retrying...'
 			}
-			return 'Server is rate limiting (429). Please try again shortly.'
+			return 'Server is rate limiting. Please try again shortly.'
 		case 'unauthorized':
-			return 'Session expired'
+			return 'Session expired. Please log in again.'
 		case 'validation_error':
 			const rid = error.requestId ? ` (requestId: ${error.requestId})` : ''
 			return `Data format error${rid}. Please retry.`
@@ -201,7 +294,7 @@ export function getUserErrorMessage(error: NormalizedError, hasLastGood: boolean
 			return `Server error (${error.statusCode || 'unknown'}). Please try again.`
 		case 'unknown':
 		default:
-			return error.message || 'An error occurred'
+			return error.message || 'An error occurred. Please try again.'
 	}
 }
 
@@ -209,7 +302,12 @@ export function getUserErrorMessage(error: NormalizedError, hasLastGood: boolean
  * Check if error should show cached results with retry message
  */
 export function shouldShowCachedWithRetry(error: NormalizedError): boolean {
-	return error.kind === 'rate_limited' || error.kind === 'server_error' || error.kind === 'offline'
+	return (
+		error.kind === 'rate_limited' || 
+		error.kind === 'server_error' || 
+		error.kind === 'offline' ||
+		error.kind === 'google_quota'
+	)
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { loadGoogleMaps, textSearch, getPlaceDetails, hasGoogleMapsKey } from '../lib/google/maps'
+import { placesProxySearch } from '../lib/google/placesProxy'
+import { normalizeGoogleProxyError, isRetryable as isRetryableError } from '../lib/google/errors'
 import Observability, { generateRequestId } from '../lib/obs'
-import { normalizeError, getUserErrorMessage, shouldShowCachedWithRetry, shouldPreserveState } from '../lib/errorHandling'
 
 export type NormalizedPlace = {
 	placeId: string
@@ -72,133 +72,74 @@ export function usePlacesSearch(input: Input): Return {
 			return
 		}
 
-		// Early return if Google Maps API key is not configured
-		if (!hasGoogleMapsKey) {
-			setResults([])
-			setSelected(null)
-			setLoading(false)
-			return
-		}
-
 		async function run() {
 			setLoading(true)
 			setError(null)
 			setIsStale(false)
 			const myId = ++requestIdRef.current
+			
 			try {
 				const reqId = normalizedInput.requestId || generateRequestId()
 				lastRequestId.current = reqId
-				Observability.log({ feature: 'discover', route: 'google.places', status: 'start', requestId: reqId })
 
-				const google = await loadGoogleMaps()
-				if (ac.signal.aborted || myId !== requestIdRef.current) return
-
-				let originLatLng: google.maps.LatLng | null = null
-
-				// Resolve the location to a lat/lng using PlaceId or Geocoding
-				if (normalizedInput.locationPlaceId) {
-					const place = await getPlaceDetails(normalizedInput.locationPlaceId, ['geometry'], ac.signal)
-					if (place?.geometry?.location) {
-						originLatLng = place.geometry.location
+				// Call server-side proxy (no Google JS required)
+				const proxyResult = await placesProxySearch(
+					{
+						q: normalizedInput.query,
+						location: normalizedInput.locationText, // Proxy handles geocoding
+						radius: 20000
+					},
+					{
+						signal: ac.signal,
+						requestId: reqId,
+						feature: 'discover',
+						userAction: 'search'
 					}
-				} else if (normalizedInput.locationText) {
-					originLatLng = await new Promise<google.maps.LatLng | null>((resolve) => {
-						const geocoder = new google.maps.Geocoder()
-						geocoder.geocode({ address: normalizedInput.locationText }, (res, status) => {
-							if (status === 'OK' && res && res[0]?.geometry?.location) {
-								resolve(res[0].geometry.location)
-							} else {
-								resolve(null)
-							}
-						})
-					})
-				}
+				)
 
 				if (ac.signal.aborted || myId !== requestIdRef.current) return
 
-				// Perform text search using shared utility (includes retry logic)
-				const request: google.maps.places.TextSearchRequest = { query: normalizedInput.query }
-				if (originLatLng) {
-					request.location = originLatLng
-					request.radius = 20000
-				}
-				
-				const textSearchResults = await textSearch(request, ac.signal)
-
-				if (ac.signal.aborted || myId !== requestIdRef.current) return
-
-				const normalized: NormalizedPlace[] = (textSearchResults || []).map((p) => {
-					const lat = typeof p.geometry?.location?.lat === 'function' ? p.geometry.location.lat() : undefined
-					const lng = typeof p.geometry?.location?.lng === 'function' ? p.geometry.location.lng() : undefined
-					const photoUrl = p.photos && p.photos[0] ? p.photos[0].getUrl({ maxWidth: 400, maxHeight: 400 }) : undefined
-					return {
-						placeId: p.place_id!,
-						name: p.name || '',
-						formattedAddress: p.formatted_address,
-						location: { lat: lat ?? 0, lng: lng ?? 0 },
-						rating: p.rating,
-						userRatingsTotal: p.user_ratings_total as number | undefined,
-						types: p.types,
-						photoUrl
-					}
-				}).filter(p => !!p.placeId && typeof p.location.lat === 'number' && typeof p.location.lng === 'number')
+				// Convert proxy results to NormalizedPlace format
+				// Note: photoUrl requires Google Maps JS to call getUrl(), so we skip it when using proxy
+				const normalized: NormalizedPlace[] = proxyResult.results.map((p) => ({
+					placeId: p.placeId,
+					name: p.name,
+					formattedAddress: p.formattedAddress,
+					location: p.location,
+					rating: p.rating,
+					userRatingsTotal: p.userRatingsTotal,
+					types: p.types,
+					photoUrl: undefined // Photos require Maps JS; omit when using proxy
+				}))
 
 				if (ac.signal.aborted || myId !== requestIdRef.current) return
 
 				setResults(normalized)
 				lastGoodRef.current = normalized
 				setSelected(normalized[0] || null)
-
-				Observability.log({
-					feature: 'discover',
-					route: 'google.places',
-					status: 'validation_ok',
-					requestId: lastRequestId.current,
-					meta: { count: normalized.length }
-				})
-				Observability.log({
-					feature: 'discover',
-					route: 'google.places',
-					status: normalized.length === 0 ? 'empty' : 'ok',
-					requestId: lastRequestId.current
-				})
 			} catch (e: any) {
 				// Ignore abortion as error - don't set error state for aborted requests
-				if (ac.signal.aborted || myId !== requestIdRef.current) return
+				if (ac.signal.aborted || e?.message === 'Aborted' || e?.name === 'AbortError' || myId !== requestIdRef.current) return
 				
-				const normalized = normalizeError(e, lastRequestId.current)
 				const hasLastGood = lastGoodRef.current && lastGoodRef.current.length > 0
 				
-				// Resilience: show last known good with stale banner for transient errors
-				if (hasLastGood && shouldShowCachedWithRetry(normalized)) {
+				// Check if error has normalized proxy error info
+				const normalized = e?.normalized ? e.normalized : normalizeGoogleProxyError({
+					code: e?.code,
+					userMessage: e?.message,
+					devDetails: e?.stack || e?.message || String(e)
+				})
+				
+				// Resilience: show last known good with stale banner for retryable errors
+				if (hasLastGood && isRetryableError(normalized.code)) {
 					setIsStale(true)
-					setError(getUserErrorMessage(normalized, true))
+					setError(normalized.userMessage)
 					// Keep showing last known good results
 				} else {
-					// For validation errors, preserve state (don't clear results)
-					if (shouldPreserveState(normalized)) {
-						setError(getUserErrorMessage(normalized, false))
-						// Don't clear results for validation errors
-					} else {
-						setError(getUserErrorMessage(normalized, false))
-						setResults([])
-						setSelected(null)
-					}
+					setError(normalized.userMessage)
+					setResults([])
+					setSelected(null)
 				}
-				
-				Observability.log({
-					feature: 'discover',
-					route: 'google.places',
-					status: 'error',
-					requestId: lastRequestId.current,
-					errorName: e?.name,
-					errorMessage: e?.message,
-					errorStack: e?.stack,
-					meta: {
-						errorKind: normalized.kind,
-						statusCode: normalized.statusCode
-					}
-				})
 			} finally {
 				// Only clear loading if this is the latest request
 				if (myId === requestIdRef.current) setLoading(false)

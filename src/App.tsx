@@ -53,6 +53,7 @@ import BetaWaitlistModal from './components/BetaWaitlistModal'
 import { isBetaMode, isDemoMode } from './config/appMode'
 import AthleteProfileDebugPanel from './components/AthleteProfileDebugPanel'
 import AuthDebugPanel from './components/AuthDebugPanel'
+import GoogleDebugPanel from './components/GoogleDebugPanel'
 import { goToLogin, goToLogout } from './lib/auth/navigation'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
@@ -360,6 +361,9 @@ function MainApp() {
 					</div>
 				</header>
 				<main className="mx-auto max-w-6xl px-4 md:px-6 pt-6 pb-24 md:pb-6">
+					{/* Google Debug Panel */}
+					<GoogleDebugPanel />
+					
 					{(() => {
 						const params = new URLSearchParams(window.location.search)
 						const showDebug = params.get('debug') === '1'

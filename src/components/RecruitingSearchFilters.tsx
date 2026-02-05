@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import Input from './ui/Input'
 import Select from './ui/Select'
 import Button from './ui/Button'
-import { loadGoogleMaps, hasGoogleMapsKey } from '../lib/google/maps'
+import { hasGoogleMapsKey } from '../lib/google/maps'
+import { geocodeAddress, reverseGeocode } from '../lib/google/geocode'
 
 export type LocationFilter = {
   locationText: string
@@ -59,26 +60,16 @@ export default function RecruitingSearchFilters({ value, onChange, disabled }: P
       throw new Error('Google Maps API key not configured')
     }
 
-    // Ensure Google Maps is loaded before using Geocoder
-    const google = await loadGoogleMaps()
-    const geocoder = new google.maps.Geocoder()
-
-    return new Promise((resolve, reject) => {
-      geocoder.geocode({ address }, (results, status) => {
-        if (status === 'OK' && results && results[0]?.geometry?.location) {
-          const location = results[0].geometry.location
-          const latValue = location.lat
-          const lngValue = location.lng
-          const lat: number = typeof latValue === 'function' ? latValue() : latValue
-          const lng: number = typeof lngValue === 'function' ? lngValue() : lngValue
-          resolve({ lat, lng })
-        } else if (status === 'ZERO_RESULTS') {
-          resolve(null)
-        } else {
-          reject(new Error(`Geocoding failed: ${status}`))
-        }
-      })
-    })
+    const result = await geocodeAddress(
+      address,
+      undefined, // no abort signal for user-triggered geocoding
+      {
+        feature: 'recruiting',
+        userAction: 'apply_location_filter'
+      }
+    )
+    
+    return result
   }
 
   async function handleApplyLocation() {
@@ -156,33 +147,31 @@ export default function RecruitingSearchFilters({ value, onChange, disabled }: P
             return
           }
 
-          const google = await loadGoogleMaps()
-          const geocoder = new google.maps.Geocoder()
-
-          geocoder.geocode(
-            { location: { lat: latitude, lng: longitude } },
-            (results, status) => {
-              if (status === 'OK' && results && results[0]) {
-                const address = results[0].formatted_address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
-                onChange({
-                  ...value,
-                  locationText: address,
-                  lat: latitude,
-                  lng: longitude
-                })
-              } else {
-                onChange({
-                  ...value,
-                  locationText: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-                  lat: latitude,
-                  lng: longitude
-                })
-              }
-              setIsGeolocating(false)
+          const address = await reverseGeocode(
+            latitude,
+            longitude,
+            undefined, // no abort signal
+            {
+              feature: 'recruiting',
+              userAction: 'use_my_location'
             }
           )
+
+          onChange({
+            ...value,
+            locationText: address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            lat: latitude,
+            lng: longitude
+          })
+          setIsGeolocating(false)
         } catch (e: any) {
-          setGeolocationError('Failed to get address from location')
+          // On error, still use coordinates
+          onChange({
+            ...value,
+            locationText: `${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`,
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          })
           setIsGeolocating(false)
         }
       },
