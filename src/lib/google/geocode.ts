@@ -29,6 +29,20 @@ export type GeocodeContext = {
 }
 
 /**
+ * Helper to coerce Google Maps LatLng value to a number
+ * Google Maps can return lat/lng as either a number or a function
+ */
+function coerceLatLng(v: number | (() => number) | undefined): number {
+	if (typeof v === 'function') {
+		return v()
+	}
+	if (typeof v === 'number') {
+		return v
+	}
+	throw new Error('Invalid lat/lng value: expected number or function, got undefined')
+}
+
+/**
  * Forward geocode: convert address string to lat/lng
  * Abort-safe: checks signal before and after async operations
  */
@@ -73,13 +87,26 @@ export async function geocodeAddress(
 				
 				if (status === 'OK' && results && results[0]?.geometry?.location) {
 					const location = results[0].geometry.location
-					const lat = typeof location.lat === 'function' ? location.lat() : location.lat
-					const lng = typeof location.lng === 'function' ? location.lng() : location.lng
-					resolve({
-						lat,
-						lng,
-						formattedAddress: results[0].formatted_address
-					})
+					try {
+						const lat = coerceLatLng(location.lat)
+						const lng = coerceLatLng(location.lng)
+						resolve({
+							lat,
+							lng,
+							formattedAddress: results[0].formatted_address
+						})
+					} catch (error) {
+						reject(new GoogleError(
+							error instanceof Error ? error.message : 'Failed to extract lat/lng from geocode result',
+							'geocode.forward',
+							{
+								googleStatus: 'UNKNOWN_ERROR',
+								retryable: false,
+								statusCode: 500,
+								requestId
+							}
+						))
+					}
 				} else if (status === 'ZERO_RESULTS') {
 					resolve(null)
 				} else {

@@ -9,6 +9,27 @@ import { getGoogleMapsStatus } from '../lib/google/loader'
 import { hasGoogleMapsKey, APP_INSTANCE } from '../config/env'
 import Observability, { type ObservabilityEntry } from '../lib/obs'
 
+/**
+ * Helper to safely render unknown values as React nodes
+ */
+function renderValue(v: unknown): React.ReactNode {
+	if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+		return String(v)
+	}
+	if (v === null || v === undefined) {
+		return '—'
+	}
+	if (v instanceof Error) {
+		return v.message
+	}
+	// For objects and other types, stringify
+	try {
+		return <pre className="whitespace-pre-wrap break-all">{JSON.stringify(v, null, 2)}</pre>
+	} catch {
+		return String(v)
+	}
+}
+
 export default function GoogleDebugPanel() {
 	const params = new URLSearchParams(window.location.search)
 	const showDebug = params.get('debug') === '1'
@@ -118,22 +139,22 @@ export default function GoogleDebugPanel() {
 										{lastDiscoverProxy.meta?.cached ? 'Yes' : 'No'}
 									</span>
 								</div>
-								{lastDiscoverProxy.meta?.query && (
+								{lastDiscoverProxy.meta?.query != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Query:</span>
-										<span className="ml-1 text-white">{String(lastDiscoverProxy.meta.query)}</span>
+										<span className="ml-1 text-white">{renderValue(lastDiscoverProxy.meta.query)}</span>
 									</div>
 								)}
-								{lastDiscoverProxy.meta?.location && (
+								{lastDiscoverProxy.meta?.location != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Location:</span>
-										<span className="ml-1 text-white text-[9px]">{String(lastDiscoverProxy.meta.location)}</span>
+										<span className="ml-1 text-white text-[9px]">{renderValue(lastDiscoverProxy.meta.location)}</span>
 									</div>
 								)}
-								{lastDiscoverProxy.meta?.radius && (
+								{lastDiscoverProxy.meta?.radius != null && (
 									<div>
 										<span className="text-gray-400">Radius:</span>
-										<span className="ml-1 text-white">{String(lastDiscoverProxy.meta.radius)}m</span>
+										<span className="ml-1 text-white">{renderValue(lastDiscoverProxy.meta.radius)}m</span>
 									</div>
 								)}
 								{lastDiscoverProxy.durationMs && (
@@ -145,24 +166,24 @@ export default function GoogleDebugPanel() {
 								{lastDiscoverProxy.meta?.count !== undefined && (
 									<div>
 										<span className="text-gray-400">Results:</span>
-										<span className="ml-1 text-white">{String(lastDiscoverProxy.meta.count)}</span>
+										<span className="ml-1 text-white">{renderValue(lastDiscoverProxy.meta.count)}</span>
 									</div>
 								)}
-								{lastDiscoverProxy.meta?.ts && (
+								{lastDiscoverProxy.meta?.ts != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Timestamp:</span>
-										<span className="ml-1 text-white text-[9px]">{String(lastDiscoverProxy.meta.ts)}</span>
+										<span className="ml-1 text-white text-[9px]">{renderValue(lastDiscoverProxy.meta.ts)}</span>
 									</div>
 								)}
 							</div>
-							{lastDiscoverProxy.status === 'error' && lastDiscoverProxy.meta?.code && (
+							{lastDiscoverProxy.status === 'error' && lastDiscoverProxy.meta?.code != null && (
 								<div className="mt-1 p-1 bg-red-900/30 border border-red-700/50 rounded text-[10px]">
-									<div className="text-red-400 font-semibold">Code: {String(lastDiscoverProxy.meta.code)}</div>
+									<div className="text-red-400 font-semibold">Code: {renderValue(lastDiscoverProxy.meta.code)}</div>
 									{lastDiscoverProxy.errorMessage && (
 										<div className="text-red-300 mt-1">{lastDiscoverProxy.errorMessage}</div>
 									)}
-									{lastDiscoverProxy.meta?.devDetails && (
-										<div className="text-red-300/70 mt-1 font-mono">{String(lastDiscoverProxy.meta.devDetails)}</div>
+									{lastDiscoverProxy.meta?.devDetails != null && (
+										<div className="text-red-300/70 mt-1 font-mono">{renderValue(lastDiscoverProxy.meta.devDetails)}</div>
 									)}
 								</div>
 							)}
@@ -195,22 +216,22 @@ export default function GoogleDebugPanel() {
 										{lastRecruitingProxy.meta?.cached ? 'Yes' : 'No'}
 									</span>
 								</div>
-								{lastRecruitingProxy.meta?.query && (
+								{lastRecruitingProxy.meta?.query != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Query:</span>
-										<span className="ml-1 text-white">{String(lastRecruitingProxy.meta.query)}</span>
+										<span className="ml-1 text-white">{renderValue(lastRecruitingProxy.meta.query)}</span>
 									</div>
 								)}
-								{lastRecruitingProxy.meta?.location && (
+								{lastRecruitingProxy.meta?.location != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Location:</span>
-										<span className="ml-1 text-white text-[9px]">{String(lastRecruitingProxy.meta.location)}</span>
+										<span className="ml-1 text-white text-[9px]">{renderValue(lastRecruitingProxy.meta.location)}</span>
 									</div>
 								)}
-								{lastRecruitingProxy.meta?.radius && (
+								{lastRecruitingProxy.meta?.radius != null && (
 									<div>
 										<span className="text-gray-400">Radius:</span>
-										<span className="ml-1 text-white">{String(lastRecruitingProxy.meta.radius)}m</span>
+										<span className="ml-1 text-white">{renderValue(lastRecruitingProxy.meta.radius)}m</span>
 									</div>
 								)}
 								{lastRecruitingProxy.durationMs && (
@@ -222,24 +243,24 @@ export default function GoogleDebugPanel() {
 								{lastRecruitingProxy.meta?.count !== undefined && (
 									<div>
 										<span className="text-gray-400">Results:</span>
-										<span className="ml-1 text-white">{String(lastRecruitingProxy.meta.count)}</span>
+										<span className="ml-1 text-white">{renderValue(lastRecruitingProxy.meta.count)}</span>
 									</div>
 								)}
-								{lastRecruitingProxy.meta?.ts && (
+								{lastRecruitingProxy.meta?.ts != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Timestamp:</span>
-										<span className="ml-1 text-white text-[9px]">{String(lastRecruitingProxy.meta.ts)}</span>
+										<span className="ml-1 text-white text-[9px]">{renderValue(lastRecruitingProxy.meta.ts)}</span>
 									</div>
 								)}
 							</div>
-							{lastRecruitingProxy.status === 'error' && lastRecruitingProxy.meta?.code && (
+							{lastRecruitingProxy.status === 'error' && lastRecruitingProxy.meta?.code != null && (
 								<div className="mt-1 p-1 bg-red-900/30 border border-red-700/50 rounded text-[10px]">
-									<div className="text-red-400 font-semibold">Code: {String(lastRecruitingProxy.meta.code)}</div>
+									<div className="text-red-400 font-semibold">Code: {renderValue(lastRecruitingProxy.meta.code)}</div>
 									{lastRecruitingProxy.errorMessage && (
 										<div className="text-red-300 mt-1">{lastRecruitingProxy.errorMessage}</div>
 									)}
-									{lastRecruitingProxy.meta?.devDetails && (
-										<div className="text-red-300/70 mt-1 font-mono">{String(lastRecruitingProxy.meta.devDetails)}</div>
+									{lastRecruitingProxy.meta?.devDetails != null && (
+										<div className="text-red-300/70 mt-1 font-mono">{renderValue(lastRecruitingProxy.meta.devDetails)}</div>
 									)}
 								</div>
 							)}
@@ -310,16 +331,16 @@ export default function GoogleDebugPanel() {
 										{lastDiscoverAttempt.status}
 									</span>
 								</div>
-								{lastDiscoverAttempt.meta?.query && (
+								{lastDiscoverAttempt.meta?.query != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Query:</span>
-										<span className="ml-1 text-white">{String(lastDiscoverAttempt.meta.query)}</span>
+										<span className="ml-1 text-white">{renderValue(lastDiscoverAttempt.meta.query)}</span>
 									</div>
 								)}
-								{lastDiscoverAttempt.meta?.googleStatus && (
+								{lastDiscoverAttempt.meta?.googleStatus != null && (
 									<div>
 										<span className="text-gray-400">Google Status:</span>
-										<span className="ml-1 text-purple-300 font-mono">{String(lastDiscoverAttempt.meta.googleStatus)}</span>
+										<span className="ml-1 text-purple-300 font-mono">{renderValue(lastDiscoverAttempt.meta.googleStatus)}</span>
 									</div>
 								)}
 								{lastDiscoverAttempt.durationMs && (
@@ -361,16 +382,16 @@ export default function GoogleDebugPanel() {
 										{lastRecruitingAttempt.status}
 									</span>
 								</div>
-								{lastRecruitingAttempt.meta?.query && (
+								{lastRecruitingAttempt.meta?.query != null && (
 									<div className="col-span-2">
 										<span className="text-gray-400">Query:</span>
-										<span className="ml-1 text-white">{String(lastRecruitingAttempt.meta.query)}</span>
+										<span className="ml-1 text-white">{renderValue(lastRecruitingAttempt.meta.query)}</span>
 									</div>
 								)}
-								{lastRecruitingAttempt.meta?.googleStatus && (
+								{lastRecruitingAttempt.meta?.googleStatus != null && (
 									<div>
 										<span className="text-gray-400">Google Status:</span>
-										<span className="ml-1 text-purple-300 font-mono">{String(lastRecruitingAttempt.meta.googleStatus)}</span>
+										<span className="ml-1 text-purple-300 font-mono">{renderValue(lastRecruitingAttempt.meta.googleStatus)}</span>
 									</div>
 								)}
 								{lastRecruitingAttempt.durationMs && (
@@ -413,28 +434,28 @@ export default function GoogleDebugPanel() {
 										<span className="text-gray-400">Time:</span>
 										<span className="ml-1 text-white">{new Date(error.time).toLocaleTimeString()}</span>
 									</div>
-									{error.meta?.code && (
+									{error.meta?.code != null && (
 										<div>
 											<span className="text-gray-400">Error Code:</span>
-											<span className="ml-1 text-red-300 font-mono font-semibold">{String(error.meta.code)}</span>
+											<span className="ml-1 text-red-300 font-mono font-semibold">{renderValue(error.meta.code)}</span>
 										</div>
 									)}
-									{error.meta?.googleStatus && (
+									{error.meta?.googleStatus != null && (
 										<div>
 											<span className="text-gray-400">Google Status:</span>
-											<span className="ml-1 text-red-300 font-mono font-semibold">{String(error.meta.googleStatus)}</span>
+											<span className="ml-1 text-red-300 font-mono font-semibold">{renderValue(error.meta.googleStatus)}</span>
 										</div>
 									)}
-									{error.meta?.httpStatus && (
+									{error.meta?.httpStatus != null && (
 										<div>
 											<span className="text-gray-400">HTTP Status:</span>
-											<span className="ml-1 text-red-300 font-semibold">{String(error.meta.httpStatus)}</span>
+											<span className="ml-1 text-red-300 font-semibold">{renderValue(error.meta.httpStatus)}</span>
 										</div>
 									)}
-									{error.meta?.statusCode && (
+									{error.meta?.statusCode != null && (
 										<div>
 											<span className="text-gray-400">Status Code:</span>
-											<span className="ml-1 text-red-300 font-semibold">{String(error.meta.statusCode)}</span>
+											<span className="ml-1 text-red-300 font-semibold">{renderValue(error.meta.statusCode)}</span>
 										</div>
 									)}
 								</div>
@@ -443,9 +464,9 @@ export default function GoogleDebugPanel() {
 										{error.errorMessage}
 									</div>
 								)}
-								{error.meta?.devDetails && (
+								{error.meta?.devDetails != null && (
 									<div className="mt-1 text-red-300/60 font-mono text-[9px]">
-										{String(error.meta.devDetails)}
+										{renderValue(error.meta.devDetails)}
 									</div>
 								)}
 							</div>
