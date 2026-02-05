@@ -5,9 +5,30 @@
 
 import { loadGoogleMaps, isGoogleMapsReady, getGoogleMapsStatus } from './loader'
 import { hasGoogleMapsKey, assertGoogleMapsKey } from '../../config/env'
+import { 
+	logGoogleStart, 
+	logGoogleSuccess, 
+	logGoogleError, 
+	GoogleError,
+	GoogleFeature,
+	GoogleStatusString,
+	isRetryableStatus,
+	statusToCode,
+	startTimer
+} from './telemetry'
 
 // Re-export core loading functions and config
 export { loadGoogleMaps, isGoogleMapsReady, getGoogleMapsStatus, hasGoogleMapsKey }
+
+export type GoogleCallContext = {
+	feature: GoogleFeature
+	requestId?: string
+	userId?: string | null
+	userAction?: string
+	query?: string
+	locationText?: string
+	placeId?: string
+}
 
 /**
  * Create a PlacesService instance
@@ -31,13 +52,26 @@ export async function createPlacesService(): Promise<google.maps.places.PlacesSe
  */
 export async function textSearch(
 	request: google.maps.places.TextSearchRequest,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	ctx?: GoogleCallContext
 ): Promise<google.maps.places.PlaceResult[]> {
+	const timer = startTimer()
+	const feature = ctx?.feature || 'discover'
+	const requestId = ctx?.requestId || logGoogleStart({
+		feature,
+		operation: 'places.textSearch',
+		userAction: ctx?.userAction,
+		query: ctx?.query || request.query,
+		locationText: ctx?.locationText,
+		userId: ctx?.userId
+	})
+	
 	const service = await createPlacesService()
 	
 	const attemptSearch = (tryNum: number): Promise<google.maps.places.PlaceResult[]> => {
 		return new Promise((resolve, reject) => {
 			if (signal?.aborted) {
+				// Don't log aborts as errors - they're intentional cancellations
 				reject(new Error('Aborted'))
 				return
 			}
@@ -48,12 +82,48 @@ export async function textSearch(
 					return
 				}
 				
+				const googleStatus = status as GoogleStatusString
+				
 				if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(results)) {
+					const durationMs = timer()
+					logGoogleSuccess(
+						{ 
+							feature, 
+							operation: 'places.textSearch', 
+							requestId,
+							userAction: ctx?.userAction,
+							query: ctx?.query || request.query,
+							locationText: ctx?.locationText,
+							userId: ctx?.userId
+						},
+						{ 
+							count: results.length, 
+							googleStatus: 'OK',
+							durationMs
+						}
+					)
 					resolve(results)
 					return
 				}
 				
 				if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+					const durationMs = timer()
+					logGoogleSuccess(
+						{ 
+							feature, 
+							operation: 'places.textSearch', 
+							requestId,
+							userAction: ctx?.userAction,
+							query: ctx?.query || request.query,
+							locationText: ctx?.locationText,
+							userId: ctx?.userId
+						},
+						{ 
+							count: 0, 
+							googleStatus: 'ZERO_RESULTS',
+							durationMs
+						}
+					)
 					resolve([])
 					return
 				}
@@ -72,12 +142,53 @@ export async function textSearch(
 					return
 				}
 				
-				reject(new Error(`Places textSearch failed: ${status}`))
+				const durationMs = timer()
+				const err = new GoogleError(
+					`Places textSearch failed: ${status}`,
+					'places.textSearch',
+					{
+						googleStatus,
+						retryable: isRetryableStatus(googleStatus),
+						statusCode: statusToCode(googleStatus),
+						requestId
+					}
+				)
+				
+				logGoogleError(
+					{ 
+						feature, 
+						operation: 'places.textSearch', 
+						requestId,
+						userAction: ctx?.userAction,
+						query: ctx?.query || request.query,
+						locationText: ctx?.locationText,
+						userId: ctx?.userId
+					},
+					{
+						message: err.message,
+						name: err.name,
+						googleStatus,
+						statusCode: statusToCode(googleStatus),
+						retryable: isRetryableStatus(googleStatus),
+						durationMs
+					}
+				)
+				
+				reject(err)
 			})
 		})
 	}
 	
-	return attemptSearch(0)
+	try {
+		return await attemptSearch(0)
+	} catch (error) {
+		// Only log non-abort errors
+		if (error instanceof Error && error.message !== 'Aborted') {
+			throw error
+		}
+		// Re-throw abort without logging
+		throw error
+	}
 }
 
 /**
@@ -86,12 +197,24 @@ export async function textSearch(
 export async function getPlaceDetails(
 	placeId: string,
 	fields?: string[],
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	ctx?: GoogleCallContext
 ): Promise<google.maps.places.PlaceResult | null> {
+	const timer = startTimer()
+	const feature = ctx?.feature || 'discover'
+	const requestId = ctx?.requestId || logGoogleStart({
+		feature,
+		operation: 'places.getDetails',
+		placeId,
+		userAction: ctx?.userAction,
+		userId: ctx?.userId
+	})
+	
 	const service = await createPlacesService()
 	
 	return new Promise((resolve, reject) => {
 		if (signal?.aborted) {
+			// Don't log aborts as errors - they're intentional cancellations
 			reject(new Error('Aborted'))
 			return
 		}
@@ -107,17 +230,81 @@ export async function getPlaceDetails(
 					return
 				}
 				
+				const googleStatus = status as GoogleStatusString
+				const durationMs = timer()
+				
 				if (status === google.maps.places.PlacesServiceStatus.OK && result) {
+					logGoogleSuccess(
+						{ 
+							feature, 
+							operation: 'places.getDetails', 
+							requestId,
+							placeId,
+							userAction: ctx?.userAction,
+							userId: ctx?.userId
+						},
+						{ 
+							count: 1, 
+							googleStatus: 'OK',
+							durationMs
+						}
+					)
 					resolve(result)
 					return
 				}
 				
-				if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+				if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS || 
+					status === google.maps.places.PlacesServiceStatus.NOT_FOUND) {
+					logGoogleSuccess(
+						{ 
+							feature, 
+							operation: 'places.getDetails', 
+							requestId,
+							placeId,
+							userAction: ctx?.userAction,
+							userId: ctx?.userId
+						},
+						{ 
+							count: 0, 
+							googleStatus: googleStatus === 'NOT_FOUND' ? 'NOT_FOUND' : 'ZERO_RESULTS',
+							durationMs
+						}
+					)
 					resolve(null)
 					return
 				}
 				
-				reject(new Error(`Places getDetails failed: ${status}`))
+				const err = new GoogleError(
+					`Places getDetails failed: ${status}`,
+					'places.getDetails',
+					{
+						googleStatus,
+						retryable: isRetryableStatus(googleStatus),
+						statusCode: statusToCode(googleStatus),
+						requestId
+					}
+				)
+				
+				logGoogleError(
+					{ 
+						feature, 
+						operation: 'places.getDetails', 
+						requestId,
+						placeId,
+						userAction: ctx?.userAction,
+						userId: ctx?.userId
+					},
+					{
+						message: err.message,
+						name: err.name,
+						googleStatus,
+						statusCode: statusToCode(googleStatus),
+						retryable: isRetryableStatus(googleStatus),
+						durationMs
+					}
+				)
+				
+				reject(err)
 			}
 		)
 	})
