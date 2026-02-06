@@ -1,16 +1,33 @@
 /**
  * Google Places Search Proxy
  * Server-side endpoint to keep Google API key secure
- * Includes retry logic and 10-minute caching
+ * Includes retry logic, 10-minute in-memory caching, and persistent Supabase cache
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { fetchWithRetry } from './_lib/googleHttp'
 import { createHash } from 'crypto'
+import { createClient } from '@supabase/supabase-js'
 
 // Force Node.js runtime for crypto support
 export const config = {
 	runtime: 'nodejs'
+}
+
+// Initialize Supabase client for persistent caching (server-side, service role)
+let supabaseClient: ReturnType<typeof createClient> | null = null
+function getSupabaseClient() {
+	if (supabaseClient) return supabaseClient
+	
+	const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+	const key = process.env.SUPABASE_SERVICE_ROLE_KEY // Service role for server-side
+	
+	if (url && key) {
+		supabaseClient = createClient(url, key)
+		return supabaseClient
+	}
+	
+	return null
 }
 
 type NormalizedPlace = {
@@ -68,11 +85,14 @@ function cleanCache() {
 }
 
 /**
- * Geocode an address to lat/lng
+ * Geocode an address to lat/lng (only called once per request)
  */
 async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
+	// Normalize input: trim and collapse whitespace
+	const normalized = address.trim().replace(/\s+/g, ' ')
+	
 	const url = new URL('https://maps.googleapis.com/maps/api/geocode/json')
-	url.searchParams.set('address', address)
+	url.searchParams.set('address', normalized)
 	url.searchParams.set('key', apiKey)
 	
 	const response = await fetchWithRetry(url.toString())
@@ -90,6 +110,7 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: n
 		}
 	}
 	
+	// ZERO_RESULTS is not an error - just means no location found
 	if (data.status === 'ZERO_RESULTS') {
 		return null
 	}
@@ -98,14 +119,15 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: n
 }
 
 /**
- * Normalize Google Places API error
+ * Normalize Google Places API error with Retry-After support
  */
-function normalizeError(error: any, googleStatus?: string): { 
+function normalizeError(error: any, googleStatus?: string, retryAfter?: number): { 
 	code: ErrorCode
 	userMessage: string
 	devDetails: string
 	googleStatus?: string
 	httpStatus?: number
+	retryAfter?: number
 } {
 	// Check Google-specific status strings first
 	if (googleStatus) {
@@ -121,10 +143,11 @@ function normalizeError(error: any, googleStatus?: string): {
 		if (googleStatus === 'OVER_QUERY_LIMIT') {
 			return {
 				code: 'OVER_QUERY_LIMIT',
-				userMessage: 'Google API quota exceeded. Please try again in a few minutes.',
+				userMessage: 'Too many searches right now. Please try again in a few seconds.',
 				devDetails: `Google status: ${googleStatus}`,
 				googleStatus,
-				httpStatus: 429
+				httpStatus: 429,
+				retryAfter
 			}
 		}
 		
@@ -141,6 +164,8 @@ function normalizeError(error: any, googleStatus?: string): {
 	
 	// Check HTTP status codes
 	const httpStatus = error?.status || error?.statusCode
+	const errorRetryAfter = error?.retryAfter || retryAfter
+	
 	if (typeof httpStatus === 'number') {
 		if (httpStatus === 403) {
 			return {
@@ -154,9 +179,10 @@ function normalizeError(error: any, googleStatus?: string): {
 		if (httpStatus === 429) {
 			return {
 				code: 'OVER_QUERY_LIMIT',
-				userMessage: 'Google API quota exceeded. Please try again in a few minutes.',
+				userMessage: 'Too many searches right now. Please try again in a few seconds.',
 				devDetails: `HTTP ${httpStatus}`,
-				httpStatus
+				httpStatus,
+				retryAfter: errorRetryAfter
 			}
 		}
 	}
@@ -186,6 +212,53 @@ function normalizeError(error: any, googleStatus?: string): {
 	}
 }
 
+/**
+ * Safe stringify for error logging (never logs sensitive data)
+ */
+function safeStringify(error: any): string {
+	try {
+		if (error instanceof Error) {
+			return JSON.stringify({
+				name: error.name,
+				message: error.message,
+				stack: error.stack?.split('\n').slice(0, 3).join('\n') // First 3 lines only
+			})
+		}
+		return JSON.stringify(error)
+	} catch {
+		return String(error)
+	}
+}
+
+/**
+ * Safe server-side logging (never logs API keys)
+ */
+function logSearch(params: {
+	requestId: string
+	code?: ErrorCode
+	googleStatus?: string
+	durationMs: number
+	cached?: boolean
+	persistentHit?: boolean
+	query?: string
+}) {
+	const { requestId, code, googleStatus, durationMs, cached, persistentHit, query } = params
+	
+	// Build log message
+	const parts = [
+		`[places-search]`,
+		`reqId=${requestId}`,
+		code ? `code=${code}` : null,
+		googleStatus ? `googleStatus=${googleStatus}` : null,
+		`duration=${durationMs}ms`,
+		cached ? 'cached=memory' : null,
+		persistentHit ? 'cached=persistent' : null,
+		query ? `query="${query.slice(0, 50)}"` : null
+	].filter(Boolean)
+	
+	console.log(parts.join(' '))
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
 	// Only allow GET requests
 	if (req.method !== 'GET') {
@@ -199,42 +272,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const startMs = Date.now()
 	
 	try {
-		// Extract and validate query params
-		const q = (req.query.q as string || '').trim()
-		const locationParam = (req.query.location as string || '').trim()
-		const radiusParam = req.query.radius ? parseInt(req.query.radius as string, 10) : 20000
+		// ===== STRICT INPUT VALIDATION =====
 		
-		if (!q) {
+		// 1. Accept both 'q' and 'query' parameters
+		const qRaw = (req.query.q ?? req.query.query ?? '') as string
+		const q = qRaw.trim()
+		
+		// 2. Validate query string: must be at least 2 characters
+		if (q.length < 2) {
+			logSearch({ requestId, code: 'INVALID_REQUEST', durationMs: Date.now() - startMs, query: q })
 			return res.status(400).json({
 				ok: false,
-				requestId,
 				code: 'INVALID_REQUEST',
-				userMessage: 'Query parameter "q" is required',
-				devDetails: 'Missing required parameter: q'
+				userMessage: 'Enter at least 2 characters to search.',
+				httpStatus: 400
 			})
 		}
 		
-		// Clamp radius to reasonable limits (100m - 50km)
-		const radius = Math.max(100, Math.min(50000, radiusParam))
+		// 3. Normalize location safely (3 forms: "lat,lng", locationText, or omitted)
+		const locationRaw = (req.query.location ?? '') as string
+		const locationParam = locationRaw.trim()
 		
-		// Get server-side Google Maps API key
-		const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY
-		if (!apiKey) {
-			return res.status(503).json({
+		// 4. Normalize radius safely with fallback to default
+		const radiusRaw = req.query.radius as string | undefined
+		let radiusMeters = 25000 // Default: 25km
+		if (radiusRaw) {
+			const parsed = parseInt(radiusRaw, 10)
+			if (!isNaN(parsed)) {
+				radiusMeters = Math.max(100, Math.min(50000, parsed)) // Clamp to 100m - 50km
+			}
+		}
+		
+		// ===== API KEY VALIDATION =====
+		
+		// Explicit check for Google Maps API key
+		if (!process.env.GOOGLE_MAPS_API_KEY) {
+			logSearch({ requestId, code: 'KEY_RESTRICTED', durationMs: Date.now() - startMs })
+			return res.status(500).json({
 				ok: false,
-				requestId,
-				code: 'KEY_RESTRICTED',
-				userMessage: 'Google Maps API is not configured',
-				devDetails: 'GOOGLE_MAPS_API_KEY not set'
+				code: 'MISSING_SERVER_KEY',
+				userMessage: 'Search is not configured (missing server key).',
+				httpStatus: 500
 			})
 		}
 		
-		// Resolve location to lat,lng if needed
-		let resolvedLocation = locationParam
+		const apiKey = process.env.GOOGLE_MAPS_API_KEY
+		
+		// ===== NORMALIZE LOCATION HANDLING (3 forms) =====
+		
+		let resolvedLocation = ''
 		let locationLatLng: { lat: number; lng: number } | null = null
 		
 		if (locationParam) {
-			// Check if it's already lat,lng format
+			// Form 1: "lat,lng" format (already coordinates)
 			const latLngMatch = locationParam.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/)
 			if (latLngMatch) {
 				locationLatLng = {
@@ -243,65 +333,157 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				}
 				resolvedLocation = `${locationLatLng.lat},${locationLatLng.lng}`
 			} else {
-				// Geocode the address
+				// Form 2: locationText (needs geocoding)
+				// Normalize: trim and collapse whitespace
+				const normalizedLocationText = locationParam.trim().replace(/\s+/g, ' ')
+				
 				try {
-					locationLatLng = await geocodeAddress(locationParam, apiKey)
+					// Geocode ONCE per request (never more)
+					locationLatLng = await geocodeAddress(normalizedLocationText, apiKey)
 					if (locationLatLng) {
 						resolvedLocation = `${locationLatLng.lat},${locationLatLng.lng}`
 					} else {
-						// ZERO_RESULTS from geocode - proceed without location
-						resolvedLocation = ''
+						// ZERO_RESULTS from geocode: not a hard error, return empty results
+						logSearch({ requestId, googleStatus: 'ZERO_RESULTS', durationMs: Date.now() - startMs, query: q })
+						return res.status(200).json({
+							ok: true,
+							requestId,
+							cached: false,
+							ts: new Date().toISOString(),
+							results: [],
+							durationMs: Date.now() - startMs,
+							devDetails: 'Geocode returned zero results for location'
+						})
 					}
 				} catch (error) {
-					// Geocoding failed - log but proceed without location
-					console.error('[places-search] Geocode failed:', error)
+					// Geocoding failed: log but proceed without location (Google supports text-only search)
+					console.error(`[places-search] Geocode failed for "${normalizedLocationText}":`, error)
 					resolvedLocation = ''
+					locationLatLng = null
 				}
 			}
 		}
+		// Form 3: location omitted - Google supports text-only search, no error
 		
-		// Check cache
-		const cKey = cacheKey(q, resolvedLocation, radius)
+		// ===== CHECK CACHES (persistent → memory → Google) =====
+		
+		const cKey = cacheKey(q, resolvedLocation, radiusMeters)
 		cleanCache()
-		const cached = cache.get(cKey)
-		if (cached && Date.now() - cached.tsMs < CACHE_TTL_MS) {
+		
+		// Try persistent cache first (Supabase)
+		const supabase = getSupabaseClient()
+		if (supabase) {
+			try {
+				const { data: persistentCache, error: cacheError } = await supabase
+					.from('search_cache')
+					.select('payload, created_at')
+					.eq('key', cKey)
+					.single()
+				
+				if (!cacheError && persistentCache) {
+					const cacheAge = Date.now() - new Date(persistentCache.created_at).getTime()
+					if (cacheAge < CACHE_TTL_MS) {
+						const payload = persistentCache.payload as CacheEntry
+						logSearch({ 
+							requestId, 
+							durationMs: Date.now() - startMs, 
+							persistentHit: true,
+							query: q
+						})
+						return res.status(200).json({
+							ok: true,
+							requestId: payload.requestId,
+							cached: true,
+							persistentCache: true,
+							ts: new Date(payload.tsMs).toISOString(),
+							results: payload.results,
+							durationMs: Date.now() - startMs
+						})
+					}
+				}
+			} catch (err) {
+				// Persistent cache error: log but continue
+				console.error('[places-search] Persistent cache read error:', err)
+			}
+		}
+		
+		// Try in-memory cache
+		const memCached = cache.get(cKey)
+		if (memCached && Date.now() - memCached.tsMs < CACHE_TTL_MS) {
+			logSearch({ 
+				requestId: memCached.requestId, 
+				durationMs: Date.now() - startMs, 
+				cached: true,
+				query: q
+			})
 			return res.status(200).json({
 				ok: true,
-				requestId: cached.requestId,
+				requestId: memCached.requestId,
 				cached: true,
-				ts: new Date(cached.tsMs).toISOString(),
-				results: cached.results,
+				ts: new Date(memCached.tsMs).toISOString(),
+				results: memCached.results,
 				durationMs: Date.now() - startMs
 			})
 		}
+		
+		// ===== CALL GOOGLE PLACES API =====
 		
 		// Build Places Text Search URL
 		const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json')
 		url.searchParams.set('query', q)
 		url.searchParams.set('key', apiKey)
 		
+		// Add location and radius if available (but not required)
 		if (locationLatLng) {
 			url.searchParams.set('location', `${locationLatLng.lat},${locationLatLng.lng}`)
-			url.searchParams.set('radius', radius.toString())
+			url.searchParams.set('radius', radiusMeters.toString())
 		}
 		
-		// Call Google Places API with retry
+		// Call Google Places API with retry (12s timeout, retries on 429/500-599/network)
 		const response = await fetchWithRetry(url.toString())
 		const data = await response.json()
 		
-		// Handle Google-specific status codes
+		// Handle Google-specific status codes (ensure structured JSON, never HTML)
 		if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-			const normalized = normalizeError(null, data.status)
-			return res.status(normalized.httpStatus || 500).json({
+			const retryAfter = (response as any)._retryAfter
+			const normalized = normalizeError(null, data.status, retryAfter)
+			
+			logSearch({ 
+				requestId, 
+				code: normalized.code, 
+				googleStatus: data.status, 
+				durationMs: Date.now() - startMs,
+				query: q
+			})
+			
+			// Map Google status to appropriate HTTP status
+			let httpStatus = normalized.httpStatus || 502
+			if (data.status === 'REQUEST_DENIED') {
+				httpStatus = 502 // Bad Gateway (upstream issue)
+			} else if (data.status === 'OVER_QUERY_LIMIT') {
+				httpStatus = 429 // Too Many Requests
+			} else if (data.status === 'INVALID_REQUEST') {
+				httpStatus = 400 // Bad Request
+			}
+			
+			const responseBody: any = {
 				ok: false,
-				requestId,
 				code: normalized.code,
 				userMessage: normalized.userMessage,
-				devDetails: normalized.devDetails,
-				googleStatus: data.status,
-				durationMs: Date.now() - startMs
-			})
+				devDetails: typeof normalized.devDetails === 'string' ? normalized.devDetails : JSON.stringify(normalized.devDetails),
+				httpStatus
+			}
+			
+			// Include Retry-After if present (for 429)
+			if (normalized.retryAfter) {
+				responseBody.retryAfter = normalized.retryAfter
+				res.setHeader('Retry-After', normalized.retryAfter.toString())
+			}
+			
+			return res.status(httpStatus).json(responseBody)
 		}
+		
+		// ===== NORMALIZE AND CACHE RESULTS =====
 		
 		// Normalize results
 		const results: NormalizedPlace[] = (data.results || []).map((place: any) => ({
@@ -318,13 +500,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			photoReference: place.photos?.[0]?.photo_reference
 		})).filter((p: NormalizedPlace) => p.placeId && p.location.lat && p.location.lng)
 		
-		// Store in cache
+		// Store in both caches
 		const entry: CacheEntry = {
 			tsMs: Date.now(),
 			results,
 			requestId
 		}
+		
+		// In-memory cache
 		cache.set(cKey, entry)
+		
+		// Persistent cache (Supabase) - fire and forget, don't block response
+		if (supabase) {
+			supabase
+				.from('search_cache')
+				.upsert({ 
+					key: cKey, 
+					payload: entry, 
+					created_at: new Date().toISOString() 
+				})
+				.then(({ error }) => {
+					if (error) {
+						console.error('[places-search] Persistent cache write error:', error)
+					}
+				})
+				.catch((err) => {
+					console.error('[places-search] Persistent cache write exception:', err)
+				})
+		}
+		
+		// Log success
+		logSearch({ 
+			requestId, 
+			googleStatus: data.status, 
+			durationMs: Date.now() - startMs,
+			query: q
+		})
 		
 		// Return results
 		res.setHeader('Cache-Control', 'no-store')
@@ -340,16 +551,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			durationMs: Date.now() - startMs
 		})
 	} catch (error: any) {
-		const normalized = normalizeError(error)
-		return res.status(normalized.httpStatus || 500).json({
-			ok: false,
-			requestId,
-			code: normalized.code,
-			userMessage: normalized.userMessage,
-			devDetails: normalized.devDetails,
-			googleStatus: normalized.googleStatus,
-			httpStatus: normalized.httpStatus,
+		// Catch all unexpected errors and return structured JSON (never throw)
+		const retryAfter = error?.retryAfter
+		const normalized = normalizeError(error, undefined, retryAfter)
+		
+		logSearch({ 
+			requestId, 
+			code: normalized.code, 
+			googleStatus: normalized.googleStatus, 
 			durationMs: Date.now() - startMs
 		})
+		
+		const responseBody: any = {
+			ok: false,
+			code: 'SERVER_ERROR',
+			userMessage: 'Search temporarily unavailable. Please try again.',
+			httpStatus: 500,
+			devDetails: safeStringify(error)
+		}
+		
+		// Include Retry-After if present
+		if (normalized.retryAfter) {
+			responseBody.retryAfter = normalized.retryAfter
+			res.setHeader('Retry-After', normalized.retryAfter.toString())
+		}
+		
+		return res.status(500).json(responseBody)
 	}
 }
