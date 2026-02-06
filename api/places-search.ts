@@ -467,16 +467,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			// Check for ping/health check
 			isPing = url.searchParams.get('ping') === '1'
 			
-			if (isPing) {
-				console.log('[places-search] health check ping', { requestId })
-				return res.status(200).json({
-					ok: true,
-					ping: 'pong',
-					ts: new Date().toISOString(),
-					hasKey: !!process.env.GOOGLE_MAPS_API_KEY,
-					requestId
-				})
-			}
+		if (isPing) {
+			console.log('[places-search] health check ping', { requestId })
+			return res.status(200).json({
+				ok: true,
+				ping: 'pong',
+				ts: new Date().toISOString(),
+				hasKey: !!process.env.GOOGLE_MAPS_API_KEY,
+				requestId,
+				// Deterministic signature for deployment verification
+				placesProxyVersion: '60304de-self-contained',
+				buildId: process.env.VERCEL_GIT_COMMIT_SHA || process.env.VITE_BUILD_ID || null,
+				gitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
+				vercelEnv: process.env.VERCEL_ENV || null
+			})
+		}
 			
 			// Parse query params safely (accept both 'q' and 'query')
 			q = (url.searchParams.get('q') || url.searchParams.get('query') || '').trim()
