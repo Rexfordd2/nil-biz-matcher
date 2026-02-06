@@ -86,36 +86,47 @@ function cleanCache() {
 
 /**
  * Geocode an address to lat/lng (only called once per request)
+ * Wrapped in try/catch to prevent uncaught errors
  */
 async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
-	// Normalize input: trim and collapse whitespace
-	const normalized = address.trim().replace(/\s+/g, ' ')
-	
-	const url = new URL('https://maps.googleapis.com/maps/api/geocode/json')
-	url.searchParams.set('address', normalized)
-	url.searchParams.set('key', apiKey)
-	
-	const response = await fetchWithRetry(url.toString())
-	
-	if (!response.ok) {
-		throw new Error(`Geocode HTTP ${response.status}`)
-	}
-	
-	const data = await response.json()
-	
-	if (data.status === 'OK' && data.results?.[0]?.geometry?.location) {
-		return {
-			lat: data.results[0].geometry.location.lat,
-			lng: data.results[0].geometry.location.lng
+	try {
+		// Normalize input: trim and collapse whitespace
+		const normalized = address.trim().replace(/\s+/g, ' ')
+		
+		const url = new URL('https://maps.googleapis.com/maps/api/geocode/json')
+		url.searchParams.set('address', normalized)
+		url.searchParams.set('key', apiKey)
+		
+		const response = await fetchWithRetry(url.toString())
+		
+		if (!response.ok) {
+			console.error('[geocodeAddress] HTTP error', { status: response.status, address: normalized })
+			throw new Error(`Geocode HTTP ${response.status}`)
 		}
+		
+		const data = await response.json()
+		
+		if (data.status === 'OK' && data.results?.[0]?.geometry?.location) {
+			return {
+				lat: data.results[0].geometry.location.lat,
+				lng: data.results[0].geometry.location.lng
+			}
+		}
+		
+		// ZERO_RESULTS is not an error - just means no location found
+		if (data.status === 'ZERO_RESULTS') {
+			return null
+		}
+		
+		console.error('[geocodeAddress] unexpected status', { status: data.status, address: normalized })
+		throw new Error(`Geocode failed: ${data.status}`)
+	} catch (error: any) {
+		// Re-throw but ensure it's a proper Error object
+		if (error instanceof Error) {
+			throw error
+		}
+		throw new Error(`Geocode error: ${String(error)}`)
 	}
-	
-	// ZERO_RESULTS is not an error - just means no location found
-	if (data.status === 'ZERO_RESULTS') {
-		return null
-	}
-	
-	throw new Error(`Geocode failed: ${data.status}`)
 }
 
 /**
@@ -260,90 +271,154 @@ function logSearch(params: {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-	// Only allow GET requests
-	if (req.method !== 'GET') {
-		return res.status(405).json({ 
-			ok: false, 
-			error: 'Method Not Allowed' 
-		})
-	}
-	
-	const requestId = (req.headers['x-request-id'] as string) || `req_${Date.now()}_${Math.random().toString(36).slice(2)}`
+	const requestId = (req.headers['x-vercel-id'] as string) || (req.headers['x-request-id'] as string) || `req_${Date.now()}_${Math.random().toString(36).slice(2)}`
 	const startMs = Date.now()
 	
+	// ===== TOP-LEVEL CRASH-PROOF WRAPPER =====
 	try {
+		console.log('[places-search] request received', {
+			method: req.method,
+			url: req.url,
+			requestId,
+			headers: {
+				host: req.headers.host,
+				'user-agent': req.headers['user-agent'],
+				'x-vercel-id': req.headers['x-vercel-id']
+			}
+		})
+		
+		// Only allow GET requests
+		if (req.method !== 'GET') {
+			console.log('[places-search] method not allowed', { method: req.method, requestId })
+			return res.status(405).json({ 
+				ok: false,
+				code: 'METHOD_NOT_ALLOWED',
+				userMessage: 'Only GET requests are allowed.',
+				httpStatus: 405,
+				requestId
+			})
+		}
+		
+		// ===== HARDENED REQUEST PARSING FOR VERCEL =====
+		// Do NOT assume req.query exists - parse from URL instead
+		let q = ''
+		let location = ''
+		let radius = 25000
+		let isPing = false
+		
+		try {
+			// Safe URL parsing for Vercel environment
+			const host = req.headers.host || 'localhost:3000'
+			const url = new URL(req.url || '/', `https://${host}`)
+			
+			// Check for ping/health check
+			isPing = url.searchParams.get('ping') === '1'
+			
+			if (isPing) {
+				console.log('[places-search] health check ping', { requestId })
+				return res.status(200).json({
+					ok: true,
+					ping: 'pong',
+					ts: new Date().toISOString(),
+					hasKey: !!process.env.GOOGLE_MAPS_API_KEY,
+					requestId
+				})
+			}
+			
+			// Parse query params safely (accept both 'q' and 'query')
+			q = (url.searchParams.get('q') || url.searchParams.get('query') || '').trim()
+			location = (url.searchParams.get('location') || '').trim()
+			
+			// Parse radius with fallback
+			const radiusRaw = url.searchParams.get('radius')
+			if (radiusRaw) {
+				const parsed = Number(radiusRaw)
+				if (Number.isFinite(parsed)) {
+					radius = Math.max(1000, Math.min(50000, parsed)) // Clamp to 1km - 50km
+				}
+			}
+			
+			console.log('[places-search] params parsed', { q, location, radius, requestId })
+		} catch (urlError: any) {
+			console.error('[places-search] URL parsing failed', {
+				error: String(urlError?.message ?? urlError),
+				url: req.url,
+				requestId
+			})
+			return res.status(400).json({
+				ok: false,
+				code: 'INVALID_REQUEST',
+				userMessage: 'Invalid request URL.',
+				httpStatus: 400,
+				requestId,
+				devDetails: { message: String(urlError?.message ?? urlError) }
+			})
+		}
 		// ===== STRICT INPUT VALIDATION =====
 		
-		// 1. Accept both 'q' and 'query' parameters
-		const qRaw = (req.query.q ?? req.query.query ?? '') as string
-		const q = qRaw.trim()
-		
-		// 2. Validate query string: must be at least 2 characters
+		// Validate query string: must be at least 2 characters
 		if (q.length < 2) {
+			console.log('[places-search] invalid query', { q, length: q.length, requestId })
 			logSearch({ requestId, code: 'INVALID_REQUEST', durationMs: Date.now() - startMs, query: q })
 			return res.status(400).json({
 				ok: false,
 				code: 'INVALID_REQUEST',
 				userMessage: 'Enter at least 2 characters to search.',
-				httpStatus: 400
+				httpStatus: 400,
+				requestId,
+				devDetails: { query: q, length: q.length }
 			})
-		}
-		
-		// 3. Normalize location safely (3 forms: "lat,lng", locationText, or omitted)
-		const locationRaw = (req.query.location ?? '') as string
-		const locationParam = locationRaw.trim()
-		
-		// 4. Normalize radius safely with fallback to default
-		const radiusRaw = req.query.radius as string | undefined
-		let radiusMeters = 25000 // Default: 25km
-		if (radiusRaw) {
-			const parsed = parseInt(radiusRaw, 10)
-			if (!isNaN(parsed)) {
-				radiusMeters = Math.max(100, Math.min(50000, parsed)) // Clamp to 100m - 50km
-			}
 		}
 		
 		// ===== API KEY VALIDATION =====
 		
-		// Explicit check for Google Maps API key
+		// Explicit check for Google Maps API key (never throw)
 		if (!process.env.GOOGLE_MAPS_API_KEY) {
+			console.error('[places-search] missing API key', { requestId })
 			logSearch({ requestId, code: 'KEY_RESTRICTED', durationMs: Date.now() - startMs })
 			return res.status(500).json({
 				ok: false,
 				code: 'MISSING_SERVER_KEY',
 				userMessage: 'Search is not configured (missing server key).',
-				httpStatus: 500
+				httpStatus: 500,
+				requestId,
+				devDetails: { error: 'GOOGLE_MAPS_API_KEY environment variable not set' }
 			})
 		}
 		
 		const apiKey = process.env.GOOGLE_MAPS_API_KEY
+		console.log('[places-search] API key verified', { requestId })
 		
 		// ===== NORMALIZE LOCATION HANDLING (3 forms) =====
 		
 		let resolvedLocation = ''
 		let locationLatLng: { lat: number; lng: number } | null = null
 		
-		if (locationParam) {
+		if (location && location.length > 0) {
 			// Form 1: "lat,lng" format (already coordinates)
-			const latLngMatch = locationParam.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/)
+			const latLngMatch = location.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/)
 			if (latLngMatch) {
 				locationLatLng = {
 					lat: parseFloat(latLngMatch[1]),
 					lng: parseFloat(latLngMatch[2])
 				}
 				resolvedLocation = `${locationLatLng.lat},${locationLatLng.lng}`
+				console.log('[places-search] location parsed as lat/lng', { resolvedLocation, requestId })
 			} else {
 				// Form 2: locationText (needs geocoding)
 				// Normalize: trim and collapse whitespace
-				const normalizedLocationText = locationParam.trim().replace(/\s+/g, ' ')
+				const normalizedLocationText = location.trim().replace(/\s+/g, ' ')
 				
 				try {
-					// Geocode ONCE per request (never more)
+					console.log('[places-search] geocoding location', { location: normalizedLocationText, requestId })
+					// Geocode ONCE per request (never more) - wrap in try/catch
 					locationLatLng = await geocodeAddress(normalizedLocationText, apiKey)
 					if (locationLatLng) {
 						resolvedLocation = `${locationLatLng.lat},${locationLatLng.lng}`
+						console.log('[places-search] geocode success', { resolvedLocation, requestId })
 					} else {
 						// ZERO_RESULTS from geocode: not a hard error, return empty results
+						console.log('[places-search] geocode returned zero results', { location: normalizedLocationText, requestId })
 						logSearch({ requestId, googleStatus: 'ZERO_RESULTS', durationMs: Date.now() - startMs, query: q })
 						return res.status(200).json({
 							ok: true,
@@ -355,25 +430,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 							devDetails: 'Geocode returned zero results for location'
 						})
 					}
-				} catch (error) {
+				} catch (geocodeError: any) {
 					// Geocoding failed: log but proceed without location (Google supports text-only search)
-					console.error(`[places-search] Geocode failed for "${normalizedLocationText}":`, error)
+					console.error('[places-search] geocode error', {
+						error: String(geocodeError?.message ?? geocodeError),
+						stack: String(geocodeError?.stack ?? ''),
+						location: normalizedLocationText,
+						requestId
+					})
+					// Continue without location instead of failing
 					resolvedLocation = ''
 					locationLatLng = null
 				}
 			}
 		}
 		// Form 3: location omitted - Google supports text-only search, no error
+		console.log('[places-search] location resolved', { resolvedLocation, hasLatLng: !!locationLatLng, requestId })
 		
 		// ===== CHECK CACHES (persistent → memory → Google) =====
 		
-		const cKey = cacheKey(q, resolvedLocation, radiusMeters)
+		const cKey = cacheKey(q, resolvedLocation, radius)
 		cleanCache()
+		console.log('[places-search] cache key generated', { cKey, requestId })
 		
 		// Try persistent cache first (Supabase)
 		const supabase = getSupabaseClient()
 		if (supabase) {
 			try {
+				console.log('[places-search] checking persistent cache', { cKey, requestId })
 				const { data: persistentCache, error: cacheError } = await supabase
 					.from('search_cache')
 					.select('payload, created_at')
@@ -384,6 +468,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 					const cacheAge = Date.now() - new Date(persistentCache.created_at).getTime()
 					if (cacheAge < CACHE_TTL_MS) {
 						const payload = persistentCache.payload as CacheEntry
+						console.log('[places-search] persistent cache HIT', { cacheAge, requestId })
 						logSearch({ 
 							requestId, 
 							durationMs: Date.now() - startMs, 
@@ -399,17 +484,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 							results: payload.results,
 							durationMs: Date.now() - startMs
 						})
+					} else {
+						console.log('[places-search] persistent cache expired', { cacheAge, requestId })
 					}
+				} else {
+					console.log('[places-search] persistent cache MISS', { requestId })
 				}
-			} catch (err) {
-				// Persistent cache error: log but continue
-				console.error('[places-search] Persistent cache read error:', err)
+			} catch (cacheErr: any) {
+				// Persistent cache error: log but continue (never crash)
+				console.error('[places-search] persistent cache error', {
+					error: String(cacheErr?.message ?? cacheErr),
+					stack: String(cacheErr?.stack ?? ''),
+					requestId
+				})
 			}
 		}
 		
 		// Try in-memory cache
 		const memCached = cache.get(cKey)
 		if (memCached && Date.now() - memCached.tsMs < CACHE_TTL_MS) {
+			console.log('[places-search] memory cache HIT', { requestId })
 			logSearch({ 
 				requestId: memCached.requestId, 
 				durationMs: Date.now() - startMs, 
@@ -425,28 +519,84 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				durationMs: Date.now() - startMs
 			})
 		}
+		console.log('[places-search] memory cache MISS', { requestId })
 		
 		// ===== CALL GOOGLE PLACES API =====
 		
 		// Build Places Text Search URL
-		const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json')
-		url.searchParams.set('query', q)
-		url.searchParams.set('key', apiKey)
+		console.log('[places-search] building Google API request', { q, locationLatLng, radius, requestId })
+		const googleUrl = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json')
+		googleUrl.searchParams.set('query', q)
+		googleUrl.searchParams.set('key', apiKey)
 		
 		// Add location and radius if available (but not required)
 		if (locationLatLng) {
-			url.searchParams.set('location', `${locationLatLng.lat},${locationLatLng.lng}`)
-			url.searchParams.set('radius', radiusMeters.toString())
+			googleUrl.searchParams.set('location', `${locationLatLng.lat},${locationLatLng.lng}`)
+			googleUrl.searchParams.set('radius', radius.toString())
 		}
 		
 		// Call Google Places API with retry (12s timeout, retries on 429/500-599/network)
-		const response = await fetchWithRetry(url.toString())
-		const data = await response.json()
+		let response: Awaited<ReturnType<typeof fetchWithRetry>>
+		let data: any
+		
+		try {
+			console.log('[places-search] calling Google API', { requestId })
+			response = await fetchWithRetry(googleUrl.toString())
+			console.log('[places-search] Google API responded', { status: response.status, ok: response.ok, requestId })
+			
+			// Parse JSON safely
+			try {
+				data = await response.json()
+			} catch (jsonError: any) {
+				console.error('[places-search] JSON parse error', {
+					error: String(jsonError?.message ?? jsonError),
+					status: response.status,
+					requestId
+				})
+				throw new Error(`Failed to parse Google API response: ${jsonError?.message ?? 'Invalid JSON'}`)
+			}
+		} catch (fetchError: any) {
+			console.error('[places-search] Google API fetch error', {
+				error: String(fetchError?.message ?? fetchError),
+				stack: String(fetchError?.stack ?? ''),
+				requestId
+			})
+			
+			// Normalize fetch error and return structured response (never throw)
+			const normalized = normalizeError(fetchError)
+			logSearch({ 
+				requestId, 
+				code: normalized.code, 
+				durationMs: Date.now() - startMs,
+				query: q
+			})
+			
+			return res.status(normalized.httpStatus || 502).json({
+				ok: false,
+				code: normalized.code,
+				userMessage: normalized.userMessage,
+				httpStatus: normalized.httpStatus || 502,
+				requestId,
+				devDetails: { 
+					message: String(fetchError?.message ?? fetchError),
+					stack: String(fetchError?.stack ?? '').split('\n').slice(0, 3).join('\n')
+				}
+			})
+		}
 		
 		// Handle Google-specific status codes (ensure structured JSON, never HTML)
+		console.log('[places-search] Google API status', { status: data.status, requestId })
+		
 		if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
 			const retryAfter = (response as any)._retryAfter
 			const normalized = normalizeError(null, data.status, retryAfter)
+			
+			console.error('[places-search] Google API error status', {
+				status: data.status,
+				code: normalized.code,
+				httpStatus: normalized.httpStatus,
+				requestId
+			})
 			
 			logSearch({ 
 				requestId, 
@@ -471,7 +621,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				code: normalized.code,
 				userMessage: normalized.userMessage,
 				devDetails: typeof normalized.devDetails === 'string' ? normalized.devDetails : JSON.stringify(normalized.devDetails),
-				httpStatus
+				httpStatus,
+				requestId
 			}
 			
 			// Include Retry-After if present (for 429)
@@ -485,7 +636,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		
 		// ===== NORMALIZE AND CACHE RESULTS =====
 		
-		// Normalize results
+		// Normalize results safely
+		console.log('[places-search] normalizing results', { count: data.results?.length ?? 0, requestId })
 		const results: NormalizedPlace[] = (data.results || []).map((place: any) => ({
 			placeId: place.place_id,
 			name: place.name || '',
@@ -500,6 +652,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			photoReference: place.photos?.[0]?.photo_reference
 		})).filter((p: NormalizedPlace) => p.placeId && p.location.lat && p.location.lng)
 		
+		console.log('[places-search] results normalized', { count: results.length, requestId })
+		
 		// Store in both caches
 		const entry: CacheEntry = {
 			tsMs: Date.now(),
@@ -512,6 +666,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		
 		// Persistent cache (Supabase) - fire and forget, don't block response
 		if (supabase) {
+			console.log('[places-search] writing to persistent cache', { cKey, requestId })
 			supabase
 				.from('search_cache')
 				.upsert({ 
@@ -521,11 +676,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				})
 				.then(({ error }) => {
 					if (error) {
-						console.error('[places-search] Persistent cache write error:', error)
+						console.error('[places-search] persistent cache write error', {
+							error: String(error?.message ?? error),
+							cKey,
+							requestId
+						})
+					} else {
+						console.log('[places-search] persistent cache write success', { cKey, requestId })
 					}
 				})
-				.catch((err) => {
-					console.error('[places-search] Persistent cache write exception:', err)
+				.catch((cacheWriteErr: any) => {
+					console.error('[places-search] persistent cache write exception', {
+						error: String(cacheWriteErr?.message ?? cacheWriteErr),
+						stack: String(cacheWriteErr?.stack ?? ''),
+						cKey,
+						requestId
+					})
 				})
 		}
 		
@@ -535,6 +701,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			googleStatus: data.status, 
 			durationMs: Date.now() - startMs,
 			query: q
+		})
+		
+		console.log('[places-search] success', { 
+			count: results.length, 
+			durationMs: Date.now() - startMs,
+			requestId 
 		})
 		
 		// Return results
@@ -551,31 +723,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			durationMs: Date.now() - startMs
 		})
 	} catch (error: any) {
-		// Catch all unexpected errors and return structured JSON (never throw)
-		const retryAfter = error?.retryAfter
-		const normalized = normalizeError(error, undefined, retryAfter)
+		// ===== TOP-LEVEL CATCH: ABSOLUTELY NOTHING ESCAPES UNCAUGHT =====
 		
-		logSearch({ 
-			requestId, 
-			code: normalized.code, 
-			googleStatus: normalized.googleStatus, 
+		// Log fatal error with full details
+		console.error('[places-search] fatal', {
+			message: String(error?.message ?? error),
+			stack: String(error?.stack ?? ''),
+			name: error?.name,
+			code: error?.code,
+			requestId,
 			durationMs: Date.now() - startMs
 		})
 		
-		const responseBody: any = {
+		logSearch({ 
+			requestId, 
+			code: 'UNKNOWN', 
+			durationMs: Date.now() - startMs
+		})
+		
+		// Return structured error response (never throw, never HTML)
+		return res.status(500).json({
 			ok: false,
 			code: 'SERVER_ERROR',
 			userMessage: 'Search temporarily unavailable. Please try again.',
 			httpStatus: 500,
-			devDetails: safeStringify(error)
-		}
-		
-		// Include Retry-After if present
-		if (normalized.retryAfter) {
-			responseBody.retryAfter = normalized.retryAfter
-			res.setHeader('Retry-After', normalized.retryAfter.toString())
-		}
-		
-		return res.status(500).json(responseBody)
+			requestId: req.headers['x-vercel-id'] ?? requestId ?? null,
+			devDetails: {
+				message: String(error?.message ?? error),
+				stack: String(error?.stack ?? '')
+			}
+		})
 	}
 }
