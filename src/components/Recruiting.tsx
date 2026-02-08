@@ -277,16 +277,21 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     setError(null)
     setIsStale(false)
     
-    // Normalize location params
-    // Use location filter as search center if available, otherwise use map center
-    const searchCenter = locationFilter.lat !== null && locationFilter.lng !== null
-      ? { lat: locationFilter.lat, lng: locationFilter.lng }
-      : center
+    // LOCATION FILTER: Optional and never blocks search
+    // If user has location filter set, include location + radius
+    // If no location filter, send query only (server uses text-based search)
+    const hasLocationFilter = locationFilter.lat !== null && locationFilter.lng !== null
     
-    // Use location filter radius if available, otherwise compute from zoom
-    const searchRadius = locationFilter.lat !== null && locationFilter.lng !== null
-      ? Math.round(locationFilter.radiusMiles * 1609.34) // Convert miles to meters
-      : computeRadiusMeters(zoom)
+    // Build search params
+    const searchParams: { q: string; location?: string; radius?: number } = {
+      q: keyword // Always required
+    }
+    
+    // Only include location if user has explicitly set a location filter
+    if (hasLocationFilter) {
+      searchParams.location = `${locationFilter.lat},${locationFilter.lng}`
+      searchParams.radius = Math.round(locationFilter.radiusMiles * 1609.34) // Convert miles to meters
+    }
     
     Observability.log({
       feature: 'recruitment',
@@ -295,13 +300,13 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       requestId,
       userId: userId ?? undefined,
       meta: { 
-        center: searchCenter, 
-        radius: searchRadius,
-        zoom, 
+        query: keyword,
+        hasLocationFilter,
+        location: searchParams.location,
+        radius: searchParams.radius,
         sport, 
         level, 
-        orgType,
-        usingLocationFilter: locationFilter.lat !== null
+        orgType
       }
     })
     
@@ -309,11 +314,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       // DETERMINISTIC: All search traffic goes through server proxy ONLY
       // NO fallback to Google Maps JS SDK on error
       const proxyResult = await placesProxySearch(
-        {
-          q: keyword, // Already trimmed and validated
-          location: `${searchCenter.lat},${searchCenter.lng}`, // Always in lat,lng format
-          radius: searchRadius // Always numeric
-        },
+        searchParams,
         {
           signal: ac.signal,
           requestId,
@@ -551,7 +552,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 					<div className="grid grid-cols-1 gap-3">
             {/* Location-based filtering */}
             <div className="border border-border rounded-lg p-3 bg-mid/20">
-              <div className="font-medium mb-3 text-sm">Location Filter</div>
+              <div className="font-medium mb-3 text-sm">Location Filter (Optional)</div>
               <RecruitingSearchFilters
                 value={locationFilter}
                 onChange={setLocationFilter}

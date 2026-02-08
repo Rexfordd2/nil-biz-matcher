@@ -52,9 +52,10 @@ export async function placesProxySearch(
 	// NORMALIZE PARAMS: Ensure clean, valid values (no undefined strings)
 	const normalizedQuery = (params.q || '').trim()
 	const normalizedLocation = params.location ? (params.location || '').trim() : undefined
-	const normalizedRadius = typeof params.radius === 'number' && params.radius > 0 
+	// Radius only matters if location is provided
+	const normalizedRadius = params.radius && typeof params.radius === 'number' && params.radius > 0 
 		? params.radius 
-		: 25000 // Default radius
+		: 25000 // Default radius (only used if location is provided)
 	
 	// Debug logging (only in ?debug=1 mode)
 	if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1') {
@@ -85,13 +86,12 @@ export async function placesProxySearch(
 		const qs = new URLSearchParams()
 		qs.set('q', normalizedQuery)
 		
-		// Only add location if it's a valid non-empty string
+		// OPTIONAL LOCATION: Only add location + radius if location is provided
+		// This allows text-only searches without geographic constraints
 		if (normalizedLocation && normalizedLocation.length > 0) {
 			qs.set('location', normalizedLocation)
+			qs.set('radius', normalizedRadius.toString())
 		}
-		
-		// Always send radius as numeric
-		qs.set('radius', normalizedRadius.toString())
 		
 		// Call proxy endpoint
 		const response = await fetch(`/api/places-search?${qs.toString()}`, {

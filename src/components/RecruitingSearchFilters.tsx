@@ -292,7 +292,7 @@ export default function RecruitingSearchFilters({ value, onChange, disabled }: P
 
       {!hasLocation && (
         <div className="text-xs text-foreground/60 italic">
-          💡 Add a location to narrow results by distance
+          💡 Location is optional. Add it to narrow results by distance, or leave empty for broader search.
         </div>
       )}
     </div>
