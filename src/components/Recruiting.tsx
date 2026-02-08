@@ -142,6 +142,9 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 	const abortControllerRef = useRef<AbortController | null>(null)
 	const lastClickTimeRef = useRef<number>(0)
 	const CLICK_COOLDOWN_MS = 500
+	
+	// RETRY: Store last search params for exact retry
+	const lastSearchParamsRef = useRef<{ q: string; location?: string; radius?: number } | null>(null)
 
 	const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
 
@@ -293,6 +296,9 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       searchParams.radius = Math.round(locationFilter.radiusMiles * 1609.34) // Convert miles to meters
     }
     
+    // RETRY: Store params for exact replay
+    lastSearchParamsRef.current = { ...searchParams }
+    
     Observability.log({
       feature: 'recruitment',
       route: 'ui.explore_map.search',
@@ -424,6 +430,126 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
     setRefreshToken(v => v + 1) // force re-render for any dependent UI
+  }
+  
+  function retry() {
+    // RETRY: Replay exact last search with same params
+    if (!lastSearchParamsRef.current) {
+      // No last search to retry, fall back to refresh
+      refresh()
+      return
+    }
+    
+    // Debounce: prevent double-click spam
+    const now = Date.now()
+    if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
+      return
+    }
+    lastClickTimeRef.current = now
+    
+    // Cancel any in-flight request
+    try {
+      abortControllerRef.current?.abort()
+    } catch {}
+    
+    const ac = new AbortController()
+    abortControllerRef.current = ac
+    const token = ++searchTokenRef.current
+    const requestId = generateRequestId()
+    
+    setLoading(true)
+    setError(null)
+    setIsStale(false)
+    
+    const params = lastSearchParamsRef.current
+    
+    Observability.log({
+      feature: 'recruitment',
+      route: 'ui.explore_map.retry',
+      status: 'start',
+      requestId,
+      userId: userId ?? undefined,
+      meta: {
+        query: params.q,
+        location: params.location,
+        radius: params.radius
+      }
+    })
+    
+    // Replay exact same search
+    placesProxySearch(
+      params,
+      {
+        signal: ac.signal,
+        requestId,
+        feature: 'recruiting',
+        userAction: 'retry'
+      }
+    )
+      .then((proxyResult) => {
+        if (ac.signal.aborted || token !== searchTokenRef.current) return
+        
+        const normalized: NormalizedPlace[] = proxyResult.results.map((p) => ({
+          placeId: p.placeId,
+          name: p.name,
+          formattedAddress: p.formattedAddress,
+          location: p.location,
+          rating: p.rating,
+          userRatingsTotal: p.userRatingsTotal,
+          types: p.types,
+          photoUrl: undefined
+        }))
+        
+        if (token !== searchTokenRef.current) return
+        
+        setUnfilteredPlaces(normalized)
+        const filtered = filterPlacesByLocation(normalized)
+        setPlaces(filtered)
+        setLastGoodPlaces(filtered)
+        setIsStale(false)
+        
+        if (filtered.length > 0) {
+          setSelectedPlaceId(filtered[0].placeId)
+        } else {
+          setSelectedPlaceId(null)
+        }
+        
+        Observability.log({
+          feature: 'recruitment',
+          route: 'ui.explore_map.retry',
+          status: normalized.length === 0 ? 'empty' : 'ok',
+          requestId,
+          meta: { count: normalized.length, filtered: filtered.length }
+        })
+      })
+      .catch((e: any) => {
+        if (ac.signal.aborted || e?.message === 'Aborted' || e?.name === 'AbortError') return
+        if (token !== searchTokenRef.current) return
+        
+        const normalized = e?.normalized ? e.normalized : normalizeGoogleProxyError({
+          code: e?.code,
+          userMessage: e?.message,
+          devDetails: e?.stack || e?.message || String(e)
+        })
+        
+        const hasLastGood = lastGoodPlaces && lastGoodPlaces.length > 0
+        
+        if (hasLastGood && isRetryableError(normalized.code)) {
+          setPlaces(lastGoodPlaces)
+          setIsStale(true)
+          setError(normalized.userMessage)
+        } else {
+          setError(normalized.userMessage)
+          setPlaces([])
+          setSelectedPlaceId(null)
+          setIsStale(false)
+        }
+      })
+      .finally(() => {
+        if (token === searchTokenRef.current) {
+          setLoading(false)
+        }
+      })
   }
 
   // NO AUTO-SEARCH: Removed useEffect that fired on filter changes
@@ -604,7 +730,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
                   </span>
                   <Button 
                     variant="secondary" 
-                    onClick={refresh} 
+                    onClick={retry} 
                     disabled={loading}
                     className="shrink-0"
                   >

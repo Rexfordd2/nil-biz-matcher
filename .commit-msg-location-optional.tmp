@@ -1,0 +1,22 @@
+fix: make Recruiting location filter truly optional and non-blocking
+
+Location filter is now completely optional - searches work with or without it.
+
+Changes:
+- Recruiting.tsx: Only include location/radius params when filter is set
+- placesProxy.ts: Only send radius parameter when location is provided
+- RecruitingSearchFilters.tsx: Update UI messaging to clarify optional nature
+- Add "Location Filter (Optional)" label in UI
+
+Behavior:
+- Without location: /api/places-search?q=... (text-only search, broad results)
+- With location: /api/places-search?q=...&location=...&radius=... (geo-filtered)
+- Users can toggle location filter on/off and re-search works correctly
+
+No breaking changes - server already supports optional location parameter.
+
+Files changed:
+- src/components/Recruiting.tsx
+- src/lib/google/placesProxy.ts
+- src/components/RecruitingSearchFilters.tsx
+- RECRUITING_LOCATION_OPTIONAL.md (new documentation)
