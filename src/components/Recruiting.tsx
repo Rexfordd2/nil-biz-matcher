@@ -140,6 +140,8 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 	const latestZoomRef = useRef<number>(5)
 	const searchTokenRef = useRef<number>(0)
 	const abortControllerRef = useRef<AbortController | null>(null)
+	const lastClickTimeRef = useRef<number>(0)
+	const CLICK_COOLDOWN_MS = 500
 
 	const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
 
@@ -252,7 +254,16 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       return
     }
 
-    // Cancel any in-flight request
+    // Client-side validation: ensure we have valid search params
+    const keyword = buildKeyword().trim()
+    if (!keyword || keyword.length < 2) {
+      setError('Select sport, level, or org type to search')
+      setPlaces([])
+      setSelectedPlaceId(null)
+      return
+    }
+
+    // Cancel any in-flight request (single-flight enforcement)
     try {
       abortControllerRef.current?.abort()
     } catch {}
@@ -266,6 +277,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     setError(null)
     setIsStale(false)
     
+    // Normalize location params
     // Use location filter as search center if available, otherwise use map center
     const searchCenter = locationFilter.lat !== null && locationFilter.lng !== null
       ? { lat: locationFilter.lat, lng: locationFilter.lng }
@@ -273,7 +285,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     
     // Use location filter radius if available, otherwise compute from zoom
     const searchRadius = locationFilter.lat !== null && locationFilter.lng !== null
-      ? locationFilter.radiusMiles * 1609.34 // Convert miles to meters
+      ? Math.round(locationFilter.radiusMiles * 1609.34) // Convert miles to meters
       : computeRadiusMeters(zoom)
     
     Observability.log({
@@ -294,12 +306,13 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     })
     
     try {
-      // Use server-side proxy (no Google JS required for search)
+      // DETERMINISTIC: All search traffic goes through server proxy ONLY
+      // NO fallback to Google Maps JS SDK on error
       const proxyResult = await placesProxySearch(
         {
-          q: buildKeyword(),
-          location: `${searchCenter.lat},${searchCenter.lng}`,
-          radius: searchRadius
+          q: keyword, // Already trimmed and validated
+          location: `${searchCenter.lat},${searchCenter.lng}`, // Always in lat,lng format
+          radius: searchRadius // Always numeric
         },
         {
           signal: ac.signal,
@@ -385,26 +398,35 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
   function handleMapIdle(state: { center: { lat: number, lng: number }, zoom: number }) {
     latestCenterRef.current = state.center
     latestZoomRef.current = state.zoom
+    
+    // Only auto-search on map idle if searchThisArea is enabled
+    // This gives users control over when searches happen
     if (searchThisArea) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      runPlacesSearch(state.center, state.zoom)
+      // Add validation before triggering search
+      const keyword = buildKeyword().trim()
+      if (keyword && keyword.length >= 2) {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        runPlacesSearch(state.center, state.zoom)
+      }
     }
   }
 
   function refresh() {
+    // Debounce: prevent double-click spam (500ms cooldown)
+    const now = Date.now()
+    if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
+      return // Ignore rapid clicks
+    }
+    lastClickTimeRef.current = now
+    
+    // Manual search trigger (only fires on explicit button click)
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
     setRefreshToken(v => v + 1) // force re-render for any dependent UI
   }
 
-  // Trigger search when filters change (including location filter)
-  useEffect(() => {
-    if (searchThisArea) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sport, sportOther, level, orgType, searchThisArea, locationFilter.lat, locationFilter.lng, locationFilter.radiusMiles])
+  // NO AUTO-SEARCH: Removed useEffect that fired on filter changes
+  // Search only happens on explicit button click (refresh) or map idle (if searchThisArea enabled)
 
   // Cleanup on unmount
   useEffect(() => {

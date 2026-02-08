@@ -1,0 +1,112 @@
+================================================================================
+ROOT CAUSE ANALYSIS
+================================================================================
+
+WHAT FAILED: Environment validation (Step 0)
+  - Script did not reach SELECT, UPSERT, or VERIFY steps
+  - Failed before attempting any Supabase operations
+
+EXACT ERROR: Missing required environment variables
+  - SUPABASE_TEST_EMAIL: Not set
+  - SUPABASE_TEST_PASSWORD: Not set
+
+ERROR CODE: N/A (pre-flight validation failure)
+
+MOST LIKELY FIX: Add test credentials to .env file
+  1. Create a test user in Supabase Dashboard:
+     - Open: https://duuvyyvfqbzozuhzlbek.supabase.co/project/default/auth/users
+     - Click "Add User" or "Invite User"
+     - Email: test@example.com (or your preferred test email)
+     - Password: Choose a secure test password
+  
+  2. Add credentials to .env:
+     SUPABASE_TEST_EMAIL=test@example.com
+     SUPABASE_TEST_PASSWORD=your-test-password
+  
+  3. Re-run diagnostic:
+     npm run diag:profile
+
+NEXT STEPS:
+  - After adding credentials, re-run diagnostic
+  - If database/RLS issues exist, they will be revealed in subsequent steps
+  - Keep this file to track diagnostic runs over time
+
+STATUS: Cannot assess athlete profile persistence until test credentials are provided
+
+================================================================================
+FULL TERMINAL OUTPUT
+================================================================================
+
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+
+> athlete-ledger@0.1.0 diag:profile
+> node scripts/diagnose-athlete-profile.mjs
+
+======================================================================
+Athlete Profile Diagnostic Tool
+======================================================================
+
+[Step 0] Validating environment variables
+✓ SUPABASE_URL found: https://duuvyyvfqbzozuhzlbek.supabase.co
+✓ SUPABASE_ANON_KEY found (length: 46)
+✗ Missing SUPABASE_TEST_EMAIL
+  Add to .env: SUPABASE_TEST_EMAIL=test@example.com
+✗ Missing SUPABASE_TEST_PASSWORD
+  Add to .env: SUPABASE_TEST_PASSWORD=your-test-password
+
+======================================================================
+✗ Environment validation failed. Cannot proceed.
+======================================================================
+
+================================================================================
+DIAGNOSTIC METADATA
+================================================================================
+
+Command: npm run diag:profile
+Working Directory: C:\Users\13109\Desktop\Monster Collective
+Exit Code: 1 (FAILURE)
+Duration: 90232ms (~90 seconds)
+Started: 2026-02-03T19:29:19.627Z
+Ended: 2026-02-03T19:30:49.859Z
+
+================================================================================
+INTERPRETATION
+================================================================================
+
+The diagnostic script correctly detected missing test credentials and prevented
+execution. This is expected behavior - the script requires valid Supabase auth
+credentials to test the full authentication → CRUD flow.
+
+POSITIVE FINDINGS:
+  ✓ Supabase URL is configured correctly
+  ✓ Supabase anon key is configured correctly
+  ✓ Script's pre-flight validation is working as designed
+
+REQUIRED ACTIONS:
+  1. Create test user in Supabase Auth (if doesn't exist)
+  2. Add SUPABASE_TEST_EMAIL to .env
+  3. Add SUPABASE_TEST_PASSWORD to .env
+  4. Re-run: npm run diag:profile
+
+EXPECTED NEXT OUTPUT (after adding credentials):
+  [Step 0] ✓ All env vars validated
+  [Step 1] ✓ Client initialized
+  [Step 2] ✓ Authenticated as test@example.com
+  [Step 3] ✓ Profile read (or "No existing profile found")
+  [Step 4] ✓ Test profile upserted
+            ✓ Row verified post-upsert
+  [Step 5] ✓ Profile re-read and verified
+  [Step 6] ✓ Original profile restored
+  
+  ======================================================================
+  ✓ All diagnostics passed!
+  ======================================================================
+
+OR (if database issues exist):
+  [Step X] ✗ Failed to [operation]
+  Error details: { code: "42501", message: "...", ... }
+  → Run SUPABASE_FIX_ATHLETE_PROFILES.sql
+
+================================================================================
+END OF DIAGNOSTIC OUTPUT
+================================================================================

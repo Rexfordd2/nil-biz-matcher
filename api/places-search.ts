@@ -285,7 +285,7 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: n
 /**
  * Normalize Google Places API error with Retry-After support
  */
-function normalizeError(error: any, googleStatus?: string, retryAfter?: number): { 
+function normalizeError(error: any, googleStatus?: string, retryAfter?: number, debugMode?: boolean): { 
 	code: ErrorCode
 	userMessage: string
 	devDetails: string
@@ -296,9 +296,13 @@ function normalizeError(error: any, googleStatus?: string, retryAfter?: number):
 	// Check Google-specific status strings first
 	if (googleStatus) {
 		if (googleStatus === 'REQUEST_DENIED') {
+			let userMessage = 'Search is temporarily unavailable (Google configuration). Please try again later.'
+			if (debugMode) {
+				userMessage += ' [DEBUG: Check GOOGLE_MAPS_API_KEY restrictions, enabled APIs (Places, Geocoding), and billing.]'
+			}
 			return {
 				code: 'KEY_RESTRICTED',
-				userMessage: 'Google API key is restricted or invalid. Please contact support.',
+				userMessage,
 				devDetails: `Google status: ${googleStatus}`,
 				googleStatus
 			}
@@ -332,9 +336,13 @@ function normalizeError(error: any, googleStatus?: string, retryAfter?: number):
 	
 	if (typeof httpStatus === 'number') {
 		if (httpStatus === 403) {
+			let userMessage = 'Search is temporarily unavailable (Google configuration). Please try again later.'
+			if (debugMode) {
+				userMessage += ' [DEBUG: Check GOOGLE_MAPS_API_KEY restrictions, enabled APIs (Places, Geocoding), and billing.]'
+			}
 			return {
 				code: 'KEY_RESTRICTED',
-				userMessage: 'Google API key is restricted or invalid. Please contact support.',
+				userMessage,
 				devDetails: `HTTP ${httpStatus}`,
 				httpStatus
 			}
@@ -458,6 +466,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		let location = ''
 		let radius = 25000
 		let isPing = false
+		let debugMode = false
 		
 		try {
 			// Safe URL parsing for Vercel environment
@@ -466,6 +475,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			
 			// Check for ping/health check
 			isPing = url.searchParams.get('ping') === '1'
+			
+			// Check for debug mode
+			debugMode = url.searchParams.get('debug') === '1'
 			
 		if (isPing) {
 			console.log('[places-search] health check ping', { requestId })
@@ -721,7 +733,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			})
 			
 			// Normalize fetch error and return structured response (never throw)
-			const normalized = normalizeError(fetchError)
+			const normalized = normalizeError(fetchError, undefined, undefined, debugMode)
 			logSearch({ 
 				requestId, 
 				code: normalized.code, 
@@ -747,7 +759,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		
 		if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
 			const retryAfter = (response as any)._retryAfter
-			const normalized = normalizeError(null, data.status, retryAfter)
+			const normalized = normalizeError(null, data.status, retryAfter, debugMode)
 			
 			console.error('[places-search] Google API error status', {
 				status: data.status,

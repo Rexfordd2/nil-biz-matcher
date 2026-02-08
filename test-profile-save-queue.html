@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Athlete Profile Save Queue Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        h1 {
+            color: #ff3333;
+        }
+        .test-section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #4a9eff;
+        }
+        .test-step {
+            background: #0f0f0f;
+            border-left: 3px solid #4a9eff;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .test-step.pending {
+            border-left-color: #888;
+        }
+        .test-step.pass {
+            border-left-color: #00ff88;
+            background: #001a10;
+        }
+        .test-step.fail {
+            border-left-color: #ff3333;
+            background: #1a0000;
+        }
+        button {
+            background: #ff3333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #cc0000;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.pending { background: #555; }
+        .status.pass { background: #00ff88; color: #000; }
+        .status.fail { background: #ff3333; }
+        .status.running { background: #ffa500; color: #000; animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        code {
+            background: #222;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+        }
+        .checklist input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.2);
+        }
+        .info-box {
+            background: #1a1a3a;
+            border: 1px solid #4a4aff;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .warning-box {
+            background: #3a2a1a;
+            border: 1px solid #ffa500;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .console-output {
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        .console-output .log { color: #888; }
+        .console-output .info { color: #4a9eff; }
+        .console-output .warn { color: #ffa500; }
+        .console-output .error { color: #ff3333; }
+        .console-output .success { color: #00ff88; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Athlete Profile Save Queue Test Suite</h1>
+    
+    <div class="info-box">
+        <strong>Prerequisites:</strong>
+        <ul>
+            <li>✅ You must be logged in to the app</li>
+            <li>✅ Navigate to the Athlete tab</li>
+            <li>✅ Add <code>?debug=1</code> to the URL to see debug panel</li>
+            <li>✅ Open Browser DevTools Console (F12)</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 1: Basic Save Reliability</h2>
+        <p><strong>Goal:</strong> Verify that multiple field changes save reliably</p>
+        
+        <div class="test-step pending" id="test1-step1">
+            <strong>Step 1:</strong> Change 5 fields in the profile form
+            <ul>
+                <li>Name</li>
+                <li>School</li>
+                <li>Sport</li>
+                <li>Location</li>
+                <li>Personality</li>
+            </ul>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test1-step2">
+            <strong>Step 2:</strong> Click the "Save Profile" button
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test1-step3">
+            <strong>Step 3:</strong> Wait for "All changes saved" status
+            <p><em>Watch the status text in the UI</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test1-step4">
+            <strong>Step 4:</strong> Refresh the page (F5 or Cmd+R)
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test1-step5">
+            <strong>Step 5:</strong> Verify all 5 changes are still there
+            <p><em>Check that the form fields show your changes</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <button onclick="markTest1Pass()">✅ Test Passed</button>
+            <button onclick="markTest1Fail()">❌ Test Failed</button>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Concurrent Save Prevention (Queue)</h2>
+        <p><strong>Goal:</strong> Verify that rapid changes are queued properly</p>
+        
+        <div class="info-box">
+            <strong>Important:</strong> Make sure <code>?debug=1</code> is in the URL to see the queue state!
+        </div>
+
+        <div class="test-step pending" id="test2-step1">
+            <strong>Step 1:</strong> Open the Debug Panel (should be visible with ?debug=1)
+            <p><em>Look for "⚡ Save Queue State" section</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test2-step2">
+            <strong>Step 2:</strong> Make a change (e.g., edit Name field)
+            <p><em>Observe "In-Flight" indicator turn yellow (pulsing)</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test2-step3">
+            <strong>Step 3:</strong> IMMEDIATELY make another change (within 1 second)
+            <p><em>Observe "Queued" indicator turn orange</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test2-step4">
+            <strong>Step 4:</strong> Wait for queue to drain
+            <p><em>Both indicators should turn gray after save completes</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test2-step5">
+            <strong>Step 5:</strong> Refresh page and verify both changes persisted
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <button onclick="markTest2Pass()">✅ Test Passed</button>
+            <button onclick="markTest2Fail()">❌ Test Failed</button>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Debug Panel Visibility</h2>
+        <p><strong>Goal:</strong> Verify debug information is displayed correctly</p>
+        
+        <ul class="checklist">
+            <li>
+                <input type="checkbox" id="debug-check-1" onchange="updateDebugTest()">
+                <label for="debug-check-1">Debug panel is visible with <code>?debug=1</code></label>
+            </li>
+            <li>
+                <input type="checkbox" id="debug-check-2" onchange="updateDebugTest()">
+                <label for="debug-check-2">Shows "In-Flight" status (Yes/No with colored indicator)</label>
+            </li>
+            <li>
+                <input type="checkbox" id="debug-check-3" onchange="updateDebugTest()">
+                <label for="debug-check-3">Shows "Queued" status (Yes/No with colored indicator)</label>
+            </li>
+            <li>
+                <input type="checkbox" id="debug-check-4" onchange="updateDebugTest()">
+                <label for="debug-check-4">Shows "Total Attempts" counter</label>
+            </li>
+            <li>
+                <input type="checkbox" id="debug-check-5" onchange="updateDebugTest()">
+                <label for="debug-check-5">Shows "Profile Snapshot" with key count and payload size</label>
+            </li>
+            <li>
+                <input type="checkbox" id="debug-check-6" onchange="updateDebugTest()">
+                <label for="debug-check-6">Shows "Last Successful Save" timestamp</label>
+            </li>
+        </ul>
+
+        <div style="margin-top: 15px;">
+            <span id="debug-test-status" class="status pending">0/6 Complete</span>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Retry Logic (Advanced)</h2>
+        <p><strong>Goal:</strong> Verify automatic retry on transient failures</p>
+        
+        <div class="warning-box">
+            <strong>⚠️ Warning:</strong> This test requires simulating network failures. Only proceed if you're comfortable with browser DevTools.
+        </div>
+
+        <div class="test-step pending" id="test4-step1">
+            <strong>Step 1:</strong> Open DevTools Network tab (F12 → Network)
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test4-step2">
+            <strong>Step 2:</strong> Set throttling to "Offline"
+            <p><em>Look for dropdown at top of Network tab</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test4-step3">
+            <strong>Step 3:</strong> Make a change in the profile
+            <p><em>Should see error message after attempts</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test4-step4">
+            <strong>Step 4:</strong> Check Console for retry messages
+            <p><em>Should see: "Attempt 1 failed, retrying in 500ms..."</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test4-step5">
+            <strong>Step 5:</strong> Re-enable network (set to "No throttling")
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test4-step6">
+            <strong>Step 6:</strong> Make another change - should save successfully
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <button onclick="markTest4Pass()">✅ Test Passed</button>
+            <button onclick="markTest4Fail()">❌ Test Failed</button>
+            <button onclick="skipTest4()">⏭️ Skip (Too Advanced)</button>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 5: Save Button Determinism</h2>
+        <p><strong>Goal:</strong> Verify "Save" button shows correct status</p>
+        
+        <div class="test-step pending" id="test5-step1">
+            <strong>Step 1:</strong> Make multiple rapid changes (5+ fields)
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test5-step2">
+            <strong>Step 2:</strong> Click "Save Profile" button
+            <p><em>Should show "Saving..." status</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test5-step3">
+            <strong>Step 3:</strong> Wait for status to change to "All changes saved"
+            <p><em>Should only show after verification passes</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test5-step4">
+            <strong>Step 4:</strong> Check Console for verification message
+            <p><em>Should see: "[Profile Save] saveNow complete - all changes saved"</em></p>
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div class="test-step pending" id="test5-step5">
+            <strong>Step 5:</strong> Refresh page - all changes should persist
+            <span class="status pending">Pending</span>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <button onclick="markTest5Pass()">✅ Test Passed</button>
+            <button onclick="markTest5Fail()">❌ Test Failed</button>
+        </div>
+    </div>
+
+    <div class="test-section" style="background: #1a1a2a; border-color: #4a4aff;">
+        <h2>📊 Test Results Summary</h2>
+        <div id="results-summary" style="font-size: 16px; line-height: 2;">
+            <p>Test 1 (Basic Save): <span id="result-1" class="status pending">Pending</span></p>
+            <p>Test 2 (Queue): <span id="result-2" class="status pending">Pending</span></p>
+            <p>Test 3 (Debug Panel): <span id="result-3" class="status pending">Pending</span></p>
+            <p>Test 4 (Retry Logic): <span id="result-4" class="status pending">Pending</span></p>
+            <p>Test 5 (Determinism): <span id="result-5" class="status pending">Pending</span></p>
+            <hr style="border-color: #333; margin: 20px 0;">
+            <p style="font-size: 20px; font-weight: bold;">
+                Overall: <span id="overall-result" class="status pending">0/5 Complete</span>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const results = {
+            test1: 'pending',
+            test2: 'pending',
+            test3: 'pending',
+            test4: 'pending',
+            test5: 'pending'
+        };
+
+        function updateResults() {
+            document.getElementById('result-1').textContent = results.test1.toUpperCase();
+            document.getElementById('result-1').className = `status ${results.test1}`;
+            
+            document.getElementById('result-2').textContent = results.test2.toUpperCase();
+            document.getElementById('result-2').className = `status ${results.test2}`;
+            
+            document.getElementById('result-3').textContent = results.test3.toUpperCase();
+            document.getElementById('result-3').className = `status ${results.test3}`;
+            
+            document.getElementById('result-4').textContent = results.test4.toUpperCase();
+            document.getElementById('result-4').className = `status ${results.test4}`;
+            
+            document.getElementById('result-5').textContent = results.test5.toUpperCase();
+            document.getElementById('result-5').className = `status ${results.test5}`;
+
+            const completed = Object.values(results).filter(r => r === 'pass' || r === 'fail' || r === 'skipped').length;
+            const passed = Object.values(results).filter(r => r === 'pass').length;
+            
+            const overallEl = document.getElementById('overall-result');
+            overallEl.textContent = `${passed}/${completed} Passed (${completed}/5 Complete)`;
+            
+            if (completed === 5) {
+                if (passed === 5) {
+                    overallEl.className = 'status pass';
+                } else if (passed >= 3) {
+                    overallEl.className = 'status running';
+                } else {
+                    overallEl.className = 'status fail';
+                }
+            }
+        }
+
+        function markTest1Pass() {
+            results.test1 = 'pass';
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`test1-step${i}`);
+                el.className = 'test-step pass';
+                el.querySelector('.status').textContent = 'PASS';
+                el.querySelector('.status').className = 'status pass';
+            }
+            updateResults();
+        }
+
+        function markTest1Fail() {
+            results.test1 = 'fail';
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`test1-step${i}`);
+                el.className = 'test-step fail';
+                el.querySelector('.status').textContent = 'FAIL';
+                el.querySelector('.status').className = 'status fail';
+            }
+            updateResults();
+        }
+
+        function markTest2Pass() {
+            results.test2 = 'pass';
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`test2-step${i}`);
+                el.className = 'test-step pass';
+                el.querySelector('.status').textContent = 'PASS';
+                el.querySelector('.status').className = 'status pass';
+            }
+            updateResults();
+        }
+
+        function markTest2Fail() {
+            results.test2 = 'fail';
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`test2-step${i}`);
+                el.className = 'test-step fail';
+                el.querySelector('.status').textContent = 'FAIL';
+                el.querySelector('.status').className = 'status fail';
+            }
+            updateResults();
+        }
+
+        function updateDebugTest() {
+            const checkboxes = [1, 2, 3, 4, 5, 6].map(i => 
+                document.getElementById(`debug-check-${i}`).checked
+            );
+            const completed = checkboxes.filter(c => c).length;
+            
+            const statusEl = document.getElementById('debug-test-status');
+            statusEl.textContent = `${completed}/6 Complete`;
+            
+            if (completed === 6) {
+                results.test3 = 'pass';
+                statusEl.className = 'status pass';
+            } else if (completed > 0) {
+                results.test3 = 'pending';
+                statusEl.className = 'status running';
+            }
+            
+            updateResults();
+        }
+
+        function markTest4Pass() {
+            results.test4 = 'pass';
+            for (let i = 1; i <= 6; i++) {
+                const el = document.getElementById(`test4-step${i}`);
+                el.className = 'test-step pass';
+                el.querySelector('.status').textContent = 'PASS';
+                el.querySelector('.status').className = 'status pass';
+            }
+            updateResults();
+        }
+
+        function markTest4Fail() {
+            results.test4 = 'fail';
+            for (let i = 1; i <= 6; i++) {
+                const el = document.getElementById(`test4-step${i}`);
+                el.className = 'test-step fail';
+                el.querySelector('.status').textContent = 'FAIL';
+                el.querySelector('.status').className = 'status fail';
+            }
+            updateResults();
+        }
+
+        function skipTest4() {
+            results.test4 = 'skipped';
+            for (let i = 1; i <= 6; i++) {
+                const el = document.getElementById(`test4-step${i}`);
+                el.className = 'test-step pending';
+                el.querySelector('.status').textContent = 'SKIPPED';
+                el.querySelector('.status').className = 'status pending';
+            }
+            updateResults();
+        }
+
+        function markTest5Pass() {
+            results.test5 = 'pass';
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`test5-step${i}`);
+                el.className = 'test-step pass';
+                el.querySelector('.status').textContent = 'PASS';
+                el.querySelector('.status').className = 'status pass';
+            }
+            updateResults();
+        }
+
+        function markTest5Fail() {
+            results.test5 = 'fail';
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`test5-step${i}`);
+                el.className = 'test-step fail';
+                el.querySelector('.status').textContent = 'FAIL';
+                el.querySelector('.status').className = 'status fail';
+            }
+            updateResults();
+        }
+
+        // Initialize
+        updateResults();
+    </script>
+</body>
+</html>

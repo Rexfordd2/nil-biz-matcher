@@ -49,6 +49,22 @@ export async function placesProxySearch(
 	const requestId = options?.requestId || generateRequestId()
 	const startMs = Date.now()
 	
+	// NORMALIZE PARAMS: Ensure clean, valid values (no undefined strings)
+	const normalizedQuery = (params.q || '').trim()
+	const normalizedLocation = params.location ? (params.location || '').trim() : undefined
+	const normalizedRadius = typeof params.radius === 'number' && params.radius > 0 
+		? params.radius 
+		: 25000 // Default radius
+	
+	// Debug logging (only in ?debug=1 mode)
+	if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1') {
+		console.info('[Search] provider=server-proxy', {
+			q: normalizedQuery,
+			location: normalizedLocation,
+			radius: normalizedRadius
+		})
+	}
+	
 	// Log start
 	Observability.log({
 		feature: feature === 'discover' ? 'discover' : 'recruitment',
@@ -56,19 +72,25 @@ export async function placesProxySearch(
 		status: 'start',
 		requestId,
 		meta: {
-			query: params.q,
-			location: params.location,
-			radius: params.radius,
+			query: normalizedQuery,
+			location: normalizedLocation,
+			radius: normalizedRadius,
 			userAction: options?.userAction
 		}
 	})
 	
 	try {
-		// Build query string
+		// Build query string with normalized params
 		const qs = new URLSearchParams()
-		qs.set('q', params.q)
-		if (params.location) qs.set('location', params.location)
-		if (params.radius) qs.set('radius', params.radius.toString())
+		qs.set('q', normalizedQuery)
+		
+		// Only add location if it's a valid non-empty string
+		if (normalizedLocation && normalizedLocation.length > 0) {
+			qs.set('location', normalizedLocation)
+		}
+		
+		// Always send radius as numeric
+		qs.set('radius', normalizedRadius.toString())
 		
 		// Call proxy endpoint
 		const response = await fetch(`/api/places-search?${qs.toString()}`, {
