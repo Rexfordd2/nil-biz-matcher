@@ -1,0 +1,12 @@
+docs: normalize proxy client params to always use 'q'
+
+- Add explicit comments documenting param normalization
+- Client (placesProxy.ts) always uses 'q' parameter
+- Server (places-search.ts) accepts both 'q' (normalized) and 'query' (legacy)
+- Maintains backward compatibility
+- No breaking changes
+
+Files changed:
+- src/lib/google/placesProxy.ts: Document 'q' param usage
+- api/places-search.ts: Document backward compatibility
+- PROXY_PARAMS_NORMALIZED.md: Complete documentation

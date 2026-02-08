@@ -81,6 +81,7 @@ export async function placesProxySearch(
 	
 	try {
 		// Build query string with normalized params
+		// NORMALIZED: Always use 'q' parameter (server accepts both 'q' and 'query' for backward compat)
 		const qs = new URLSearchParams()
 		qs.set('q', normalizedQuery)
 		

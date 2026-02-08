@@ -495,7 +495,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			})
 		}
 			
-			// Parse query params safely (accept both 'q' and 'query')
+			// Parse query params safely
+			// BACKWARD COMPATIBILITY: Accept both 'q' (normalized) and 'query' (legacy)
+			// Client always sends 'q', but we accept 'query' for backward compatibility
 			q = (url.searchParams.get('q') || url.searchParams.get('query') || '').trim()
 			location = (url.searchParams.get('location') || '').trim()
 			
