@@ -26,7 +26,7 @@ import Guidelines from './components/Guidelines'
 import RecruitingBoard from './components/RecruitingBoard'
 import RecruitingBlast from './components/RecruitingBlast'
 import Sidebar from './components/Sidebar'
-import Recruiting from './components/Recruiting'
+import RecruitingV2 from './components/RecruitingV2'
 import SignUp from './components/auth/SignUp'
 import SignUpSupabase from './components/auth/SignUpSupabase'
 import Login from './components/auth/Login'
@@ -736,7 +736,7 @@ function MainApp() {
 
 					{tab === 'Recruiting' && (
 						<SectionErrorBoundary>
-							<Recruiting />
+							<RecruitingV2 />
 						</SectionErrorBoundary>
 					)}
 
@@ -921,7 +921,7 @@ function MainApp() {
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Discover') }}>Discover</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Matches') }}>Matches</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Dashboard') }}>Dashboard</button>
-										<button data-testid="nav-recruiting-button" className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Recruiting</button>
+										<button data-testid="nav-recruiting-button" className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Recruiting (V2)</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Profile Preview') }}>Public Profile</button>
 										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Settings') }}>Settings</button>
 										{!currentUser && (

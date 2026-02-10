@@ -1,0 +1,27 @@
+feat: add universal retry functionality to Recruiting
+
+Recruiting now stores last search params and retries exact same call.
+
+Implementation:
+- Add lastSearchParamsRef to store exact search params { q, location, radius }
+- Store params before each search for replay
+- Create retry() function that replays exact placesProxySearch call
+- Debounced (500ms) to prevent spam clicks
+- Disabled during in-flight requests
+- Logs retry actions with userAction='retry'
+
+Consistency:
+- Discover: Already had retry via usePlacesSearch hook ✅
+- Recruiting: Now has matching retry implementation ✅
+- Both store and replay exact params (not current UI state)
+
+Error handling:
+- On retry success: Results update, error clears
+- On retry failure: New error shown, retry still available
+- Stale results: Shows cached with banner if retryable error
+
+Files changed:
+- src/components/Recruiting.tsx: Add lastSearchParamsRef + retry()
+- RETRY_IMPLEMENTATION.md: Complete documentation
+
+Closes consistent retry implementation across Discover + Recruiting.
