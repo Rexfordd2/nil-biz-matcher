@@ -93,7 +93,7 @@ export default function RecruitingFilters({ filters, onChange, onSearch, loading
         </div>
       </div>
 
-      <div className="border-t border-border pt-4"></div>
+      <div className="border-t border-border pt-4">
         <div className="text-xs uppercase tracking-wide text-foreground/60 mb-1">Sport</div>
         <Select 
           value={filters.sport} 
