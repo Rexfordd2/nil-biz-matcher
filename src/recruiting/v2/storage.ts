@@ -9,6 +9,19 @@ import type { RecruitingV2Contact, RecruitingV2Status, RecruitingV2Store } from 
 import Papa from 'papaparse'
 
 const STORAGE_KEY = 'recruiting_v2.store.v1'
+const LAST_SEARCH_KEY = 'recruiting_v2.last_search'
+
+export type LastSearchParams = {
+  q: string
+  locationText: string
+  radiusMiles: number
+  sport: string
+  sportOther: string
+  level: string
+  orgType: string
+  timestamp: string
+  successful: boolean
+}
 
 function getEmptyStore(): RecruitingV2Store {
   return {
@@ -157,4 +170,25 @@ export function exportShortlistCsv(contacts: RecruitingV2Contact[]): void {
   a.download = `recruiting-shortlist-${new Date().toISOString().split('T')[0]}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export function saveLastSearchParams(params: Omit<LastSearchParams, 'timestamp' | 'successful'>, successful: boolean): void {
+  const lastSearch: LastSearchParams = {
+    ...params,
+    timestamp: new Date().toISOString(),
+    successful
+  }
+  save(LAST_SEARCH_KEY, lastSearch)
+}
+
+export function loadLastSearchParams(): LastSearchParams | null {
+  return load<LastSearchParams | null>(LAST_SEARCH_KEY, null)
+}
+
+export function clearLastSearchParams(): void {
+  try {
+    localStorage.removeItem(LAST_SEARCH_KEY)
+  } catch {
+    // ignore
+  }
 }

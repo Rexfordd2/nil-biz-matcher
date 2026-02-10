@@ -12,7 +12,10 @@ import {
   toggleStar as toggleStarInStore,
   setStatus as setStatusInStore,
   setNotes as setNotesInStore,
-  setLastContacted as setLastContactedInStore
+  setLastContacted as setLastContactedInStore,
+  saveLastSearchParams,
+  loadLastSearchParams,
+  clearLastSearchParams
 } from '../recruiting/v2/storage'
 import { placesProxySearch } from '../lib/google/placesProxy'
 import { normalizeGoogleProxyError, isRetryable as isRetryableError } from '../lib/google/errors'
@@ -46,16 +49,29 @@ export default function RecruitingV2() {
   // Contact tracking state
   const [contacts, setContacts] = useState<Record<string, RecruitingV2Contact>>({})
 
+  // Last search restore state
+  const [showRestoreSearch, setShowRestoreSearch] = useState(false)
+  const [lastSearchParams, setLastSearchParams] = useState<ReturnType<typeof loadLastSearchParams>>(null)
+
   // Search management refs
   const searchTokenRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const lastGoodPlacesRef = useRef<NormalizedPlace[]>([])
   const lastSearchParamsRef = useRef<{ q: string; location?: string; radius?: number } | null>(null)
 
-  // Load contacts from localStorage on mount
+  // Load contacts and last search from localStorage on mount
   useEffect(() => {
     const store = loadRecruitingV2Store()
     setContacts(store.contactsByPlaceId)
+    
+    const lastSearch = loadLastSearchParams()
+    if (lastSearch) {
+      setLastSearchParams(lastSearch)
+      // Show restore prompt if no current results and last search exists
+      if (results.length === 0) {
+        setShowRestoreSearch(true)
+      }
+    }
   }, [])
 
   // Build search query from filters
@@ -157,6 +173,18 @@ export default function RecruitingV2() {
     setLoading(true)
     setError(null)
     setIsStale(false)
+    setShowRestoreSearch(false)
+
+    // Save attempted search params
+    saveLastSearchParams({
+      q: query,
+      locationText: filters.locationText,
+      radiusMiles: filters.radiusMiles,
+      sport: filters.sport,
+      sportOther: filters.sportOther,
+      level: filters.level,
+      orgType: filters.orgType
+    }, false)
 
     // Build search params - location is optional
     const searchParams: { q: string; location?: string; radius?: number } = {
@@ -201,6 +229,17 @@ export default function RecruitingV2() {
       lastGoodPlacesRef.current = normalized
       setIsStale(false)
 
+      // Save successful search params
+      saveLastSearchParams({
+        q: query,
+        locationText: filters.locationText,
+        radiusMiles: filters.radiusMiles,
+        sport: filters.sport,
+        sportOther: filters.sportOther,
+        level: filters.level,
+        orgType: filters.orgType
+      }, true)
+
       if (normalized.length > 0) {
         setSelectedPlaceId(normalized[0].placeId)
       } else {
@@ -238,6 +277,32 @@ export default function RecruitingV2() {
   const retry = useCallback(() => {
     runSearch()
   }, [runSearch])
+
+  function handleRestoreLastSearch() {
+    if (!lastSearchParams) return
+    
+    setFilters({
+      sport: lastSearchParams.sport,
+      sportOther: lastSearchParams.sportOther,
+      level: lastSearchParams.level,
+      orgType: lastSearchParams.orgType,
+      locationText: lastSearchParams.locationText,
+      radiusMiles: lastSearchParams.radiusMiles
+    })
+    
+    setShowRestoreSearch(false)
+    
+    // Auto-run search after restoring
+    setTimeout(() => {
+      runSearch()
+    }, 100)
+  }
+
+  function handleDismissRestore() {
+    setShowRestoreSearch(false)
+    clearLastSearchParams()
+    setLastSearchParams(null)
+  }
 
   // Cleanup on unmount
   useEffect(() => {
@@ -304,6 +369,56 @@ export default function RecruitingV2() {
       </div>
 
       {!hasGoogleMapsKey && <GoogleMapsDisabledNotice className="mb-4" />}
+
+      {/* Restore last search prompt */}
+      {showRestoreSearch && lastSearchParams && (
+        <div className="border border-blue-500/40 bg-blue-500/10 rounded-lg p-4 flex items-center justify-between gap-4">
+          <div className="flex-1">
+            <div className="font-medium text-blue-400 mb-1">Restore Last Search?</div>
+            <div className="text-sm text-foreground/80">
+              {lastSearchParams.sport && (
+                <span>
+                  {lastSearchParams.sport === 'other' && lastSearchParams.sportOther 
+                    ? lastSearchParams.sportOther 
+                    : lastSearchParams.sport}
+                </span>
+              )}
+              {lastSearchParams.level && <span> • {lastSearchParams.level}</span>}
+              {lastSearchParams.orgType && <span> • {lastSearchParams.orgType}</span>}
+              {lastSearchParams.locationText && <span> • {lastSearchParams.locationText}</span>}
+              {lastSearchParams.successful && (
+                <span className="ml-2 text-green-500">✓ Last search was successful</span>
+              )}
+              {!lastSearchParams.successful && (
+                <span className="ml-2 text-amber-500">⚠ Last search failed</span>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={handleDismissRestore}>
+              Dismiss
+            </Button>
+            <Button onClick={handleRestoreLastSearch}>
+              Restore & Search
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Retry last search button (shown on error) */}
+      {error && !loading && lastSearchParams && !showRestoreSearch && (
+        <div className="border border-amber-500/40 bg-amber-500/10 rounded-lg p-3 flex items-center justify-between gap-4">
+          <div className="text-sm text-foreground/80">
+            Search failed. 
+            {lastSearchParams.successful && (
+              <span className="ml-1">Your last successful search was similar - try it again?</span>
+            )}
+          </div>
+          <Button variant="secondary" onClick={retry} disabled={loading}>
+            Retry Last Search
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px,1fr,400px] gap-6">
         {/* Left: Filters */}
