@@ -20,6 +20,8 @@ import { isDebugAccessAllowed } from '../lib/debugAccess'
 import { isDemoMode, isBetaMode } from '../config/appMode'
 import { useAuth } from '../context/AuthContext'
 import { PUBLIC_MODE } from '../config/publicMode'
+import RecruitingV2Route from '../pages/RecruitingV2Route'
+import RecruitingLegacyRoute from '../pages/RecruitingLegacyRoute'
 
 type RouteEntry =
 	| { key: 'home' }
@@ -34,6 +36,8 @@ type RouteEntry =
 	| { key: 'status' }
 	| { key: 'health' }
 	| { key: 'app'; subpath: string }
+	| { key: 'recruiting' }
+	| { key: 'recruiting_legacy' }
 	| { key: 'debug_discover_recruiting' }
 	| { key: 'debug_build' }
 	| { key: 'debug_places_hooks' }
@@ -48,6 +52,8 @@ function parseLocation(pathname: string): RouteEntry {
 	if (pathname.startsWith('/terms')) return { key: 'terms' }
 	if (pathname.startsWith('/privacy')) return { key: 'privacy' }
 	if (pathname.startsWith('/app')) return { key: 'app', subpath: pathname.slice('/app'.length) || '/' }
+	if (pathname === '/recruiting/legacy') return { key: 'recruiting_legacy' }
+	if (pathname.startsWith('/recruiting')) return { key: 'recruiting' }
 	if (pathname.startsWith('/onboarding')) return { key: 'onboarding' }
 	if (pathname.startsWith('/auth/reset')) return { key: 'reset' }
 	if (pathname.startsWith('/status')) return { key: 'status' }
@@ -159,10 +165,14 @@ export default function RootRouter() {
 				return <Privacy />
 			case 'onboarding':
 				return <Onboarding />
-			case 'reset':
-				return <ResetRoute />
-			case 'status':
-				return <Status />
+		case 'reset':
+			return <ResetRoute />
+		case 'status':
+			return <Status />
+		case 'recruiting':
+			return <RecruitingV2Route />
+		case 'recruiting_legacy':
+			return <RecruitingLegacyRoute />
 		case 'app':
 			// Render app shell under /app/* - show AuthGate if not authenticated
 			// If authenticated or still initializing, render the app

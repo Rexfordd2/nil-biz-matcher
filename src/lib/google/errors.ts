@@ -41,10 +41,10 @@ export function normalizeGoogleProxyError(errorResponse: {
 	if (!userMessage) {
 		switch (code) {
 			case 'KEY_RESTRICTED':
-				userMessage = 'Google API key is restricted or invalid. Please contact support.'
+				userMessage = 'Search is temporarily unavailable (Google configuration). Please try again later.'
 				break
 			case 'OVER_QUERY_LIMIT':
-				userMessage = 'Google API quota exceeded. Please try again in a few minutes.'
+				userMessage = 'Too many searches right now. Please try again in a few seconds.'
 				break
 			case 'ZERO_RESULTS':
 				userMessage = 'No results found'

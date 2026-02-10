@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Persistence Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e5e5e5;
+        }
+        h1 {
+            color: #ef4444;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #999;
+            margin-bottom: 30px;
+        }
+        .section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #fff;
+            font-size: 18px;
+        }
+        .test-step {
+            background: #252525;
+            border-left: 3px solid #666;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .test-step.active {
+            border-left-color: #3b82f6;
+            background: #1e3a5f;
+        }
+        .test-step.pass {
+            border-left-color: #22c55e;
+            background: #1a3a2a;
+        }
+        .test-step.fail {
+            border-left-color: #ef4444;
+            background: #3a1a1a;
+        }
+        .field-check {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+        }
+        .field-check:last-child {
+            border-bottom: none;
+        }
+        .field-name {
+            font-family: 'Courier New', monospace;
+            color: #a0a0a0;
+        }
+        .field-status {
+            font-size: 14px;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .field-status.pass {
+            background: #22c55e;
+            color: #fff;
+        }
+        .field-status.fail {
+            background: #ef4444;
+            color: #fff;
+        }
+        .field-status.pending {
+            background: #666;
+            color: #fff;
+        }
+        button {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #dc2626;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .instructions {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        .instructions li {
+            margin: 8px 0;
+        }
+        .code {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #fbbf24;
+        }
+        .summary {
+            font-size: 20px;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .summary.pass {
+            background: #22c55e;
+            color: #fff;
+        }
+        .summary.fail {
+            background: #ef4444;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔬 Athlete Profile Persistence Test</h1>
+    <p class="subtitle">Verify that ALL profile fields save and persist across refresh</p>
+
+    <div class="section">
+        <h2>Test Instructions</h2>
+        <div class="instructions">
+            <p>This test verifies that all athlete profile fields are correctly saved to Supabase.</p>
+            <ol>
+                <li>Open the app in a separate tab: <span class="code">http://localhost:5173</span></li>
+                <li>Log in with your test account</li>
+                <li>Navigate to <strong>Athlete Profile</strong></li>
+                <li>Fill in the following 5 test fields (from different sections):</li>
+                <ul>
+                    <li><span class="code">School</span>: Test University</li>
+                    <li><span class="code">Sport</span>: Football</li>
+                    <li><span class="code">Graduation Year</span>: 2026</li>
+                    <li><span class="code">Location</span>: Austin, TX</li>
+                    <li><span class="code">Social Handle</span>: @testathlete</li>
+                </ul>
+                <li>Click <strong>Save Profile</strong></li>
+                <li>Wait for "All changes saved" confirmation</li>
+                <li>Return here and click <strong>Verify Save</strong> below</li>
+                <li>If verification passes, click <strong>Test Persistence (Refresh)</strong></li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Step 1: Verify Initial Save</h2>
+        <div class="test-step" id="step1">
+            <p><strong>Status:</strong> Waiting for test data...</p>
+            <button onclick="verifyInitialSave()" id="verifyBtn">Verify Save</button>
+        </div>
+        <div id="initialResults"></div>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Test Persistence After Refresh</h2>
+        <div class="test-step" id="step2">
+            <p><strong>Status:</strong> Complete Step 1 first</p>
+            <button onclick="testPersistence()" id="persistBtn" disabled>Test Persistence (Refresh)</button>
+        </div>
+        <div id="persistResults"></div>
+    </div>
+
+    <div id="summary"></div>
+
+    <script>
+        const TEST_FIELDS = {
+            name: 'Test Athlete',
+            school: 'Test University',
+            sports: [{ sportName: 'Football', positions: [] }],
+            location: 'Austin, TX',
+            socialHandles: [{ platform: 'Instagram', handle: '@testathlete' }]
+        };
+
+        let initialPayload = null;
+
+        async function verifyInitialSave() {
+            const btn = document.getElementById('verifyBtn');
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+
+            // Check if window.__lastProfileSavePayload exists
+            const opener = window.opener;
+            if (!opener) {
+                alert('Please open this test page from the app (right-click > Open in new tab)');
+                btn.disabled = false;
+                btn.textContent = 'Verify Save';
+                return;
+            }
+
+            // Access the payload from the main window
+            initialPayload = opener.__lastProfileSavePayload;
+            
+            if (!initialPayload) {
+                document.getElementById('step1').className = 'test-step fail';
+                document.getElementById('step1').innerHTML = `
+                    <p><strong>Status:</strong> ❌ No save payload captured yet</p>
+                    <p>Make sure you saved the profile with debug mode enabled (?debug=1)</p>
+                `;
+                btn.disabled = false;
+                btn.textContent = 'Retry Verification';
+                return;
+            }
+
+            // Check all fields
+            const results = [];
+            const criticalFields = initialPayload.criticalFields || {};
+
+            // Check name
+            results.push({
+                field: 'name',
+                expected: TEST_FIELDS.name,
+                actual: criticalFields.name,
+                pass: criticalFields.name === TEST_FIELDS.name
+            });
+
+            // Check school
+            results.push({
+                field: 'school',
+                expected: TEST_FIELDS.school,
+                actual: criticalFields.school,
+                pass: criticalFields.school === TEST_FIELDS.school
+            });
+
+            // Check sports
+            const sportsMatch = Array.isArray(criticalFields.sports) && 
+                                criticalFields.sports.length > 0 &&
+                                criticalFields.sports[0].sportName === 'Football';
+            results.push({
+                field: 'sports',
+                expected: 'Football',
+                actual: JSON.stringify(criticalFields.sports),
+                pass: sportsMatch
+            });
+
+            // Check location
+            results.push({
+                field: 'location',
+                expected: TEST_FIELDS.location,
+                actual: criticalFields.location,
+                pass: criticalFields.location === TEST_FIELDS.location
+            });
+
+            // Check social handles
+            const socialsMatch = Array.isArray(criticalFields.socialHandles) && 
+                                 criticalFields.socialHandles.length > 0 &&
+                                 criticalFields.socialHandles[0].handle === '@testathlete';
+            results.push({
+                field: 'socialHandles',
+                expected: '@testathlete',
+                actual: JSON.stringify(criticalFields.socialHandles),
+                pass: socialsMatch
+            });
+
+            // Display results
+            const allPassed = results.every(r => r.pass);
+            document.getElementById('step1').className = `test-step ${allPassed ? 'pass' : 'fail'}`;
+            document.getElementById('step1').innerHTML = `
+                <p><strong>Status:</strong> ${allPassed ? '✅ All fields saved correctly!' : '❌ Some fields missing or incorrect'}</p>
+            `;
+
+            let html = '<div style="margin-top: 15px;">';
+            results.forEach(r => {
+                html += `
+                    <div class="field-check">
+                        <span class="field-name">${r.field}</span>
+                        <span class="field-status ${r.pass ? 'pass' : 'fail'}">
+                            ${r.pass ? '✓ Pass' : '✗ Fail'}
+                        </span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('initialResults').innerHTML = html;
+
+            if (allPassed) {
+                document.getElementById('persistBtn').disabled = false;
+                document.getElementById('step2').className = 'test-step active';
+                document.getElementById('step2').innerHTML = `
+                    <p><strong>Status:</strong> Ready to test persistence</p>
+                    <p style="color: #999; font-size: 14px; margin-top: 10px;">
+                        Click "Test Persistence" to refresh the app and verify all fields load correctly
+                    </p>
+                    <button onclick="testPersistence()" id="persistBtn">Test Persistence (Refresh)</button>
+                `;
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Retry Verification';
+        }
+
+        async function testPersistence() {
+            const btn = document.getElementById('persistBtn');
+            btn.disabled = true;
+            btn.textContent = 'Testing...';
+
+            const opener = window.opener;
+            if (!opener) {
+                alert('Main window was closed. Please restart the test.');
+                return;
+            }
+
+            // Trigger a reload in the main window
+            opener.location.reload();
+
+            // Wait for reload and profile load
+            document.getElementById('step2').className = 'test-step active';
+            document.getElementById('step2').innerHTML = `
+                <p><strong>Status:</strong> ⏳ Refreshing app and loading profile...</p>
+                <p style="color: #999; font-size: 14px; margin-top: 10px;">
+                    Waiting 5 seconds for profile to load from database...
+                </p>
+            `;
+
+            // Wait 5 seconds for the profile to load
+            setTimeout(() => {
+                checkPersistedFields();
+            }, 5000);
+        }
+
+        function checkPersistedFields() {
+            const opener = window.opener;
+            if (!opener) {
+                alert('Main window was closed. Please restart the test.');
+                return;
+            }
+
+            // Get the loaded profile from the main window (check the debug panel or window state)
+            const loadedPayload = opener.__lastProfileSavePayload;
+            
+            if (!loadedPayload || loadedPayload.timestamp === initialPayload.timestamp) {
+                document.getElementById('step2').className = 'test-step fail';
+                document.getElementById('step2').innerHTML = `
+                    <p><strong>Status:</strong> ❌ Could not verify persistence</p>
+                    <p style="color: #999; font-size: 14px;">
+                        Profile may not have loaded yet. Try clicking "Test Persistence" again.
+                    </p>
+                    <button onclick="testPersistence()" id="persistBtn">Retry Persistence Test</button>
+                `;
+                return;
+            }
+
+            // Compare loaded fields with expected
+            const results = [];
+            const criticalFields = loadedPayload.criticalFields || {};
+
+            results.push({ field: 'name', pass: criticalFields.name === TEST_FIELDS.name });
+            results.push({ field: 'school', pass: criticalFields.school === TEST_FIELDS.school });
+            results.push({ 
+                field: 'sports', 
+                pass: Array.isArray(criticalFields.sports) && 
+                      criticalFields.sports.length > 0 &&
+                      criticalFields.sports[0].sportName === 'Football'
+            });
+            results.push({ field: 'location', pass: criticalFields.location === TEST_FIELDS.location });
+            results.push({ 
+                field: 'socialHandles', 
+                pass: Array.isArray(criticalFields.socialHandles) && 
+                      criticalFields.socialHandles.length > 0 &&
+                      criticalFields.socialHandles[0].handle === '@testathlete'
+            });
+
+            const allPassed = results.every(r => r.pass);
+            
+            document.getElementById('step2').className = `test-step ${allPassed ? 'pass' : 'fail'}`;
+            document.getElementById('step2').innerHTML = `
+                <p><strong>Status:</strong> ${allPassed ? '✅ All fields persisted correctly!' : '❌ Some fields did not persist'}</p>
+            `;
+
+            let html = '<div style="margin-top: 15px;">';
+            results.forEach(r => {
+                html += `
+                    <div class="field-check">
+                        <span class="field-name">${r.field}</span>
+                        <span class="field-status ${r.pass ? 'pass' : 'fail'}">
+                            ${r.pass ? '✓ Persisted' : '✗ Lost'}
+                        </span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('persistResults').innerHTML = html;
+
+            // Show final summary
+            document.getElementById('summary').className = `summary ${allPassed ? 'pass' : 'fail'}`;
+            document.getElementById('summary').innerHTML = allPassed 
+                ? '🎉 SUCCESS: All profile fields save and persist correctly!'
+                : '⚠️ FAILURE: Some fields are not persisting. Check the console logs for details.';
+        }
+    </script>
+</body>
+</html>

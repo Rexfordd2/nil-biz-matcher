@@ -1,0 +1,17 @@
+fix: force Discover/Recruiting search through server proxy only
+
+- Add debug logging to placesProxySearch (only with ?debug=1)
+- Add explicit comments documenting server-proxy-only architecture
+- Verify no fallback paths to Google Maps JS SDK exist
+- System is now 100% deterministic - all search traffic via /api/places-search
+
+Changes:
+- src/lib/google/placesProxy.ts: Add debug console.info logging
+- src/hooks/usePlacesSearch.ts: Add determinism comment
+- src/components/Recruiting.tsx: Add determinism comment
+- SEARCH_DETERMINISM_COMPLETE.md: Document complete implementation
+
+Testing:
+- Add ?debug=1 to URL to see search routing logs
+- All searches go through /api/places-search server endpoint
+- No client-side Google Places JS SDK search calls

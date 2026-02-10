@@ -274,7 +274,7 @@ export function getUserErrorMessage(error: NormalizedError, hasLastGood: boolean
 			}
 			return 'Google API quota exceeded. Please try again in a few minutes.'
 		case 'google_restricted':
-			return 'Google API key is restricted or invalid. Please contact support.'
+			return 'Search is temporarily unavailable (Google configuration). Please try again later.'
 		case 'google_invalid':
 			return 'Invalid search request. Please try different search terms.'
 		case 'rate_limited':

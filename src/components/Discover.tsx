@@ -22,11 +22,9 @@ export default function Discover() {
 	const [whereText, setWhereText] = useState('')
 	const [wherePlaceId, setWherePlaceId] = useState<string | undefined>(undefined)
 
-	// Committed search params (trigger searches)
-	const [searchParams, setSearchParams] = useState<{ query: string; locationText: string; locationPlaceId?: string; requestId?: string }>({
-		query: '',
-		locationText: ''
-	})
+	// Button debouncing (prevent double-click spam)
+	const lastClickTimeRef = useRef<number>(0)
+	const CLICK_COOLDOWN_MS = 500
 
 	// Attach Places Autocomplete to the "Where" input
 	const whereInputRef = useRef<HTMLInputElement | null>(null)
@@ -81,34 +79,73 @@ export default function Discover() {
 		}
 	}, [hasClientKey])
 
-	const { results, loading, error, isStale, selected, setSelected, retry } = usePlacesSearch(searchParams)
+	const { results, loading, error, isStale, selected, setSelected, search, retry } = usePlacesSearch()
 	const [hasSearched, setHasSearched] = useState(false)
+	const [validationError, setValidationError] = useState<string | null>(null)
 
-	// Errors are handled and displayed to user, but no redirects
-
-	function onSearch() {
-		if (!hasClientKey) return
-		if (!whatText || !whereText) return
+	// Manual search function with debouncing and validation
+	async function onSearch() {
+		// Debounce: prevent double-click spam (500ms cooldown)
+		const now = Date.now()
+		if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
+			return // Ignore rapid clicks
+		}
+		lastClickTimeRef.current = now
+		
+		// Clear validation error
+		setValidationError(null)
+		
+		if (!hasClientKey) {
+			setValidationError('Google Maps API key not configured')
+			return
+		}
+		
+		// Client-side validation (UI-level)
+		const trimmedWhat = whatText.trim()
+		const trimmedWhere = whereText.trim()
+		
+		if (!trimmedWhat) {
+			setValidationError('Enter what you are looking for')
+			return
+		}
+		
+		if (trimmedWhat.length < 2) {
+			setValidationError('Enter at least 2 characters')
+			return
+		}
+		
+		if (!trimmedWhere) {
+			setValidationError('Enter a location')
+			return
+		}
+		
 		setHasSearched(true)
 		const reqId = generateRequestId()
+		
 		Observability.log({
 			feature: 'discover',
 			route: 'ui.discover.search',
 			status: 'ui_action',
 			requestId: reqId,
-			meta: { query: whatText, where: whereText }
+			meta: { query: trimmedWhat, where: trimmedWhere }
 		})
 		
 		// Save user data (non-blocking)
 		saveUserData('discover_search', {
-			what: whatText,
-			where: whereText,
+			what: trimmedWhat,
+			where: trimmedWhere,
 			ts: new Date().toISOString()
 		}).catch(() => {
 			// Errors are already logged in saveUserData
 		})
 		
-		setSearchParams({ query: whatText, locationText: whereText, locationPlaceId: wherePlaceId, requestId: reqId })
+		// Call manual search (hook handles single-flight + server validation)
+		await search({
+			query: trimmedWhat,
+			locationText: trimmedWhere,
+			locationPlaceId: wherePlaceId,
+			requestId: reqId
+		})
 	}
 
 	function onSelect(placeId: string) {
@@ -230,24 +267,19 @@ export default function Discover() {
 						</Button>
 					</div>
 				</div>
+				{validationError && (
+					<div data-testid="discover-validation-error" className="mt-3 text-sm text-amber-300">
+						{validationError}
+					</div>
+				)}
 				{error && (
 					<div data-testid="discover-error-banner" className={`mt-3 text-sm ${isStale ? 'text-amber-300' : 'text-red-300'}`}>
 						<div className="flex items-center justify-between gap-2">
 							<span>{isStale ? '⚠️ Showing cached results — ' : ''}{error}</span>
-							<Button variant="secondary" onClick={() => retry()} disabled={loading} className="shrink-0">
+							<Button variant="secondary" onClick={retry} disabled={loading} className="shrink-0">
 								Retry
 							</Button>
 						</div>
-						{import.meta.env.DEV && (
-							<div className="text-xs mt-2 opacity-70 font-mono bg-black/20 p-2 rounded border border-white/10">
-								<div className="font-bold mb-1">Debug Info:</div>
-								<div>Error: {error}</div>
-								<div>Stale: {isStale ? 'Yes' : 'No'}</div>
-								<div>Query: {searchParams.query}</div>
-								<div>Location: {searchParams.locationText}</div>
-								<div>PlaceId: {searchParams.locationPlaceId || 'None'}</div>
-							</div>
-						)}
 					</div>
 				)}
 			</Card>

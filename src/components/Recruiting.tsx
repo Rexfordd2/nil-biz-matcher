@@ -140,6 +140,11 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 	const latestZoomRef = useRef<number>(5)
 	const searchTokenRef = useRef<number>(0)
 	const abortControllerRef = useRef<AbortController | null>(null)
+	const lastClickTimeRef = useRef<number>(0)
+	const CLICK_COOLDOWN_MS = 500
+	
+	// RETRY: Store last search params for exact retry
+	const lastSearchParamsRef = useRef<{ q: string; location?: string; radius?: number } | null>(null)
 
 	const { details, loading: loadingDetails } = usePlaceDetails(selectedPlaceId || undefined)
 
@@ -252,7 +257,16 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       return
     }
 
-    // Cancel any in-flight request
+    // Client-side validation: ensure we have valid search params
+    const keyword = buildKeyword().trim()
+    if (!keyword || keyword.length < 2) {
+      setError('Select sport, level, or org type to search')
+      setPlaces([])
+      setSelectedPlaceId(null)
+      return
+    }
+
+    // Cancel any in-flight request (single-flight enforcement)
     try {
       abortControllerRef.current?.abort()
     } catch {}
@@ -266,15 +280,24 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
     setError(null)
     setIsStale(false)
     
-    // Use location filter as search center if available, otherwise use map center
-    const searchCenter = locationFilter.lat !== null && locationFilter.lng !== null
-      ? { lat: locationFilter.lat, lng: locationFilter.lng }
-      : center
+    // LOCATION FILTER: Optional and never blocks search
+    // If user has location filter set, include location + radius
+    // If no location filter, send query only (server uses text-based search)
+    const hasLocationFilter = locationFilter.lat !== null && locationFilter.lng !== null
     
-    // Use location filter radius if available, otherwise compute from zoom
-    const searchRadius = locationFilter.lat !== null && locationFilter.lng !== null
-      ? locationFilter.radiusMiles * 1609.34 // Convert miles to meters
-      : computeRadiusMeters(zoom)
+    // Build search params
+    const searchParams: { q: string; location?: string; radius?: number } = {
+      q: keyword // Always required
+    }
+    
+    // Only include location if user has explicitly set a location filter
+    if (hasLocationFilter) {
+      searchParams.location = `${locationFilter.lat},${locationFilter.lng}`
+      searchParams.radius = Math.round(locationFilter.radiusMiles * 1609.34) // Convert miles to meters
+    }
+    
+    // RETRY: Store params for exact replay
+    lastSearchParamsRef.current = { ...searchParams }
     
     Observability.log({
       feature: 'recruitment',
@@ -283,24 +306,21 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
       requestId,
       userId: userId ?? undefined,
       meta: { 
-        center: searchCenter, 
-        radius: searchRadius,
-        zoom, 
+        query: keyword,
+        hasLocationFilter,
+        location: searchParams.location,
+        radius: searchParams.radius,
         sport, 
         level, 
-        orgType,
-        usingLocationFilter: locationFilter.lat !== null
+        orgType
       }
     })
     
     try {
-      // Use server-side proxy (no Google JS required for search)
+      // DETERMINISTIC: All search traffic goes through server proxy ONLY
+      // NO fallback to Google Maps JS SDK on error
       const proxyResult = await placesProxySearch(
-        {
-          q: buildKeyword(),
-          location: `${searchCenter.lat},${searchCenter.lng}`,
-          radius: searchRadius
-        },
+        searchParams,
         {
           signal: ac.signal,
           requestId,
@@ -385,26 +405,155 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
   function handleMapIdle(state: { center: { lat: number, lng: number }, zoom: number }) {
     latestCenterRef.current = state.center
     latestZoomRef.current = state.zoom
+    
+    // Only auto-search on map idle if searchThisArea is enabled
+    // This gives users control over when searches happen
     if (searchThisArea) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      runPlacesSearch(state.center, state.zoom)
+      // Add validation before triggering search
+      const keyword = buildKeyword().trim()
+      if (keyword && keyword.length >= 2) {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        runPlacesSearch(state.center, state.zoom)
+      }
     }
   }
 
   function refresh() {
+    // Debounce: prevent double-click spam (500ms cooldown)
+    const now = Date.now()
+    if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
+      return // Ignore rapid clicks
+    }
+    lastClickTimeRef.current = now
+    
+    // Manual search trigger (only fires on explicit button click)
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
     setRefreshToken(v => v + 1) // force re-render for any dependent UI
   }
-
-  // Trigger search when filters change (including location filter)
-  useEffect(() => {
-    if (searchThisArea) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      runPlacesSearch(latestCenterRef.current, latestZoomRef.current)
+  
+  function retry() {
+    // RETRY: Replay exact last search with same params
+    if (!lastSearchParamsRef.current) {
+      // No last search to retry, fall back to refresh
+      refresh()
+      return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sport, sportOther, level, orgType, searchThisArea, locationFilter.lat, locationFilter.lng, locationFilter.radiusMiles])
+    
+    // Debounce: prevent double-click spam
+    const now = Date.now()
+    if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
+      return
+    }
+    lastClickTimeRef.current = now
+    
+    // Cancel any in-flight request
+    try {
+      abortControllerRef.current?.abort()
+    } catch {}
+    
+    const ac = new AbortController()
+    abortControllerRef.current = ac
+    const token = ++searchTokenRef.current
+    const requestId = generateRequestId()
+    
+    setLoading(true)
+    setError(null)
+    setIsStale(false)
+    
+    const params = lastSearchParamsRef.current
+    
+    Observability.log({
+      feature: 'recruitment',
+      route: 'ui.explore_map.retry',
+      status: 'start',
+      requestId,
+      userId: userId ?? undefined,
+      meta: {
+        query: params.q,
+        location: params.location,
+        radius: params.radius
+      }
+    })
+    
+    // Replay exact same search
+    placesProxySearch(
+      params,
+      {
+        signal: ac.signal,
+        requestId,
+        feature: 'recruiting',
+        userAction: 'retry'
+      }
+    )
+      .then((proxyResult) => {
+        if (ac.signal.aborted || token !== searchTokenRef.current) return
+        
+        const normalized: NormalizedPlace[] = proxyResult.results.map((p) => ({
+          placeId: p.placeId,
+          name: p.name,
+          formattedAddress: p.formattedAddress,
+          location: p.location,
+          rating: p.rating,
+          userRatingsTotal: p.userRatingsTotal,
+          types: p.types,
+          photoUrl: undefined
+        }))
+        
+        if (token !== searchTokenRef.current) return
+        
+        setUnfilteredPlaces(normalized)
+        const filtered = filterPlacesByLocation(normalized)
+        setPlaces(filtered)
+        setLastGoodPlaces(filtered)
+        setIsStale(false)
+        
+        if (filtered.length > 0) {
+          setSelectedPlaceId(filtered[0].placeId)
+        } else {
+          setSelectedPlaceId(null)
+        }
+        
+        Observability.log({
+          feature: 'recruitment',
+          route: 'ui.explore_map.retry',
+          status: normalized.length === 0 ? 'empty' : 'ok',
+          requestId,
+          meta: { count: normalized.length, filtered: filtered.length }
+        })
+      })
+      .catch((e: any) => {
+        if (ac.signal.aborted || e?.message === 'Aborted' || e?.name === 'AbortError') return
+        if (token !== searchTokenRef.current) return
+        
+        const normalized = e?.normalized ? e.normalized : normalizeGoogleProxyError({
+          code: e?.code,
+          userMessage: e?.message,
+          devDetails: e?.stack || e?.message || String(e)
+        })
+        
+        const hasLastGood = lastGoodPlaces && lastGoodPlaces.length > 0
+        
+        if (hasLastGood && isRetryableError(normalized.code)) {
+          setPlaces(lastGoodPlaces)
+          setIsStale(true)
+          setError(normalized.userMessage)
+        } else {
+          setError(normalized.userMessage)
+          setPlaces([])
+          setSelectedPlaceId(null)
+          setIsStale(false)
+        }
+      })
+      .finally(() => {
+        if (token === searchTokenRef.current) {
+          setLoading(false)
+        }
+      })
+  }
+
+  // NO AUTO-SEARCH: Removed useEffect that fired on filter changes
+  // Search only happens on explicit button click (refresh) or map idle (if searchThisArea enabled)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -529,7 +678,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
 					<div className="grid grid-cols-1 gap-3">
             {/* Location-based filtering */}
             <div className="border border-border rounded-lg p-3 bg-mid/20">
-              <div className="font-medium mb-3 text-sm">Location Filter</div>
+              <div className="font-medium mb-3 text-sm">Location Filter (Optional)</div>
               <RecruitingSearchFilters
                 value={locationFilter}
                 onChange={setLocationFilter}
@@ -581,7 +730,7 @@ function ExplorePanel({ userId, isMobile }: { userId: string | null, isMobile: b
                   </span>
                   <Button 
                     variant="secondary" 
-                    onClick={refresh} 
+                    onClick={retry} 
                     disabled={loading}
                     className="shrink-0"
                   >

@@ -22,11 +22,7 @@ export default function DebugPlacesHooks() {
 	const [assertions, setAssertions] = useState<string[]>([])
 	const testRunRef = useRef<{ queries: string[], startTime: number } | null>(null)
 
-	const { results, loading, error } = usePlacesSearch({
-		query,
-		locationText: location,
-		requestId: `test-${Date.now()}`
-	})
+	const { results, loading, error, search } = usePlacesSearch()
 
 	// Track results changes for all queries during test
 	const queryStateRef = useRef<Map<string, { resultsCount: number, error: string | null, timestamp: number }>>(new Map())
@@ -81,14 +77,21 @@ export default function DebugPlacesHooks() {
 		setAssertions([])
 		queryStateRef.current.clear()
 
-		const queries = ['p', 'pi', 'piz', 'pizz', 'pizza', 'pizza ', 'pizza n', 'pizza ne', 'pizza new']
+		const queries = ['pi', 'piz', 'pizz', 'pizza', 'pizza ', 'pizza n', 'pizza ne', 'pizza new', 'pizza near']
 		testRunRef.current = { queries, startTime: Date.now() }
 
 		// Track when each query was set
 		const querySetTimes = new Map<string, number>()
 		for (let i = 0; i < queries.length; i++) {
-			querySetTimes.set(queries[i], Date.now())
-			setQuery(queries[i])
+			const q = queries[i]
+			querySetTimes.set(q, Date.now())
+			setQuery(q)
+			// Trigger manual search
+			await search({
+				query: q,
+				locationText: location,
+				requestId: `test-${Date.now()}-${i}`
+			})
 			await new Promise(resolve => setTimeout(resolve, 50))
 		}
 
