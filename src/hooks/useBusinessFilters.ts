@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Business } from '../types'
+import { filterBusinesses } from '../utils/filterBusinesses'
 
 export type BusinessFilters = {
 	status: Business['status'] | ''
@@ -15,21 +16,12 @@ const defaultFilters: BusinessFilters = {
 	location: '',
 }
 
-function applyFilters(list: Business[], filters: BusinessFilters): Business[] {
-	return list.filter(b => {
-		if (filters.status && (b.status || 'Not Contacted') !== filters.status) return false
-		if (filters.tags.length > 0) {
-			const bizTags = b.tags ?? []
-			const hasMatch = filters.tags.some(t => bizTags.includes(t))
-			if (!hasMatch) return false
-		}
-		if (filters.location.trim()) {
-			const q = filters.location.trim().toLowerCase()
-			const match = (b.location?.toLowerCase().includes(q)) || (b.name?.toLowerCase().includes(q))
-			if (!match) return false
-		}
-		return true
-	})
+function toFilterOpts(filters: BusinessFilters): Parameters<typeof filterBusinesses>[1] {
+	return {
+		...(filters.status && { status: filters.status }),
+		...(filters.tags.length > 0 && { tags: filters.tags }),
+		...(filters.location.trim() && { text: filters.location.trim() }),
+	}
 }
 
 /** Collect all unique tag values from the list (for filter dropdown/chips). */
@@ -50,7 +42,7 @@ export function useBusinessFilters(
 	const [filters, setFilters] = useState<BusinessFilters>({ ...defaultFilters, ...initialFilters })
 
 	const filteredList = useMemo(
-		() => applyFilters(businesses, filters),
+		() => filterBusinesses(businesses, toFilterOpts(filters)),
 		[businesses, filters]
 	)
 

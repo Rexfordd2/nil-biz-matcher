@@ -4,9 +4,12 @@ import Button from './ui/Button'
 import { AthleteProfile, Business, DealLogEntry, DealStatus, DealType, PaymentRecord } from '../types'
 import { load, save } from '../utils/storage'
 
+const businessStatusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Discussion', 'Partnered']
+
 type Props = {
 	athlete: AthleteProfile | null
 	businesses: Business[]
+	onUpdateBusiness?: (b: Business) => void
 }
 
 type DealStore = Record<string, DealLogEntry[]> // key: athleteId
@@ -47,7 +50,7 @@ function computeRiskFlags(deal: DealLogEntry): string[] {
 	return flags
 }
 
-export default function Deals({ athlete, businesses }: Props) {
+export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) {
 	const athleteId = athlete?.id || 'anonymous'
 	const [store, setStore] = useState<DealStore>(() => load<DealStore>('deals.store', {}))
 	const [filterStatus, setFilterStatus] = useState<DealStatus | 'all'>('all')
@@ -208,6 +211,7 @@ export default function Deals({ athlete, businesses }: Props) {
 						deal={selectedDeal}
 						onChange={upsertDeal}
 						businesses={businesses}
+						onUpdateBusiness={onUpdateBusiness}
 					/>
 				)}
 			</Card>
@@ -223,9 +227,10 @@ export default function Deals({ athlete, businesses }: Props) {
 	)
 }
 
-function DealEditor({ deal, onChange, businesses }: { deal: DealLogEntry; onChange: (d: DealLogEntry) => void; businesses: Business[] }) {
+function DealEditor({ deal, onChange, businesses, onUpdateBusiness }: { deal: DealLogEntry; onChange: (d: DealLogEntry) => void; businesses: Business[]; onUpdateBusiness?: (b: Business) => void }) {
 	const [docUrl, setDocUrl] = useState('')
 	const bizOptions = useMemo(() => businesses.map(b => ({ id: b.id, label: b.name })), [businesses])
+	const linkedBusiness = useMemo(() => deal.businessId ? businesses.find(b => b.id === deal.businessId) ?? null : null, [deal.businessId, businesses])
 	const flags = computeRiskFlags(deal)
 
 	// Local helpers for nested editor actions to avoid referencing outer scope
@@ -286,6 +291,18 @@ function DealEditor({ deal, onChange, businesses }: { deal: DealLogEntry; onChan
 					<option value="">Link business (optional)</option>
 					{bizOptions.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
 				</select>
+				{linkedBusiness && onUpdateBusiness && (
+					<div className="flex items-center gap-2">
+						<span className="text-black/70 text-sm">Business status:</span>
+						<select
+							value={linkedBusiness.status || 'Not Contacted'}
+							onChange={e => onUpdateBusiness({ ...linkedBusiness, status: e.target.value as Business['status'] })}
+							className="ui-input flex-1 max-w-[200px]"
+						>
+							{businessStatusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+						</select>
+					</div>
+				)}
 				<input value={deal.exclusivityNotes || ''} onChange={e => onChange({ ...deal, exclusivityNotes: e.target.value })} className="ui-input" placeholder="Exclusivity notes (if any)" />
 			</div>
 
