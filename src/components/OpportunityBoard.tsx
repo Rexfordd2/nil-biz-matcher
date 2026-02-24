@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
-import { AthleteProfile, DealLogEntry, Opportunity, OpportunityCategory, OpportunityStatus } from '../types'
+import Select from './ui/Select'
+import { AthleteProfile, Business, DealLogEntry, Opportunity, OpportunityCategory, OpportunityStatus } from '../types'
 import { load, save } from '../utils/storage'
 
-type Props = { athlete: AthleteProfile | null }
+const businessStatusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Discussion', 'Partnered']
+
+type Props = {
+	athlete: AthleteProfile | null
+	businesses?: Business[]
+	onUpdateBusiness?: (b: Business) => void
+}
 type Store = Record<string, Opportunity[]> // key: athleteId
 type DealStore = Record<string, DealLogEntry[]>
 
@@ -31,7 +38,7 @@ function createEmpty(athleteId: string): Opportunity {
 	}
 }
 
-export default function OpportunityBoard({ athlete }: Props) {
+export default function OpportunityBoard({ athlete, businesses = [], onUpdateBusiness }: Props) {
 	const athleteId = athlete?.id || 'anonymous'
 	const [store, setStore] = useState<Store>(() => load<Store>('opps.store', {}))
 	const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -92,6 +99,41 @@ export default function OpportunityBoard({ athlete }: Props) {
 					</div>
 				)}
 			</div>
+
+			{businesses.length > 0 && onUpdateBusiness && (
+				<div className="mb-4 rounded-md border border-border bg-mid/40 p-3">
+					<div className="text-white font-semibold text-sm mb-2">Your businesses</div>
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm text-left">
+							<thead>
+								<tr className="text-gray-400">
+									<th className="py-1 pr-2">Name</th>
+									<th className="py-1 pr-2">Location</th>
+									<th className="py-1 pr-2">Status</th>
+								</tr>
+							</thead>
+							<tbody>
+								{businesses.slice(0, 10).map(b => (
+									<tr key={b.id} className="border-t border-border">
+										<td className="py-1 pr-2 text-white truncate max-w-[200px]">{b.name}</td>
+										<td className="py-1 pr-2 text-gray-400 truncate max-w-[180px]">{b.location || '—'}</td>
+										<td className="py-1 pr-2">
+											<Select
+												value={b.status || 'Not Contacted'}
+												onChange={e => onUpdateBusiness({ ...b, status: e.target.value as Business['status'] })}
+												className="bg-background border border-border rounded px-2 py-0.5 text-xs text-white min-w-[140px]"
+											>
+												{businessStatusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+											</Select>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+					{businesses.length > 10 && <div className="text-gray-400 text-xs mt-1">Showing 10 of {businesses.length}</div>}
+				</div>
+			)}
 
 			{activeTab === 'board' && (
 				<div className="space-y-4">

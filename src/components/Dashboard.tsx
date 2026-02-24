@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import Select from './ui/Select'
@@ -19,6 +19,20 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 	const [filterLevel, setFilterLevel] = useState<BusinessLevel | 'ALL'>('ALL')
 	const [filterFit, setFilterFit] = useState<FitRating | 'ALL'>('ALL')
 	const [recruitingCounts, setRecruitingCounts] = useState<{ pursue: number; inConversation: number }>({ pursue: 0, inConversation: 0 })
+
+	const countsByStatus = useMemo(() => {
+		const counts: Record<string, number> = {
+			'Not Contacted': 0,
+			'Pending': 0,
+			'In Discussion': 0,
+			'Partnered': 0,
+		}
+		for (const b of businesses) {
+			const s = b.status || 'Not Contacted'
+			if (s in counts) counts[s]++
+		}
+		return counts
+	}, [businesses])
 
 	useEffect(() => {
 		const athlete = load<any>('athlete', null)
@@ -63,6 +77,14 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 					<div className="text-black/70 text-xs">In conversation</div>
 					<div className="text-black text-2xl font-bold">{recruitingCounts.inConversation}</div>
 				</div>
+			</div>
+			<div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+				{statusOptions.map(s => (
+					<div key={s} className="bg-white border border-black/10 rounded-md p-3">
+						<div className="text-black/70 text-xs">{s}</div>
+						<div className="text-black text-xl font-bold">{countsByStatus[s ?? 'Not Contacted'] ?? 0}</div>
+					</div>
+				))}
 			</div>
 			<div className="overflow-x-auto">
 				<table className="table w-full text-sm">

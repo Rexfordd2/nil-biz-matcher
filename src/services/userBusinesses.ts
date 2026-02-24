@@ -50,6 +50,7 @@ function rowToBusinessProfile(
 		description: '',
 		status: (ub?.status as Business['status']) ?? DEFAULT_STATUS,
 		tags: Array.isArray(ub?.tags) ? ub.tags : [],
+		types: Array.isArray(b.types) ? b.types : [],
 		createdAt,
 	}
 }

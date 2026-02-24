@@ -11,8 +11,8 @@ import Deals from './components/Deals'
 import { ToastProvider, useToast } from './components/ui/Toast'
 import { AthleteProfile, Business } from './types'
 import { load, save } from './utils/storage'
-import { listUserBusinesses, updateUserBusinessProfile, upsertBusinessCanonical, saveUserBusiness } from './services/userBusinesses'
-import { migrateSavedBusinesses } from './utils/migrateSavedBusinesses'
+import { updateUserBusinessProfile, upsertBusinessCanonical, saveUserBusiness } from './services/userBusinesses'
+import { useMyBusinesses } from './hooks/useMyBusinesses'
 import { useBusinessFilters } from './hooks/useBusinessFilters'
 import BusinessFilterBar from './components/BusinessFilterBar'
 import { evaluateMatch } from './utils/matching'
@@ -112,14 +112,15 @@ type Tab =
 function MainApp() {
 	const [tab, setTab] = useState<Tab>('Welcome')
 	const [athlete, setAthlete] = useState<AthleteProfile | null>(() => migrateAthleteProfile(load('athlete', null)))
-	const [businesses, setBusinesses] = useState<Business[]>([])
 	const [selectedBizId, setSelectedBizId] = useState<string | null>(null)
+	const [matchOverlay, setMatchOverlay] = useState<Record<string, { match: import('./types').MatchResult; level?: import('./types').BusinessLevel }>>({})
 	const { show } = useToast()
 	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 	const [userMenuOpen, setUserMenuOpen] = useState(false)
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const [waitlistOpen, setWaitlistOpen] = useState(false)
 	const { user, loading } = useSupabaseSession()
+	const { businesses, loading: businessesLoading, error: businessesError, refetch: refetchBusinesses } = useMyBusinesses()
 	const autosave = useAutosaveProfile({ user, debounceMs: 800 })
 	const anonDraft = useAnonProfileDraft({ debounceMs: 800 })
 	const cloudConfigured = supabaseEnvConfigured
@@ -135,30 +136,17 @@ function MainApp() {
 
 	useEffect(() => save('athlete', athlete), [athlete])
 
-	// Load businesses from unified list (listUserBusinesses); run one-time migration first
-	useEffect(() => {
-		if (loading || !user) {
-			setBusinesses([])
-			return
-		}
-		let cancelled = false
-		;(async () => {
-			await migrateSavedBusinesses(user.id)
-			if (cancelled) return
-			const res = await listUserBusinesses(user.id)
-			if (cancelled) return
-			if (!res.error) setBusinesses(res.rows)
-		})()
-		return () => { cancelled = true }
-	}, [loading, user?.id])
-
 	async function refreshBusinesses() {
-		if (!user) return
-		const res = await listUserBusinesses(user.id)
-		if (!res.error) setBusinesses(res.rows)
+		await refetchBusinesses()
+		setMatchOverlay({})
 	}
 
 	const { filters, setFilters, filteredList } = useBusinessFilters(businesses)
+
+	const filteredListWithMatches = useMemo(() =>
+		filteredList.map(b => ({ ...b, ...matchOverlay[b.id] })),
+		[filteredList, matchOverlay]
+	)
 
 	// Initial mount ping (independent of auth)
 	useEffect(() => {
@@ -193,17 +181,11 @@ function MainApp() {
 		}
 	}, [user])
 
-	const selectedBiz = useMemo(() => businesses.find(b => b.id === selectedBizId) || null, [selectedBizId, businesses])
-
-	function upsertBusiness(next: Business) {
-		setBusinesses(prev => {
-			const idx = prev.findIndex(b => b.id === next.id)
-			if (idx === -1) return [next, ...prev]
-			const copy = [...prev]
-			copy[idx] = next
-			return copy
-		})
-	}
+	const selectedBiz = useMemo(() => {
+		const b = businesses.find(b => b.id === selectedBizId) || null
+		if (!b) return null
+		return { ...b, ...matchOverlay[b.id] }
+	}, [selectedBizId, businesses, matchOverlay])
 
 	async function addBusiness(b: Business) {
 		if (user) {
@@ -226,26 +208,26 @@ function MainApp() {
 				show('Failed to save business')
 				return
 			}
-			const res = await listUserBusinesses(user.id)
-			if (!res.error) setBusinesses(res.rows)
+			await refreshBusinesses()
 			show('Business added')
 		} else {
-			upsertBusiness(b)
 			show('Business added (sign in to save to cloud)')
 		}
 		setTab('Businesses')
 	}
 
-	function handleUpdateBusiness(updated: Business) {
-		upsertBusiness(updated)
+	async function handleUpdateBusiness(updated: Business) {
 		if (user && (updated.status !== undefined || updated.tags !== undefined)) {
-			updateUserBusinessProfile(user.id, updated.id, {
+			const res = await updateUserBusinessProfile(user.id, updated.id, {
 				...(updated.status !== undefined && { status: updated.status }),
 				...(updated.tags !== undefined && { tags: updated.tags }),
-			}).then(res => {
-				if (res.ok) show('Status updated')
-				else show('Failed to update')
 			})
+			if (res.ok) {
+				show('Status updated')
+				await refetchBusinesses()
+			} else {
+				show('Failed to update')
+			}
 		}
 	}
 
@@ -264,13 +246,14 @@ function MainApp() {
 
 	function runMatches() {
 		if (!athlete) return
-		setBusinesses(prev =>
-			prev.map(b => ({
-				...b,
+		const next: Record<string, { match: import('./types').MatchResult; level?: import('./types').BusinessLevel }> = {}
+		for (const b of businesses) {
+			next[b.id] = {
 				match: evaluateMatch(athlete, b),
 				level: b.level || b.analysis?.levelGuess
-			}))
-		)
+			}
+		}
+		setMatchOverlay(next)
 		setTab('Matches')
 	}
 
@@ -601,9 +584,15 @@ function MainApp() {
 
 					{tab === 'Businesses' && (
 						<>
+							{businessesError && (
+								<div className="mb-4 text-sm text-red-400">{businessesError}</div>
+							)}
+							{businessesLoading && (
+								<div className="mb-4 text-sm text-gray-400">Loading businesses…</div>
+							)}
 							<BusinessForm onAdd={addBusiness} />
 							<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-								{businesses.map(b => (
+								{filteredList.map(b => (
 									<div key={b.id} className="space-y-3">
 										<BusinessAnalysisCard business={b} />
 										<div className="flex items-center gap-2">
@@ -631,7 +620,7 @@ function MainApp() {
 								</div>
 							</div>
 							<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-								{filteredList.map(b => {
+								{filteredListWithMatches.map(b => {
 									const m = b.match
 									if (!m) return null
 									const active = selectedBizId === null || selectedBizId === b.id
@@ -784,12 +773,12 @@ function MainApp() {
 							<div className="mb-4">
 								<BusinessFilterBar businesses={businesses} filters={filters} onFiltersChange={setFilters} />
 							</div>
-							<Deals athlete={athlete} businesses={filteredList} />
+							<Deals athlete={athlete} businesses={filteredListWithMatches} onUpdateBusiness={handleUpdateBusiness} />
 						</>
 					)}
 
 					{tab === 'Opportunities' && (
-						<OpportunityBoard athlete={athlete} />
+						<OpportunityBoard athlete={athlete} businesses={filteredListWithMatches} onUpdateBusiness={handleUpdateBusiness} />
 					)}
 
 					{tab === 'Events' && (
@@ -803,7 +792,7 @@ function MainApp() {
 								<BusinessFilterBar businesses={businesses} filters={filters} onFiltersChange={setFilters} statusOnly />
 							</div>
 							<Dashboard
-								businesses={filteredList}
+								businesses={filteredListWithMatches}
 								onUpdate={handleUpdateBusiness}
 								onBuildOutreach={(b) => { setSelectedBizId(b.id); setTab('Matches') }}
 							/>

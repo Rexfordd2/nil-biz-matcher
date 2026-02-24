@@ -303,6 +303,8 @@ export type Business = {
 	status?: 'Not Contacted' | 'Pending' | 'In Discussion' | 'Partnered'
 	/** User-defined tags for filtering (unified business profile). */
 	tags?: string[]
+	/** Canonical place types from provider (e.g. Google types). */
+	types?: string[]
 	createdAt: number
 }
 

@@ -11,6 +11,9 @@ const MIGRATION_FLAG_PREFIX = 'businesses_migrated_v1_'
  * One-time migration: copy saved_businesses and localStorage businesses into
  * canonical businesses + user_businesses. Call when user is authenticated.
  * Uses localStorage flag per userId to avoid re-running.
+ *
+ * NOTE: The only consumer of the 'businesses' localStorage key is this migration
+ * (read then clear). No other feature should load or save that key.
  */
 export async function migrateSavedBusinesses(userId: string): Promise<{ migrated: boolean; error?: string }> {
 	try {
