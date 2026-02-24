@@ -5,7 +5,8 @@ import Input from './ui/Input'
 import { usePlacesSearch, type NormalizedPlace } from '../hooks/usePlacesSearch'
 import { usePlaceDetails } from '../hooks/usePlaceDetails'
 import PlacesMap from './PlacesMap'
-import { listSavedBusinesses, removeSavedBusiness, saveBusiness, type SavedBusinessRow } from '../services/savedBusinesses'
+import { listUserBusinesses, removeUserBusiness, upsertBusinessFromDiscover } from '../services/userBusinesses'
+import type { Business } from '../types'
 import Observability, { generateRequestId } from '../lib/obs'
 import { supabaseEnvConfigured } from '../lib/supabaseClient'
 import { useSupabaseSession } from '../context/SupabaseSessionContext'
@@ -14,7 +15,12 @@ import { normalizeError } from '../lib/errorHandling'
 import { hasGoogleMapsKey, loadGoogleMaps } from '../lib/google/maps'
 import GoogleMapsDisabledNotice from './GoogleMapsDisabledNotice'
 
-export default function Discover() {
+type DiscoverProps = {
+	/** Called after user successfully saves a business (so parent can refresh businesses list). */
+	onSaved?: () => void
+}
+
+export default function Discover({ onSaved }: DiscoverProps) {
 	const hasClientKey = hasGoogleMapsKey
 
 	// Editable inputs
@@ -157,8 +163,8 @@ export default function Discover() {
 
 	const list = results
 
-	// Saved businesses
-	const [saved, setSaved] = useState<SavedBusinessRow[]>([])
+	// Saved businesses (unified: listUserBusinesses)
+	const [saved, setSaved] = useState<Business[]>([])
 	const [saving, setSaving] = useState(false)
 	const [savedLoading, setSavedLoading] = useState(false)
 	const [savedError, setSavedError] = useState<string | null>(null)
@@ -166,7 +172,6 @@ export default function Discover() {
 
 	async function refreshSaved() {
 		if (!supabaseEnvConfigured) return
-		// Gate on session ready and user present to avoid RLS/anon inconsistencies
 		if (sessionLoading || !user) {
 			setSaved([])
 			setSavedError(null)
@@ -174,7 +179,7 @@ export default function Discover() {
 		}
 		setSavedLoading(true)
 		try {
-			const res = await listSavedBusinesses()
+			const res = await listUserBusinesses(user.id)
 			if (res.error) {
 				if (res.permission) {
 					setSavedError(`Permission error loading saved (RLS). Please log in. ${res.code ? `Code: ${res.code}` : ''}`)
@@ -198,15 +203,16 @@ export default function Discover() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [sessionLoading, user?.id])
 
-	const isSelectedSaved = selected ? saved.some(s => s.place_id === selected.placeId) : false
+	const isSelectedSaved = selected ? saved.some(s => s.id === selected.placeId) : false
 
 	async function onSaveSelected() {
 		if (!selected) return
 		setSaving(true)
 		try {
-			const res = await saveBusiness(selected, details.details || null)
+			const res = await upsertBusinessFromDiscover(selected, details.details || null)
 			if (res.ok) {
 				await refreshSaved()
+				onSaved?.()
 			} else {
 				const msg = res.permission
 					? `Permission error saving (RLS). Please log in. ${res.code ? `Code: ${res.code}` : ''}`
@@ -221,7 +227,7 @@ export default function Discover() {
 	}
 
 	async function onRemoveSaved(placeId: string) {
-		const res = await removeSavedBusiness(placeId)
+		const res = await removeUserBusiness(placeId)
 		if (!res.ok) {
 			const msg = res.permission
 				? `Permission error removing (RLS). Please log in. ${res.code ? `Code: ${res.code}` : ''}`
@@ -409,13 +415,13 @@ export default function Discover() {
 							<li key={sb.id} className="card flex items-center justify-between">
 								<div className="min-w-0">
 									<div className="text-white font-medium truncate">{sb.name}</div>
-									{sb.address && <div className="text-gray-400 text-sm truncate">{sb.address}</div>}
+									{sb.location && <div className="text-gray-400 text-sm truncate">{sb.location}</div>}
 								</div>
 								<div className="flex items-center gap-2 ml-3">
 									{sb.website && (
 										<a className="text-blue-300 hover:underline text-sm" href={sb.website} target="_blank" rel="noreferrer">Website</a>
 									)}
-									<Button variant="ghost" onClick={() => onRemoveSaved(sb.place_id)}>Remove</Button>
+									<Button variant="ghost" onClick={() => onRemoveSaved(sb.id)}>Remove</Button>
 								</div>
 							</li>
 						))}

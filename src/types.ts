@@ -301,8 +301,13 @@ export type Business = {
 	analysis?: BusinessAnalysis
 	match?: MatchResult
 	status?: 'Not Contacted' | 'Pending' | 'In Discussion' | 'Partnered'
+	/** User-defined tags for filtering (unified business profile). */
+	tags?: string[]
 	createdAt: number
 }
+
+/** Merged canonical + user overlay; id = place_id. Use Business in UI. */
+export type BusinessProfile = Business
 
 export type BusinessAnalysis = {
 	history: string
