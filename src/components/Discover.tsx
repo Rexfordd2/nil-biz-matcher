@@ -18,9 +18,11 @@ import GoogleMapsDisabledNotice from './GoogleMapsDisabledNotice'
 type DiscoverProps = {
 	/** Called after user successfully saves a business (so parent can refresh businesses list). */
 	onSaved?: () => void
+	/** When true, Save button is disabled (e.g. canonical business tables missing). */
+	businessPipelineDisabled?: boolean
 }
 
-export default function Discover({ onSaved }: DiscoverProps) {
+export default function Discover({ onSaved, businessPipelineDisabled = false }: DiscoverProps) {
 	const hasClientKey = hasGoogleMapsKey
 
 	// Editable inputs
@@ -333,6 +335,7 @@ export default function Discover({ onSaved }: DiscoverProps) {
 									onSave={onSaveSelected}
 									saving={saving}
 									isSaved={isSelectedSaved}
+									pipelineDisabled={businessPipelineDisabled}
 								/>
 							</div>
 						)}
@@ -380,6 +383,7 @@ export default function Discover({ onSaved }: DiscoverProps) {
 								onSave={onSaveSelected}
 								saving={saving}
 								isSaved={isSelectedSaved}
+								pipelineDisabled={businessPipelineDisabled}
 							/>
 							<div className="mt-3 flex justify-end">
 								<Button variant="ghost" onClick={() => setSelected(null)}>Close</Button>
@@ -432,7 +436,7 @@ export default function Discover({ onSaved }: DiscoverProps) {
 	)
 }
 
-function DetailsPanel({ place, loading, error, info, onSave, saving, isSaved }: {
+function DetailsPanel({ place, loading, error, info, onSave, saving, isSaved, pipelineDisabled }: {
 	place: NormalizedPlace
 	loading: boolean
 	error: string | null
@@ -440,6 +444,7 @@ function DetailsPanel({ place, loading, error, info, onSave, saving, isSaved }: 
 	onSave?: () => void
 	saving?: boolean
 	isSaved?: boolean
+	pipelineDisabled?: boolean
 }) {
 	return (
 		<div>
@@ -480,7 +485,7 @@ function DetailsPanel({ place, loading, error, info, onSave, saving, isSaved }: 
 				{isSaved ? (
 					<Button disabled className="bg-green-700/60 cursor-default">Saved</Button>
 				) : (
-					<Button onClick={onSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+					<Button onClick={onSave} disabled={saving || pipelineDisabled}>{saving ? 'Saving…' : pipelineDisabled ? 'Save (disabled)' : 'Save'}</Button>
 				)}
 			</div>
 		</div>
