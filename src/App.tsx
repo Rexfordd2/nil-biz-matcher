@@ -11,6 +11,10 @@ import Deals from './components/Deals'
 import { ToastProvider, useToast } from './components/ui/Toast'
 import { AthleteProfile, Business } from './types'
 import { load, save } from './utils/storage'
+import { listUserBusinesses, updateUserBusinessProfile, upsertBusinessCanonical, saveUserBusiness } from './services/userBusinesses'
+import { migrateSavedBusinesses } from './utils/migrateSavedBusinesses'
+import { useBusinessFilters } from './hooks/useBusinessFilters'
+import BusinessFilterBar from './components/BusinessFilterBar'
 import { evaluateMatch } from './utils/matching'
 import Button from './components/ui/Button'
 import { FitBadge, LevelBadge } from './components/ui/Badge'
@@ -108,7 +112,7 @@ type Tab =
 function MainApp() {
 	const [tab, setTab] = useState<Tab>('Welcome')
 	const [athlete, setAthlete] = useState<AthleteProfile | null>(() => migrateAthleteProfile(load('athlete', null)))
-	const [businesses, setBusinesses] = useState<Business[]>(() => load('businesses', []))
+	const [businesses, setBusinesses] = useState<Business[]>([])
 	const [selectedBizId, setSelectedBizId] = useState<string | null>(null)
 	const { show } = useToast()
 	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
@@ -130,7 +134,31 @@ function MainApp() {
 	}>(() => ({ sessionOk: null, sessionError: null, dbOk: null, dbError: null }))
 
 	useEffect(() => save('athlete', athlete), [athlete])
-	useEffect(() => save('businesses', businesses), [businesses])
+
+	// Load businesses from unified list (listUserBusinesses); run one-time migration first
+	useEffect(() => {
+		if (loading || !user) {
+			setBusinesses([])
+			return
+		}
+		let cancelled = false
+		;(async () => {
+			await migrateSavedBusinesses(user.id)
+			if (cancelled) return
+			const res = await listUserBusinesses(user.id)
+			if (cancelled) return
+			if (!res.error) setBusinesses(res.rows)
+		})()
+		return () => { cancelled = true }
+	}, [loading, user?.id])
+
+	async function refreshBusinesses() {
+		if (!user) return
+		const res = await listUserBusinesses(user.id)
+		if (!res.error) setBusinesses(res.rows)
+	}
+
+	const { filters, setFilters, filteredList } = useBusinessFilters(businesses)
 
 	// Initial mount ping (independent of auth)
 	useEffect(() => {
@@ -177,9 +205,48 @@ function MainApp() {
 		})
 	}
 
-	function addBusiness(b: Business) {
-		upsertBusiness(b)
+	async function addBusiness(b: Business) {
+		if (user) {
+			const placeId = `local-${crypto.randomUUID()}`
+			const canon = await upsertBusinessCanonical(placeId, {
+				name: b.name,
+				address: b.location || undefined,
+				lat: b.coordinates?.latitude ?? undefined,
+				lng: b.coordinates?.longitude ?? undefined,
+				phone: b.phone ?? undefined,
+				website: b.website ?? undefined,
+				rating: b.rating ?? undefined,
+			})
+			if (!canon.ok) {
+				show('Failed to save business')
+				return
+			}
+			const saved = await saveUserBusiness(user.id, placeId, b.status, b.tags)
+			if (!saved.ok) {
+				show('Failed to save business')
+				return
+			}
+			const res = await listUserBusinesses(user.id)
+			if (!res.error) setBusinesses(res.rows)
+			show('Business added')
+		} else {
+			upsertBusiness(b)
+			show('Business added (sign in to save to cloud)')
+		}
 		setTab('Businesses')
+	}
+
+	function handleUpdateBusiness(updated: Business) {
+		upsertBusiness(updated)
+		if (user && (updated.status !== undefined || updated.tags !== undefined)) {
+			updateUserBusinessProfile(user.id, updated.id, {
+				...(updated.status !== undefined && { status: updated.status }),
+				...(updated.tags !== undefined && { tags: updated.tags }),
+			}).then(res => {
+				if (res.ok) show('Status updated')
+				else show('Failed to update')
+			})
+		}
 	}
 
 	async function goToTab(next: Tab) {
@@ -551,17 +618,20 @@ function MainApp() {
 					)}
 
 					{tab === 'Discover' && (
-						<Discover />
+						<Discover onSaved={refreshBusinesses} />
 					)}
 
 					{tab === 'Matches' && (
 						<>
-							<div className="flex items-center justify-between">
+							<div className="flex flex-wrap items-center justify-between gap-3 mb-4">
 								<h2 className="headline text-xl">Best Matches for You</h2>
-								<Button onClick={runMatches} variant="ghost">Re-run</Button>
+								<div className="flex items-center gap-2">
+									<BusinessFilterBar businesses={businesses} filters={filters} onFiltersChange={setFilters} />
+									<Button onClick={runMatches} variant="ghost">Re-run</Button>
+								</div>
 							</div>
 							<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-								{businesses.map(b => {
+								{filteredList.map(b => {
 									const m = b.match
 									if (!m) return null
 									const active = selectedBizId === null || selectedBizId === b.id
@@ -710,7 +780,12 @@ function MainApp() {
 					)}
 
 					{tab === 'Deals' && (
-						<Deals athlete={athlete} businesses={businesses} />
+						<>
+							<div className="mb-4">
+								<BusinessFilterBar businesses={businesses} filters={filters} onFiltersChange={setFilters} />
+							</div>
+							<Deals athlete={athlete} businesses={filteredList} />
+						</>
 					)}
 
 					{tab === 'Opportunities' && (
@@ -724,9 +799,12 @@ function MainApp() {
 					{tab === 'Dashboard' && (
 						<>
 							<SuggestedPlays athlete={athlete} marketingConsent={currentUser?.marketingConsent} />
+							<div className="mb-4">
+								<BusinessFilterBar businesses={businesses} filters={filters} onFiltersChange={setFilters} statusOnly />
+							</div>
 							<Dashboard
-								businesses={businesses}
-								onUpdate={upsertBusiness}
+								businesses={filteredList}
+								onUpdate={handleUpdateBusiness}
 								onBuildOutreach={(b) => { setSelectedBizId(b.id); setTab('Matches') }}
 							/>
 						</>

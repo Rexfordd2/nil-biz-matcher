@@ -4,7 +4,6 @@ import Button from './ui/Button'
 import Select from './ui/Select'
 import { Business, BusinessLevel, FitRating } from '../types'
 import { FitBadge, LevelBadge } from './ui/Badge'
-import { useToast } from './ui/Toast'
 import { getTargetsFor } from '../recruiting/pipeline'
 import { load } from '../utils/storage'
 
@@ -17,7 +16,6 @@ type Props = {
 const statusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Discussion', 'Partnered']
 
 export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Props) {
-	const { show } = useToast()
 	const [filterLevel, setFilterLevel] = useState<BusinessLevel | 'ALL'>('ALL')
 	const [filterFit, setFilterFit] = useState<FitRating | 'ALL'>('ALL')
 	const [recruitingCounts, setRecruitingCounts] = useState<{ pursue: number; inConversation: number }>({ pursue: 0, inConversation: 0 })
@@ -95,7 +93,6 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 										value={b.status || 'Not Contacted'}
 										onChange={e => {
 											onUpdate({ ...b, status: e.target.value as Business['status'] })
-											show('Status updated')
 										}}
 									>
 										{statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
