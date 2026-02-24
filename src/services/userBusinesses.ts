@@ -14,6 +14,19 @@ function isSchemaMissingError(code: string | undefined, message: string): boolea
 	return lower.includes('does not exist') && lower.includes('relation')
 }
 
+/**
+ * Lightweight preflight: check that businesses and user_businesses tables exist.
+ * Uses select limit 1 on each; if either errors with 42P01 / relation does not exist, returns ok: false.
+ */
+export async function checkCanonicalBusinessTables(): Promise<{ ok: boolean }> {
+	if (!supabaseEnvConfigured || !supabase) return { ok: false }
+	const { error: bizErr } = await supabase.from('businesses').select('place_id').limit(1)
+	if (bizErr && isSchemaMissingError((bizErr as { code?: string }).code, (bizErr as { message?: string }).message ?? '')) return { ok: false }
+	const { error: ubErr } = await supabase.from('user_businesses').select('place_id').limit(1)
+	if (ubErr && isSchemaMissingError((ubErr as { code?: string }).code, (ubErr as { message?: string }).message ?? '')) return { ok: false }
+	return { ok: true }
+}
+
 type PlaceDetails = {
 	phone?: string
 	website?: string

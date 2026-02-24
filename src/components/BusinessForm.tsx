@@ -15,9 +15,11 @@ import { hasGoogleMapsKey } from '../config/env'
 
 type Props = {
 	onAdd: (b: Business) => void
+	/** When true, Add Business and add-from-search are disabled (e.g. canonical tables missing). */
+	disabled?: boolean
 }
 
-export default function BusinessForm({ onAdd }: Props) {
+export default function BusinessForm({ onAdd, disabled = false }: Props) {
 	const { show } = useToast()
 	const [importUrl, setImportUrl] = useState('')
 	const [name, setName] = useState('')
@@ -128,7 +130,7 @@ export default function BusinessForm({ onAdd }: Props) {
 
 	return (
 		<Card title="Find and Add Businesses" actions={
-			<Button onClick={handleAdd} className="red-glow">Add Business</Button>
+			<Button onClick={handleAdd} className="red-glow" disabled={disabled}>Add Business</Button>
 		}>
 			<div className="mb-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
 				<label className="flex flex-col gap-2">
@@ -167,7 +169,7 @@ export default function BusinessForm({ onAdd }: Props) {
 								</div>
 								<div className="mt-3 flex gap-2">
 									<Button variant="ghost" onClick={() => importToForm(r)}>Fill form</Button>
-									<Button onClick={() => addFromExternal(r)}>Add business</Button>
+									<Button onClick={() => addFromExternal(r)} disabled={disabled}>Add business</Button>
 								</div>
 							</div>
 						))}

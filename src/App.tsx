@@ -13,7 +13,9 @@ import { AthleteProfile, Business } from './types'
 import { load, save } from './utils/storage'
 import { updateUserBusinessProfile, upsertBusinessCanonical, saveUserBusiness } from './services/userBusinesses'
 import { useMyBusinesses } from './hooks/useMyBusinesses'
+import { useCanonicalBusinessPreflight } from './hooks/useCanonicalBusinessPreflight'
 import { useBusinessFilters } from './hooks/useBusinessFilters'
+import { CANONICAL_BUSINESSES_MIGRATION_SQL } from './constants/canonicalBusinessMigrationSql'
 import BusinessFilterBar from './components/BusinessFilterBar'
 import { evaluateMatch } from './utils/matching'
 import Button from './components/ui/Button'
@@ -39,7 +41,7 @@ import Extras from './pages/Extras'
 import { type CurrentUser } from './utils/auth'
 import { useAutosaveProfile } from './hooks/useAutosaveProfile'
 import { useAnonProfileDraft } from './hooks/useAnonProfileDraft'
-import { supabase, supabaseEnvConfigured } from './lib/supabaseClient'
+import { supabase, supabaseEnvConfigured, getSupabaseHostname } from './lib/supabaseClient'
 import { getSession } from './lib/authSupabase'
 import { signOut } from './lib/authSupabase'
 import LoginPage from './components/LoginPage'
@@ -121,6 +123,10 @@ function MainApp() {
 	const [waitlistOpen, setWaitlistOpen] = useState(false)
 	const { user, loading } = useSupabaseSession()
 	const { businesses, loading: businessesLoading, error: businessesError, migrationRequired: businessesMigrationRequired, refetch: refetchBusinesses } = useMyBusinesses()
+	const { tablesOk, loading: preflightLoading } = useCanonicalBusinessPreflight()
+	const isDebugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1'
+	const showPreflightBanner = Boolean(user && isDebugMode && !preflightLoading && !tablesOk)
+	const businessPipelineDisabled = !tablesOk
 	const autosave = useAutosaveProfile({ user, debounceMs: 800 })
 	const anonDraft = useAnonProfileDraft({ debounceMs: 800 })
 	const cloudConfigured = supabaseEnvConfigured
@@ -135,6 +141,16 @@ function MainApp() {
 	}>(() => ({ sessionOk: null, sessionError: null, dbOk: null, dbError: null }))
 
 	useEffect(() => save('athlete', athlete), [athlete])
+
+	// Debug-only: log Supabase hostname once when ?debug=1 so deploy can confirm intended project
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const params = new URLSearchParams(window.location.search)
+		if (params.get('debug') !== '1') return
+		const host = getSupabaseHostname()
+		// eslint-disable-next-line no-console
+		console.log('[debug=1] Supabase hostname:', host)
+	}, [])
 
 	async function refreshBusinesses() {
 		await refetchBusinesses()
@@ -188,6 +204,10 @@ function MainApp() {
 	}, [selectedBizId, businesses, matchOverlay])
 
 	async function addBusiness(b: Business) {
+		if (businessPipelineDisabled) {
+			show('Business pipeline disabled: run canonical businesses migration first')
+			return
+		}
 		if (user) {
 			const placeId = `local-${crypto.randomUUID()}`
 			const canon = await upsertBusinessCanonical(placeId, {
@@ -217,6 +237,10 @@ function MainApp() {
 	}
 
 	async function handleUpdateBusiness(updated: Business) {
+		if (businessPipelineDisabled) {
+			show('Business pipeline disabled: run canonical businesses migration first')
+			return
+		}
 		if (user && (updated.status !== undefined || updated.tags !== undefined)) {
 			const res = await updateUserBusinessProfile(user.id, updated.id, {
 				...(updated.status !== undefined && { status: updated.status }),
@@ -228,6 +252,15 @@ function MainApp() {
 			} else {
 				show('Failed to update')
 			}
+		}
+	}
+
+	async function copyMigrationSql() {
+		try {
+			await navigator.clipboard.writeText(CANONICAL_BUSINESSES_MIGRATION_SQL)
+			show('Migration SQL copied to clipboard')
+		} catch {
+			show('Failed to copy')
 		}
 	}
 
@@ -423,6 +456,7 @@ function MainApp() {
 								<div className="flex items-center justify-between">
 									<div>
 										<div>App Instance: <span className="text-white">{APP_INSTANCE}</span></div>
+										<div>Supabase: <span className="text-white" data-testid="debug-supabase-hostname">{getSupabaseHostname()}</span></div>
 										<div>Build ID: <span className="text-white">{BUILD_ID}</span></div>
 										<div>User ID: <span className="text-white">{currentUser?.id || '—'}</span></div>
 										<div>Env configured: <span className="text-white">{String(cloudConfigured)}</span></div>
@@ -584,7 +618,14 @@ function MainApp() {
 
 					{tab === 'Businesses' && (
 						<>
-							{businessesMigrationRequired && (
+							{showPreflightBanner && (
+								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
+									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
+									<p className="mt-1 text-sm">Run the migration in Supabase SQL Editor, then refresh.</p>
+									<Button onClick={copyMigrationSql} className="mt-3" variant="secondary">Copy Migration SQL</Button>
+								</div>
+							)}
+							{!showPreflightBanner && businessesMigrationRequired && (
 								<div className="mb-4 rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-amber-200" role="alert">
 									<p className="font-semibold">Admin: Business list failed (e.g. relation does not exist — tables missing).</p>
 									<p className="mt-1 text-sm">Run the canonical businesses migration in Supabase SQL Editor: supabase/migrations/20260223_canonical_businesses_user_businesses.sql</p>
@@ -596,7 +637,7 @@ function MainApp() {
 							{businessesLoading && (
 								<div className="mb-4 text-sm text-gray-400">Loading businesses…</div>
 							)}
-							<BusinessForm onAdd={addBusiness} />
+							<BusinessForm onAdd={addBusiness} disabled={businessPipelineDisabled} />
 							<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 								{filteredList.map(b => (
 									<div key={b.id} className="space-y-3">
@@ -614,18 +655,32 @@ function MainApp() {
 
 					{tab === 'Discover' && (
 						<>
-							{businessesMigrationRequired && (
+							{showPreflightBanner && (
+								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
+									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
+									<p className="mt-1 text-sm">Run the migration in Supabase SQL Editor, then refresh.</p>
+									<Button onClick={copyMigrationSql} className="mt-3" variant="secondary">Copy Migration SQL</Button>
+								</div>
+							)}
+							{!showPreflightBanner && businessesMigrationRequired && (
 								<div className="mb-4 rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-amber-200" role="alert">
 									<p className="font-semibold">Admin: Business list failed (e.g. relation does not exist — tables missing).</p>
 									<p className="mt-1 text-sm">Run the canonical businesses migration in Supabase SQL Editor: supabase/migrations/20260223_canonical_businesses_user_businesses.sql</p>
 								</div>
 							)}
-							<Discover onSaved={refreshBusinesses} />
+							<Discover onSaved={refreshBusinesses} businessPipelineDisabled={businessPipelineDisabled} />
 						</>
 					)}
 
 					{tab === 'Matches' && (
 						<>
+							{showPreflightBanner && (
+								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
+									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
+									<p className="mt-1 text-sm">Run the migration in Supabase SQL Editor, then refresh.</p>
+									<Button onClick={copyMigrationSql} className="mt-3" variant="secondary">Copy Migration SQL</Button>
+								</div>
+							)}
 							<div className="flex flex-wrap items-center justify-between gap-3 mb-4">
 								<h2 className="headline text-xl">Best Matches for You</h2>
 								<div className="flex items-center gap-2">
@@ -784,6 +839,13 @@ function MainApp() {
 
 					{tab === 'Deals' && (
 						<>
+							{showPreflightBanner && (
+								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
+									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
+									<p className="mt-1 text-sm">Run the migration in Supabase SQL Editor, then refresh.</p>
+									<Button onClick={copyMigrationSql} className="mt-3" variant="secondary">Copy Migration SQL</Button>
+								</div>
+							)}
 							<div className="mb-4">
 								<BusinessFilterBar businesses={businesses} filters={filters} onFiltersChange={setFilters} />
 							</div>
@@ -792,7 +854,16 @@ function MainApp() {
 					)}
 
 					{tab === 'Opportunities' && (
-						<OpportunityBoard athlete={athlete} businesses={filteredListWithMatches} onUpdateBusiness={handleUpdateBusiness} />
+						<>
+							{showPreflightBanner && (
+								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
+									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
+									<p className="mt-1 text-sm">Run the migration in Supabase SQL Editor, then refresh.</p>
+									<Button onClick={copyMigrationSql} className="mt-3" variant="secondary">Copy Migration SQL</Button>
+								</div>
+							)}
+							<OpportunityBoard athlete={athlete} businesses={filteredListWithMatches} onUpdateBusiness={handleUpdateBusiness} />
+						</>
 					)}
 
 					{tab === 'Events' && (
