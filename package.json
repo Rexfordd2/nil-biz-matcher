@@ -41,7 +41,10 @@
     "diag:profile": "node scripts/diagnose-athlete-profile.mjs",
     "diag:profile:cli": "node scripts/diagnose-athlete-profile.mjs --email=$SUPABASE_TEST_EMAIL --password=$SUPABASE_TEST_PASSWORD",
     "diag:profile:prompt": "node scripts/diagnose-athlete-profile.mjs --prompt",
-    "launch:status": "node scripts/launch-status.mjs"
+    "launch:status": "node scripts/launch-status.mjs",
+    "test:businesses-canonic": "node scripts/test-businesses-canonic.mjs",
+    "verify:businesses-canonic": "node scripts/verify-businesses-canonical.mjs",
+    "diag:biz": "node scripts/verify-businesses-canonical.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

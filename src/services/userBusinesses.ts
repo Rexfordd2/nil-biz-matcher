@@ -4,6 +4,16 @@ import type { Business, BusinessProfile } from '../types'
 
 const DEFAULT_STATUS: Business['status'] = 'Not Contacted'
 
+/** Shown when businesses/user_businesses tables are missing (42P01). Used by useMyBusinesses to show migration banner. */
+export const MIGRATION_REQUIRED_MESSAGE =
+	'Businesses tables are not set up. Run the canonical businesses migration in Supabase SQL Editor. See supabase/migrations/20260223_canonical_businesses_user_businesses.sql'
+
+function isSchemaMissingError(code: string | undefined, message: string): boolean {
+	if (code === '42P01') return true
+	const lower = message.toLowerCase()
+	return lower.includes('does not exist') && lower.includes('relation')
+}
+
 type PlaceDetails = {
 	phone?: string
 	website?: string
@@ -230,6 +240,9 @@ export async function listUserBusinesses(userId: string): Promise<{
 
 	if (ubError) {
 		const info = parseSupabaseError(ubError)
+		if (isSchemaMissingError(info.code, info.message)) {
+			return { rows: [], error: MIGRATION_REQUIRED_MESSAGE, code: info.code ?? '42P01', permission: info.isPermission }
+		}
 		return { rows: [], error: info.message, code: info.code, permission: info.isPermission }
 	}
 
@@ -243,6 +256,9 @@ export async function listUserBusinesses(userId: string): Promise<{
 
 	if (bizError) {
 		const info = parseSupabaseError(bizError)
+		if (isSchemaMissingError(info.code, info.message)) {
+			return { rows: [], error: MIGRATION_REQUIRED_MESSAGE, code: info.code ?? '42P01', permission: info.isPermission }
+		}
 		return { rows: [], error: info.message, code: info.code, permission: info.isPermission }
 	}
 

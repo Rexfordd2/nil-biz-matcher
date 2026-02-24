@@ -120,7 +120,7 @@ function MainApp() {
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 	const [waitlistOpen, setWaitlistOpen] = useState(false)
 	const { user, loading } = useSupabaseSession()
-	const { businesses, loading: businessesLoading, error: businessesError, refetch: refetchBusinesses } = useMyBusinesses()
+	const { businesses, loading: businessesLoading, error: businessesError, migrationRequired: businessesMigrationRequired, refetch: refetchBusinesses } = useMyBusinesses()
 	const autosave = useAutosaveProfile({ user, debounceMs: 800 })
 	const anonDraft = useAnonProfileDraft({ debounceMs: 800 })
 	const cloudConfigured = supabaseEnvConfigured
@@ -584,7 +584,13 @@ function MainApp() {
 
 					{tab === 'Businesses' && (
 						<>
-							{businessesError && (
+							{businessesMigrationRequired && (
+								<div className="mb-4 rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-amber-200" role="alert">
+									<p className="font-semibold">Admin: Business list failed (e.g. relation does not exist — tables missing).</p>
+									<p className="mt-1 text-sm">Run the canonical businesses migration in Supabase SQL Editor: supabase/migrations/20260223_canonical_businesses_user_businesses.sql</p>
+								</div>
+							)}
+							{!businessesMigrationRequired && businessesError && (
 								<div className="mb-4 text-sm text-red-400">{businessesError}</div>
 							)}
 							{businessesLoading && (
@@ -607,7 +613,15 @@ function MainApp() {
 					)}
 
 					{tab === 'Discover' && (
-						<Discover onSaved={refreshBusinesses} />
+						<>
+							{businessesMigrationRequired && (
+								<div className="mb-4 rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-amber-200" role="alert">
+									<p className="font-semibold">Admin: Business list failed (e.g. relation does not exist — tables missing).</p>
+									<p className="mt-1 text-sm">Run the canonical businesses migration in Supabase SQL Editor: supabase/migrations/20260223_canonical_businesses_user_businesses.sql</p>
+								</div>
+							)}
+							<Discover onSaved={refreshBusinesses} />
+						</>
 					)}
 
 					{tab === 'Matches' && (
