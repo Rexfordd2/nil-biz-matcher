@@ -1,7 +1,7 @@
 ## Athlete Ledger
 
 ### Project summary
-Athlete Ledger is a Vite + React app that matches NIL-ready student‑athletes (middle/high school) with local and regional businesses. It includes an Athlete Profile Builder (multi‑sport, multi‑position, multiple social handles and content styles) and Business Discovery via URL import and embedded external search (server‑side Google Places). A built‑in NIL Hub provides educational resources, including a link to the Skool community.
+Athlete Ledger is a Vite + React app that matches NIL-ready student‑athletes (middle/high school/college/semi pro/club) with local and regional businesses. It includes an Athlete Profile Builder (multi‑sport, multi‑position, multiple social handles and content styles), Business Discovery via URL import and embedded external search (server‑side Google Places) and Recruiting Network filled with coaches and managers that are an email away from provlonging athletic careers. Also, A built‑in NIL Hub provides educational resources, including a link to the Skool community.
 
 ### Rebrand status
 - UI title and header updated to “Athlete Ledger”.
