@@ -3,6 +3,7 @@ import clsx from 'clsx'
 type Item = {
 	key: string
 	label: string
+	path?: string
 }
 
 type Section = {
@@ -11,14 +12,15 @@ type Section = {
 }
 
 export type SidebarProps = {
+	/** Active parent destination id (highlights for all child routes). */
 	current: string
-	onSelect: (key: string) => void
+	onSelect: (key: string, path?: string) => void
 	sections: Section[]
 }
 
 export default function Sidebar({ current, onSelect, sections }: SidebarProps) {
 	return (
-		<aside className="bg-surface border border-border rounded-xl p-3 md:p-4 h-full">
+		<aside className="bg-surface border border-border rounded-xl p-3 md:p-4 h-full" data-testid="app-sidebar">
 			<nav className="space-y-5">
 				{sections.map((section, si) => (
 					<div key={`sec-${si}`}>
@@ -28,13 +30,15 @@ export default function Sidebar({ current, onSelect, sections }: SidebarProps) {
 								<li key={it.key}>
 									<button
 										type="button"
-										onClick={() => onSelect(it.key)}
+										data-testid={`nav-${it.key}`}
+										onClick={() => onSelect(it.key, it.path)}
 										className={clsx(
 											'w-full text-left px-3 py-2 rounded-md text-sm',
 											current === it.key
 												? 'bg-mid text-foreground font-semibold'
 												: 'text-foreground/80 hover:bg-mid'
 										)}
+										aria-current={current === it.key ? 'page' : undefined}
 									>
 										{it.label}
 									</button>
@@ -47,5 +51,3 @@ export default function Sidebar({ current, onSelect, sections }: SidebarProps) {
 		</aside>
 	)
 }
-
-

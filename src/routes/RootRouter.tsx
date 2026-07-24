@@ -19,9 +19,10 @@ import { supabaseEnvConfigured } from '../lib/supabaseClient'
 import { isDebugAccessAllowed } from '../lib/debugAccess'
 import { isDemoMode, isBetaMode } from '../config/appMode'
 import { useAuth } from '../context/AuthContext'
-import { PUBLIC_MODE } from '../config/publicMode'
 import RecruitingV2Route from '../pages/RecruitingV2Route'
 import RecruitingLegacyRoute from '../pages/RecruitingLegacyRoute'
+import { isAppPathname, resolveAppPath } from './appRoutes'
+import { isE2EAuthBypass } from '../config/e2e'
 
 type RouteEntry =
 	| { key: 'home' }
@@ -89,7 +90,7 @@ export default function RootRouter() {
 		return () => window.removeEventListener('popstate', onPop)
 	}, [])
 
-	// Redirect effect: handle unknown routes, denied debug routes, and app mode restrictions
+	// Redirect effect: handle unknown routes, denied debug routes, app defaults, and app mode restrictions
 	useEffect(() => {
 		const hasDebugAccess = isDebugAccessAllowed(window.location.search)
 		const isDebugRoute = loc.key === 'debug_discover_recruiting' || loc.key === 'debug_build' || loc.key === 'debug_places_hooks'
@@ -108,6 +109,15 @@ export default function RootRouter() {
 			if (loc.key === 'demo') {
 				shouldRedirect = true
 				redirectTarget = '/'
+			}
+		}
+
+		// Canonical /app defaults and unknown /app fallback (non-demo only)
+		if (!shouldRedirect && loc.key === 'app' && isAppPathname(window.location.pathname)) {
+			const resolved = resolveAppPath(window.location.pathname)
+			if (resolved.redirectTo && window.location.pathname !== resolved.redirectTo) {
+				shouldRedirect = true
+				redirectTarget = resolved.redirectTo
 			}
 		}
 
@@ -176,7 +186,8 @@ export default function RootRouter() {
 		case 'app':
 			// Render app shell under /app/* - show AuthGate if not authenticated
 			// If authenticated or still initializing, render the app
-			if (!user && !initializing) {
+			// VITE_E2E_BYPASS_AUTH is test-only (Playwright navigation); off in production.
+			if (!user && !initializing && !isE2EAuthBypass()) {
 				return <AuthGate returnTo={window.location.pathname} />
 			}
 			return <App />
