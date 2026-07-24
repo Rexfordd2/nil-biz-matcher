@@ -22,7 +22,7 @@ import { useAuth } from '../context/AuthContext'
 import RecruitingV2Route from '../pages/RecruitingV2Route'
 import RecruitingLegacyRoute from '../pages/RecruitingLegacyRoute'
 import { isAppPathname, resolveAppPath } from './appRoutes'
-import { isE2EAuthBypass } from '../config/e2e'
+import { isLocalE2EAuthBypassAllowed } from '../config/e2e'
 
 type RouteEntry =
 	| { key: 'home' }
@@ -79,12 +79,14 @@ export function navigate(to: string, replace: boolean = false) {
 }
 
 export default function RootRouter() {
-	const [loc, setLoc] = useState<RouteEntry>(() => parseLocation(window.location.pathname))
+	// Single authoritative pathname + one popstate subscription for app routing.
+	const [pathname, setPathname] = useState(() => window.location.pathname)
+	const loc = useMemo(() => parseLocation(pathname), [pathname])
 	const { user, initializing } = useAuth()
 
 	useEffect(() => {
 		function onPop() {
-			setLoc(parseLocation(window.location.pathname))
+			setPathname(window.location.pathname)
 		}
 		window.addEventListener('popstate', onPop)
 		return () => window.removeEventListener('popstate', onPop)
@@ -113,18 +115,18 @@ export default function RootRouter() {
 		}
 
 		// Canonical /app defaults and unknown /app fallback (non-demo only)
-		if (!shouldRedirect && loc.key === 'app' && isAppPathname(window.location.pathname)) {
-			const resolved = resolveAppPath(window.location.pathname)
-			if (resolved.redirectTo && window.location.pathname !== resolved.redirectTo) {
+		if (!shouldRedirect && loc.key === 'app' && isAppPathname(pathname)) {
+			const resolved = resolveAppPath(pathname)
+			if (resolved.redirectTo && pathname !== resolved.redirectTo) {
 				shouldRedirect = true
 				redirectTarget = resolved.redirectTo
 			}
 		}
 
-		if (shouldRedirect && window.location.pathname !== redirectTarget) {
+		if (shouldRedirect && pathname !== redirectTarget) {
 			navigate(redirectTarget, true)
 		}
-	}, [loc])
+	}, [loc, pathname])
 
 	// Auth guard: protect /app route when not in PUBLIC_MODE
 	// Note: Now handled by rendering AuthGate instead of redirecting
@@ -186,18 +188,18 @@ export default function RootRouter() {
 		case 'app':
 			// Render app shell under /app/* - show AuthGate if not authenticated
 			// If authenticated or still initializing, render the app
-			// VITE_E2E_BYPASS_AUTH is test-only (Playwright navigation); off in production.
-			if (!user && !initializing && !isE2EAuthBypass()) {
-				return <AuthGate returnTo={window.location.pathname} />
+			// Local E2E bypass is loopback-only even if the Vite flag is baked in.
+			if (!user && !initializing && !isLocalE2EAuthBypassAllowed()) {
+				return <AuthGate returnTo={pathname} />
 			}
-			return <App />
+			return <App pathname={pathname} />
 			case 'not_found':
 				// Unknown route: redirect to / (handled by effect above)
 				return <Home />
 			default:
 				return <Home />
 		}
-	}, [loc])
+	}, [loc, pathname, user, initializing])
 
 	return (
 		<div className="min-h-screen bg-background text-foreground">
@@ -210,5 +212,3 @@ export default function RootRouter() {
 		</div>
 	)
 }
-
-

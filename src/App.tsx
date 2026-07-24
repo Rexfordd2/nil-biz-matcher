@@ -69,7 +69,7 @@ import {
 import WaitlistGate from './components/WaitlistGate'
 import BetaWaitlistModal from './components/BetaWaitlistModal'
 import { isBetaMode, isDemoMode } from './config/appMode'
-import { isE2EAuthBypass } from './config/e2e'
+import { isLocalE2EAuthBypassAllowed } from './config/e2e'
 import AthleteProfileDebugPanel from './components/AthleteProfileDebugPanel'
 import AuthDebugPanel from './components/AuthDebugPanel'
 import GoogleDebugPanel from './components/GoogleDebugPanel'
@@ -103,11 +103,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 type Tab = AppTab
 
-function MainApp() {
-	const [appPath, setAppPath] = useState(() =>
-		typeof window !== 'undefined' ? window.location.pathname : '/app/today'
-	)
-	const resolved = useMemo(() => resolveAppPath(appPath), [appPath])
+type MainAppProps = {
+	/** Pathname owned by RootRouter (single popstate authority). */
+	pathname: string
+}
+
+function MainApp({ pathname }: MainAppProps) {
+	const resolved = useMemo(() => resolveAppPath(pathname), [pathname])
 	const tab = resolved.tab
 	const activeDestination = resolved.destination
 	const [athlete, setAthlete] = useState<AthleteProfile | null>(() => migrateAthleteProfile(load('athlete', null)))
@@ -138,19 +140,6 @@ function MainApp() {
 	}>(() => ({ sessionOk: null, sessionError: null, dbOk: null, dbError: null }))
 
 	useEffect(() => save('athlete', athlete), [athlete])
-
-	// Keep rendered destination in sync with the URL (single source of truth).
-	useEffect(() => {
-		function onPop() {
-			setAppPath(window.location.pathname)
-		}
-		window.addEventListener('popstate', onPop)
-		return () => window.removeEventListener('popstate', onPop)
-	}, [])
-
-	useEffect(() => {
-		setAppPath(window.location.pathname)
-	}, [])
 
 	// Debug-only: log Supabase hostname once when ?debug=1 so deploy can confirm intended project
 	useEffect(() => {
@@ -287,23 +276,21 @@ function MainApp() {
 		const path = pathForTab(next)
 		if (path) {
 			navigate(path)
-			setAppPath(path)
 			return
 		}
 		// Auth tabs use standalone routes rather than in-app tab state
 		if (next === 'Log In') {
-			goToLogin(window.location.pathname)
+			goToLogin(pathname)
 			return
 		}
 		if (next === 'Sign Up') {
-			navigate(`/auth/signup?returnTo=${encodeURIComponent(window.location.pathname)}`)
+			navigate(`/auth/signup?returnTo=${encodeURIComponent(pathname)}`)
 			return
 		}
 	}
 
 	function goToPath(path: string) {
 		navigate(path)
-		setAppPath(path)
 	}
 
 	function goToDestination(destinationKey: string, path?: string) {
@@ -392,13 +379,13 @@ function MainApp() {
 
 	// BETA mode auth gate: redirect unauthenticated users to /auth/login
 	useEffect(() => {
-		if (isBetaMode() && !loading && !user && !isE2EAuthBypass()) {
+		if (isBetaMode() && !loading && !user && !isLocalE2EAuthBypassAllowed()) {
 			navigate('/auth/login', true)
 		}
 	}, [user, loading])
 
 	// In BETA mode, if not authenticated, render nothing while redirecting
-	if (isBetaMode() && !loading && !user && !isE2EAuthBypass()) {
+	if (isBetaMode() && !loading && !user && !isLocalE2EAuthBypassAllowed()) {
 		return (
 			<ToastProvider>
 				<div className="min-h-screen bg-background light-theme flex items-center justify-center">
@@ -615,7 +602,7 @@ function MainApp() {
 
 					{tab === 'Businesses' && (
 						<>
-							<OpportunitiesSubnav currentPath={appPath} onNavigate={goToPath} />
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -653,7 +640,7 @@ function MainApp() {
 
 					{tab === 'Discover' && (
 						<>
-							<OpportunitiesSubnav currentPath={appPath} onNavigate={goToPath} />
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -673,7 +660,7 @@ function MainApp() {
 
 					{tab === 'Matches' && (
 						<>
-							<OpportunitiesSubnav currentPath={appPath} onNavigate={goToPath} />
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -839,7 +826,7 @@ function MainApp() {
 
 					{tab === 'Deals' && (
 						<>
-							<OpportunitiesSubnav currentPath={appPath} onNavigate={goToPath} />
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -856,7 +843,7 @@ function MainApp() {
 
 					{tab === 'Opportunities' && (
 						<>
-							<OpportunitiesSubnav currentPath={appPath} onNavigate={goToPath} />
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -870,7 +857,7 @@ function MainApp() {
 
 					{tab === 'Events' && (
 						<>
-							<OpportunitiesSubnav currentPath={appPath} onNavigate={goToPath} />
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							<EventsPlanner athlete={athlete} />
 						</>
 					)}
@@ -1148,7 +1135,7 @@ function MainApp() {
 	)
 }
 
-function AppShell() {
+function AppShell({ pathname }: { pathname: string }) {
 	const { user, loading } = useSupabaseSession()
 	if (!supabaseEnvConfigured) {
 		return (
@@ -1160,15 +1147,14 @@ function AppShell() {
 	}
 	// Don't block rendering - allow unauthenticated access immediately
 	// Session loading happens in background and updates when ready
-	return <MainApp />
+	return <MainApp pathname={pathname} />
 }
 
-export default function App() {
-	const path = typeof window !== 'undefined' ? window.location.pathname : '/'
+export default function App({ pathname }: { pathname: string }) {
 	const showDebugDiscoverRecruiting =
-		path === '/debug/discover-recruiting' &&
+		pathname === '/debug/discover-recruiting' &&
 		((Observability as any).isDiagnosticsEnabled?.() || import.meta.env.DEV)
-	const showDebugBuild = path === '/debug/build'
+	const showDebugBuild = pathname === '/debug/build'
 
 	return (
 		<SupabaseSessionProvider>
@@ -1177,7 +1163,7 @@ export default function App() {
 			) : showDebugBuild ? (
 				<DebugBuild />
 			) : (
-				<AppShell />
+				<AppShell pathname={pathname} />
 			)}
 		</SupabaseSessionProvider>
 	)

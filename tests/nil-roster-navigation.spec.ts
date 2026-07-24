@@ -3,16 +3,19 @@ import { test, expect } from '@playwright/test'
 /**
  * PR-2: URL-backed NIL Roster destination navigation.
  *
- * Run against an app-capable (non-demo) build with auth bypass for shell access:
+ * Run against an app-capable (non-demo) build with local-only auth bypass:
  *
  *   PowerShell:
  *   $env:VITE_APP_MODE="beta"
  *   $env:VITE_E2E_BYPASS_AUTH="true"
  *   $env:VITE_PUBLIC_MODE="true"
  *   npm run build
- *   npx --yes serve -s dist -l 4173   # or: npm start
- *   $env:BASE_URL="http://localhost:4173"
+ *   npx vite preview --host 127.0.0.1 --port 4173
+ *   $env:BASE_URL="http://127.0.0.1:4173"
  *   npx playwright test tests/nil-roster-navigation.spec.ts
+ *
+ * Bypass activates only when VITE_E2E_BYPASS_AUTH=true AND hostname is
+ * localhost / 127.0.0.1 / ::1 (never on deployed hosts).
  *
  * Do not use VITE_APP_MODE=demo for this file (/app redirects to /demo).
  */
