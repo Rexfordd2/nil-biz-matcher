@@ -3,6 +3,7 @@ import Button from './ui/Button'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import { RECRUITING_BOARD_STATUSES } from '../recruiting/boardSummary'
 
 type Org = {
 	id: string
@@ -22,7 +23,7 @@ type Row = {
 	status: string
 }
 
-const STATUS_COLUMNS: string[] = ['To Contact', 'Contacted', 'In Progress', 'Offer/Visit', 'Closed']
+const STATUS_COLUMNS: string[] = [...RECRUITING_BOARD_STATUSES]
 
 export default function RecruitingBoard() {
 	const [rows, setRows] = useState<Row[]>([])
