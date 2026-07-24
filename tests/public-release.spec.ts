@@ -185,8 +185,8 @@ test.describe('Public Release Acceptance Tests', () => {
 			const bodyText = await page.locator('body').textContent() || ''
 			
 			// If debug access is not enabled, should see landing page content instead of debug UI
-			// Look for landing page indicators (like "Athlete Ledger" header or waitlist)
-			const isLandingPage = bodyText.includes('Athlete Ledger') || 
+			// Look for landing page indicators (like "NIL Roster" header or waitlist)
+			const isLandingPage = bodyText.includes('NIL Roster') || 
 			                      bodyText.includes('Join Waitlist') ||
 			                      bodyText.includes('How it works')
 			
@@ -247,7 +247,8 @@ test.describe('Public Release Acceptance Tests', () => {
 		
 		// Should show welcome message
 		const bodyText = await page.locator('body').textContent()
-		expect(bodyText).toContain('Welcome to Athlete Ledger')
+		expect(bodyText).toContain('Welcome to NIL Roster')
+		expect(bodyText).not.toContain('Athlete Ledger')
 		
 		// Validates: src/routes/RootRouter.tsx (renders Auth Gate on /app when logged out),
 		//           src/components/AuthGate.tsx (Auth Gate component)

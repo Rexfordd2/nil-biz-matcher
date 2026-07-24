@@ -49,6 +49,7 @@ import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseS
 import SectionErrorBoundary from './components/ErrorBoundary'
 import { BUILD_ID } from './constants/build'
 import { APP_INSTANCE } from './config/env'
+import { isDebugAccessAllowed } from './lib/debugAccess'
 import Observability from './lib/obs'
 import DiagnosticsPanel from './components/DiagnosticsPanel'
 import DebugDiscoverRecruiting from './pages/DebugDiscoverRecruiting'
@@ -383,15 +384,15 @@ function MainApp() {
 						<div className="flex items-center gap-3">
 							<div className="w-8 h-8 rounded-lg bg-brand-red shadow-glow overflow-hidden">
 								<img
-									src="/athlete-ledger-logo.png"
-									alt="Athlete Ledger Logo"
+									src="/nil-roster-logo.png"
+									alt="NIL Roster Logo"
 									className="w-full h-full object-cover"
 									onError={(e) => {
 										;(e.currentTarget as HTMLImageElement).style.display = 'none'
 									}}
 								/>
 							</div>
-							<h1 className="headline text-2xl">Athlete Ledger</h1>
+							<h1 className="headline text-2xl">NIL Roster</h1>
 						</div>
 						<div className="relative flex flex-col items-end gap-1">
 							<div className="text-xs">
@@ -1145,10 +1146,13 @@ function MainApp() {
 							</div>
 						</div>
 					)}
-					{/* App instance label - always visible in footer */}
+					{/* Build always visible; instance only in DEV or authorized debug mode */}
 					<div className="mx-auto max-w-6xl px-4 md:px-6 mt-4">
-						<div className="text-center text-xs text-gray-500">
-							Instance: {APP_INSTANCE} | Build: {BUILD_ID}
+						<div className="text-center text-xs text-gray-500" data-testid="app-footer-build">
+							{(import.meta.env.DEV || isDebugAccessAllowed(typeof window !== 'undefined' ? window.location.search : undefined)) ? (
+								<span data-testid="app-footer-instance">Instance: {APP_INSTANCE} | </span>
+							) : null}
+							Build: {BUILD_ID}
 						</div>
 					</div>
 				</footer>

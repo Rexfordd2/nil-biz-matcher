@@ -34,8 +34,18 @@ let client: SupabaseClient | null = null
 if (isValidHttpUrl(supabaseUrl) && typeof supabaseAnonKey === 'string' && supabaseAnonKey.length > 0) {
 	client = createClient(supabaseUrl, supabaseAnonKey)
 } else {
-	warnOnce('[Athlete Ledger] Supabase not configured')
+	warnOnce('[NIL Roster] Supabase not configured')
 }
 
 export const supabase: SupabaseClient | null = client
+
+/** Hostname of the configured Supabase URL (for debug panels only). */
+export function getSupabaseHostname(): string {
+	if (!isValidHttpUrl(supabaseUrl)) return '—'
+	try {
+		return new URL(supabaseUrl).hostname
+	} catch {
+		return '—'
+	}
+}
 

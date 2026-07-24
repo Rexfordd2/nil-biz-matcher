@@ -14,8 +14,8 @@ export default function Waitlist() {
 	// Set Open Graph meta tags
 	useEffect(() => {
 		setOpenGraphTags({
-			title: 'Athlete Ledger - Join Waitlist',
-			description: 'Get early access to Athlete Ledger. Build your athlete profile, discover local businesses, and track NIL opportunities.',
+			title: 'NIL Roster — Join Waitlist',
+			description: 'Get early access to NIL Roster. Build a verified athlete profile, find the right place to play, grow your professional network, and connect with businesses.',
 			url: window.location.href,
 			type: 'website'
 		})
@@ -34,13 +34,13 @@ export default function Waitlist() {
 					<div className="flex items-center gap-3">
 						<div className="w-8 h-8 rounded-lg bg-brand-red shadow-glow overflow-hidden">
 							<img
-								src="/athlete-ledger-logo.png"
-								alt="Athlete Ledger Logo"
+								src="/nil-roster-logo.png"
+								alt="NIL Roster Logo"
 								className="w-full h-full object-cover"
 								onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
 							/>
 						</div>
-						<h1 className="headline text-2xl">Athlete Ledger</h1>
+						<h1 className="headline text-2xl">NIL Roster</h1>
 					</div>
 					<div className="flex items-center gap-2">
 						<Button data-testid="header-home-button" onClick={() => navigate('/')} variant="ghost">Home</Button>
@@ -53,7 +53,7 @@ export default function Waitlist() {
 						Join the Waitlist
 					</h2>
 					<p className="text-gray-700 text-lg max-w-xl mx-auto">
-						Get early access to Athlete Ledger and be the first to know when we launch.
+						Get early access to NIL Roster and be the first to know when we launch.
 					</p>
 				</section>
 
@@ -61,7 +61,7 @@ export default function Waitlist() {
 					{joined ? (
 						<div className="text-center space-y-4">
 							<p className="text-green-600 font-medium text-lg">✓ You're on the list</p>
-							<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
+							<p className="text-sm text-gray-600">We'll notify you when NIL Roster launches.</p>
 							<div className="flex flex-col gap-2">
 								<Button
 									onClick={() => goToLogin('/app')}
@@ -104,7 +104,7 @@ export default function Waitlist() {
 			</main>
 			<footer className="border-t border-border mt-8 py-6">
 				<div className="mx-auto max-w-6xl px-4 md:px-6 text-xs text-gray-400">
-					By using Athlete Ledger, you agree to our <a className="underline" onClick={() => navigate('/terms')}>Terms</a>. <span className="mx-2">•</span>
+					By using NIL Roster, you agree to our <a className="underline" onClick={() => navigate('/terms')}>Terms</a>. <span className="mx-2">•</span>
 					<a className="underline" onClick={() => navigate('/status')}>Status</a>
 				</div>
 			</footer>

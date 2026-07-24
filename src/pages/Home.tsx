@@ -25,8 +25,8 @@ export default function Home() {
 	// Set Open Graph meta tags
 	useEffect(() => {
 		setOpenGraphTags({
-			title: 'Athlete Ledger - Turn Your Hustle into a Real NIL Game Plan',
-			description: 'Build your athlete profile, discover local businesses, and track NIL opportunities—all with safety and compliance built in.',
+			title: 'NIL Roster — Recruiting, Relationships, and Opportunity Beyond the Game',
+			description: 'Build a verified athlete profile, find the right place to play, grow your professional network, connect with businesses, and carry your audience into what comes next.',
 			url: window.location.href,
 			type: 'website'
 		})
@@ -93,13 +93,13 @@ export default function Home() {
 					<div className="flex items-center gap-3">
 						<div className="w-8 h-8 rounded-lg bg-brand-red shadow-glow overflow-hidden">
 							<img
-								src="/athlete-ledger-logo.png"
-								alt="Athlete Ledger Logo"
+								src="/nil-roster-logo.png"
+								alt="NIL Roster Logo"
 								className="w-full h-full object-cover"
 								onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
 							/>
 						</div>
-						<h1 className="headline text-2xl">Athlete Ledger</h1>
+						<h1 className="headline text-2xl">NIL Roster</h1>
 					</div>
 					<div className="flex items-center gap-2">
 						{user ? (
@@ -148,7 +148,7 @@ export default function Home() {
 						<iframe
 							className="w-full h-full"
 							src={`https://www.youtube.com/embed/${YOUTUBE_INTRO_VIDEO_ID}`}
-							title="Athlete Ledger Intro"
+							title="NIL Roster Intro"
 							frameBorder={0}
 							allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
 							allowFullScreen
@@ -163,7 +163,7 @@ export default function Home() {
 						{waitlistConfirmed ? (
 							<div className="text-center space-y-4">
 								<p className="text-green-600 font-medium text-lg">✓ You're on the list</p>
-								<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
+								<p className="text-sm text-gray-600">We'll notify you when NIL Roster launches.</p>
 							<div className="flex flex-col gap-2">
 								<Button
 									onClick={() => goToLogin('/app')}
@@ -269,7 +269,7 @@ export default function Home() {
 			</main>
 			<footer className="border-t border-border mt-8 py-6">
 				<div className="mx-auto max-w-6xl px-4 md:px-6 text-xs text-gray-400">
-					By using Athlete Ledger, you agree to our <a className="underline" onClick={() => navigate('/terms')}>Terms</a>. <span className="mx-2">•</span>
+					By using NIL Roster, you agree to our <a className="underline" onClick={() => navigate('/terms')}>Terms</a>. <span className="mx-2">•</span>
 					<a className="underline" onClick={() => navigate('/status')}>Status</a>
 				</div>
 			</footer>

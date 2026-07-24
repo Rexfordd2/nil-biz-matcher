@@ -104,7 +104,7 @@ export default function WaitlistForm({ onSuccess, source = 'landing' }: Props) {
 		return (
 			<div className="text-center space-y-4">
 				<p className="text-green-600 font-medium text-lg">✓ You're on the list</p>
-				<p className="text-sm text-gray-600">We'll notify you when Athlete Ledger launches.</p>
+				<p className="text-sm text-gray-600">We'll notify you when NIL Roster launches.</p>
 				<div className="flex flex-col gap-2">
 					<Button
 						onClick={() => goToLogin('/app')}

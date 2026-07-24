@@ -89,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 					<p>Coach ${coach.name || ''},</p>
 					<p>${body}</p>
 					<p><a href="${clickRedirectUrl}">Watch my highlight</a></p>
-					<p>View my Athlete Ledger profile: <a href="${profileLink}">${profileLink}</a></p>
+					<p>View my NIL Roster profile: <a href="${profileLink}">${profileLink}</a></p>
 					<img src="${openPixelUrl}" width="1" height="1" style="display:none;" alt="" />
 				`
 				await sendMail({ from: `"${athlete.fullName}" <${athlete.email}>`, to: coach.email, subject, html })
@@ -109,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 				<p>Coach ${coach.name || ''},</p>
 				<p>${body}</p>
 				<p><a href="${clickRedirectUrl}">Watch my highlight</a></p>
-				<p>View my Athlete Ledger profile: <a href="${profileLink}">${profileLink}</a></p>
+				<p>View my NIL Roster profile: <a href="${profileLink}">${profileLink}</a></p>
 				<img src="${openPixelUrl}" width="1" height="1" style="display:none;" alt="" />
 			`
 			await sendMail({ from: `"${athlete.fullName}" <${athlete.email}>`, to: coach.email, subject, html })

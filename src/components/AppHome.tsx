@@ -96,7 +96,7 @@ export default function AppHome({ onEditProfile, onLogout }: Props) {
 
 	return (
 		<div style={{ maxWidth: 900, margin: '40px auto' }}>
-			<h1 style={{ fontSize: 30, fontWeight: 800 }}>Athlete Ledger</h1>
+			<h1 style={{ fontSize: 30, fontWeight: 800 }}>NIL Roster</h1>
 			{loading ? (
 				<p style={{ color: '#6B7280' }}>Loading…</p>
 			) : error ? (

@@ -37,7 +37,7 @@ export default function Login({ onLoggedIn, onNeedAccount }: Props) {
 
 	return (
 		<div className="max-w-md mx-auto">
-			<Card title="Log in to Athlete Ledger">
+			<Card title="Log in to NIL Roster">
 				<form className="space-y-4" onSubmit={handleSubmit}>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Email</span>
@@ -59,7 +59,7 @@ export default function Login({ onLoggedIn, onNeedAccount }: Props) {
 					<span className="text-xs text-gray-400">Forgot password? Use the cloud login option if available.</span>
 				</div>
 				<div className="text-xs text-gray-400 mt-3">
-					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
+					By using NIL Roster, you agree to our <a href="/terms" className="underline">Terms</a>.
 				</div>
 			</Card>
 		</div>

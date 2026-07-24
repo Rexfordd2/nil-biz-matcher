@@ -120,16 +120,16 @@ export default defineConfig({
 		<!-- Open Graph / Facebook -->
 		<meta property="og:type" content="website" />
 		<meta property="og:url" content="https://athlete-ledger.vercel.app/" />
-		<meta property="og:title" content="Athlete Ledger - Connect with College Coaches" />
-		<meta property="og:description" content="The platform for athletes to discover and connect with college coaches. Showcase your profile and find your perfect match." />
-		<meta property="og:image" content="https://athlete-ledger.vercel.app/athlete-ledger-logo.png" />
+		<meta property="og:title" content="NIL Roster — Recruiting, Relationships, and Opportunity Beyond the Game" />
+		<meta property="og:description" content="Build a verified athlete profile, find the right place to play, grow your professional network, connect with businesses, and carry your audience into what comes next." />
+		<meta property="og:image" content="https://athlete-ledger.vercel.app/nil-roster-og.png" />
 		
 		<!-- Twitter -->
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:url" content="https://athlete-ledger.vercel.app/" />
-		<meta name="twitter:title" content="Athlete Ledger - Connect with College Coaches" />
-		<meta name="twitter:description" content="The platform for athletes to discover and connect with college coaches. Showcase your profile and find your perfect match." />
-		<meta name="twitter:image" content="https://athlete-ledger.vercel.app/athlete-ledger-logo.png" />`
+		<meta name="twitter:title" content="NIL Roster — Recruiting, Relationships, and Opportunity Beyond the Game" />
+		<meta name="twitter:description" content="Build a verified athlete profile, find the right place to play, grow your professional network, connect with businesses, and carry your audience into what comes next." />
+		<meta name="twitter:image" content="https://athlete-ledger.vercel.app/nil-roster-og.png" />`
 					result = result.replace('</head>', `${ogTags}\n\t</head>`)
 				}
 				return result
