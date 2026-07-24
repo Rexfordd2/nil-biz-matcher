@@ -3,8 +3,23 @@
 -- Hobby-safe and client-safe with RLS policies
 
 -- ============================================================================
--- 1. Alter waitlist table to add anon_id column and index
+-- 1. Ensure waitlist exists, then add anon_id column and index
 -- ============================================================================
+
+-- Waitlist historically lived in supabase/waitlist.sql (outside migrations).
+-- Create it here so clean local resets can apply this migration.
+create table if not exists public.waitlist (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  anon_id text,
+  source text,
+  utm_source text,
+  utm_medium text,
+  utm_campaign text,
+  utm_term text,
+  utm_content text,
+  created_at timestamptz not null default now()
+);
 
 -- Add anon_id column to waitlist (nullable, for backward compatibility)
 alter table if exists public.waitlist
