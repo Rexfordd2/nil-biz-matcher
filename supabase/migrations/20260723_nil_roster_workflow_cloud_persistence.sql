@@ -9,8 +9,10 @@
 -- Purpose: Safe cloud-persistence foundation for PR-4A (no UI cutover)
 -- ============================================================================
 
--- Reuse existing updated_at helper (same body as prior migrations; safe to re-apply).
-CREATE OR REPLACE FUNCTION public.set_updated_at()
+-- Workflow-specific updated_at helper.
+-- Do NOT replace public.set_updated_at(): production shares it with profiles and
+-- athlete_profiles triggers. A global CREATE OR REPLACE would be unnecessary risk.
+CREATE OR REPLACE FUNCTION public.set_workflow_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
@@ -59,7 +61,7 @@ DROP TRIGGER IF EXISTS trg_opportunities_updated_at ON public.opportunities;
 CREATE TRIGGER trg_opportunities_updated_at
   BEFORE UPDATE ON public.opportunities
   FOR EACH ROW
-  EXECUTE FUNCTION public.set_updated_at();
+  EXECUTE FUNCTION public.set_workflow_updated_at();
 
 ALTER TABLE public.opportunities ENABLE ROW LEVEL SECURITY;
 
@@ -132,7 +134,7 @@ DROP TRIGGER IF EXISTS trg_deals_updated_at ON public.deals;
 CREATE TRIGGER trg_deals_updated_at
   BEFORE UPDATE ON public.deals
   FOR EACH ROW
-  EXECUTE FUNCTION public.set_updated_at();
+  EXECUTE FUNCTION public.set_workflow_updated_at();
 
 ALTER TABLE public.deals ENABLE ROW LEVEL SECURITY;
 
@@ -203,7 +205,7 @@ DROP TRIGGER IF EXISTS trg_events_updated_at ON public.events;
 CREATE TRIGGER trg_events_updated_at
   BEFORE UPDATE ON public.events
   FOR EACH ROW
-  EXECUTE FUNCTION public.set_updated_at();
+  EXECUTE FUNCTION public.set_workflow_updated_at();
 
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 

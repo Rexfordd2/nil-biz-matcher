@@ -94,6 +94,13 @@ describe('PR-4A workflow migration SQL/RLS static contract', () => {
 		}
 	})
 
+	it('uses workflow-specific updated_at function, not shared set_updated_at', () => {
+		expect(lower).toContain('create or replace function public.set_workflow_updated_at()')
+		expect(lower).toContain('execute function public.set_workflow_updated_at()')
+		expect(lower).not.toMatch(/create\s+or\s+replace\s+function\s+public\.set_updated_at\s*\(/)
+		expect(lower).not.toMatch(/execute\s+function\s+public\.set_updated_at\s*\(/)
+	})
+
 	it('documents payload privacy in SQL comments', () => {
 		expect(lower).toContain('must remain private')
 		expect(lower).toContain('financial')
