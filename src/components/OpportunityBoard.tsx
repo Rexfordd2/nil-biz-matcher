@@ -6,6 +6,10 @@ import { AthleteProfile, Business, DealLogEntry, Opportunity, OpportunityCategor
 import { load } from '../utils/storage'
 import { useWorkflowDomainPersistence } from '../hooks/useWorkflowDomainPersistence'
 import { opportunityWorkflowAdapters } from '../hooks/workflowDomainAdapters'
+import {
+	toActiveAthleteId,
+	toLocalAthleteStorageKey,
+} from '../persistence/workflows/athleteIdentity'
 import WorkflowImportGate from './workflows/WorkflowImportGate'
 
 const businessStatusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Discussion', 'Partnered']
@@ -41,7 +45,8 @@ function createEmpty(athleteId: string): Opportunity {
 }
 
 export default function OpportunityBoard({ athlete, businesses = [], onUpdateBusiness }: Props) {
-	const athleteId = athlete?.id || 'anonymous'
+	const activeAthleteId = toActiveAthleteId(athlete?.id)
+	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
 	const {
 		mode,
 		store,
@@ -54,24 +59,24 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 		confirmImport,
 		keepUsingDevice,
 		retryBootstrap,
-	} = useWorkflowDomainPersistence(athleteId, opportunityWorkflowAdapters)
+	} = useWorkflowDomainPersistence(activeAthleteId, opportunityWorkflowAdapters)
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [statusFilter, setStatusFilter] = useState<OpportunityStatus | 'all'>('all')
 	const [activeTab, setActiveTab] = useState<'board' | 'details' | 'notes'>('board')
 
 	const dealsForAthlete = useMemo(() => {
 		const ds = load<DealStore>('deals.store', {})
-		return (ds[athleteId] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
-	}, [athleteId, store])
+		return (ds[localAthleteKey] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
+	}, [localAthleteKey, store])
 
 	const list = useMemo(() => {
-		const arr = store[athleteId] || []
+		const arr = store[localAthleteKey] || []
 		return arr
 			.filter(o => (statusFilter === 'all' ? true : o.status === statusFilter))
 			.sort((a, b) => (STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status)) || a.id.localeCompare(b.id))
-	}, [store, athleteId, statusFilter])
+	}, [store, localAthleteKey, statusFilter])
 
-	const selected = useMemo(() => (selectedId ? (store[athleteId] || []).find(o => o.id === selectedId) || null : null), [selectedId, store, athleteId])
+	const selected = useMemo(() => (selectedId ? (store[localAthleteKey] || []).find(o => o.id === selectedId) || null : null), [selectedId, store, localAthleteKey])
 
 	function upsertLocal(next: Opportunity) {
 		void upsert(next)
@@ -157,7 +162,7 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 					{statusFilter === 'all' ? (
 						<div className="space-y-6">
 							{STATUSES.map(s => {
-								const rows = (store[athleteId] || []).filter(o => o.status === s)
+								const rows = (store[localAthleteKey] || []).filter(o => o.status === s)
 								return (
 									<div key={`grp-${s}`}>
 										<div className="text-white font-semibold mb-2">{s.replaceAll('_',' ')}</div>

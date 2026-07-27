@@ -4,6 +4,10 @@ import Button from './ui/Button'
 import { AthleteProfile, Business, DealLogEntry, DealStatus, DealType, PaymentRecord } from '../types'
 import { useWorkflowDomainPersistence } from '../hooks/useWorkflowDomainPersistence'
 import { dealWorkflowAdapters } from '../hooks/workflowDomainAdapters'
+import {
+	toActiveAthleteId,
+	toLocalAthleteStorageKey,
+} from '../persistence/workflows/athleteIdentity'
 import WorkflowImportGate from './workflows/WorkflowImportGate'
 
 const businessStatusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Discussion', 'Partnered']
@@ -51,7 +55,8 @@ function computeRiskFlags(deal: DealLogEntry): string[] {
 }
 
 export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) {
-	const athleteId = athlete?.id || 'anonymous'
+	const activeAthleteId = toActiveAthleteId(athlete?.id)
+	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
 	const {
 		mode,
 		store,
@@ -64,23 +69,23 @@ export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) 
 		confirmImport,
 		keepUsingDevice,
 		retryBootstrap,
-	} = useWorkflowDomainPersistence(athleteId, dealWorkflowAdapters)
+	} = useWorkflowDomainPersistence(activeAthleteId, dealWorkflowAdapters)
 	const [filterStatus, setFilterStatus] = useState<DealStatus | 'all'>('all')
 	const [filterType, setFilterType] = useState<DealType | 'all'>('all')
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 
 	const dealsForAthlete = useMemo(() => {
-		const list = store[athleteId] || []
+		const list = store[localAthleteKey] || []
 		return list
 			.filter(d => (filterStatus === 'all' ? true : d.status === filterStatus))
 			.filter(d => (filterType === 'all' ? true : d.dealType === filterType))
 			.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || '') || b.id.localeCompare(a.id))
-	}, [store, athleteId, filterStatus, filterType])
+	}, [store, localAthleteKey, filterStatus, filterType])
 
 	const selectedDeal = useMemo(() => {
 		if (!selectedId) return null
-		return (store[athleteId] || []).find(d => d.id === selectedId) || null
-	}, [store, athleteId, selectedId])
+		return (store[localAthleteKey] || []).find(d => d.id === selectedId) || null
+	}, [store, localAthleteKey, selectedId])
 
 	function upsertDeal(next: DealLogEntry) {
 		void upsert(next)

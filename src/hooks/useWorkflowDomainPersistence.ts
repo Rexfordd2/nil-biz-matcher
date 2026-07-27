@@ -10,6 +10,12 @@ import type {
 	RepoWriteResult,
 } from '../persistence/workflows/types'
 import {
+	isCloudEligibleAthleteId,
+	toActiveAthleteId,
+	toLocalAthleteStorageKey,
+	type ActiveAthleteId,
+} from '../persistence/workflows/athleteIdentity'
+import {
 	areMutationsDisabled,
 	decideWorkflowBootstrapMode,
 	isCloudWriteMode,
@@ -30,6 +36,8 @@ export type WorkflowDomainAdapters<T extends { id: string; athleteId: string }> 
 export type UseWorkflowDomainPersistenceResult<T extends { id: string; athleteId: string }> = {
 	mode: WorkflowPersistenceMode
 	store: AthleteKeyedStore<T>
+	/** Legacy localStorage partition for the active athlete (may be "anonymous" when none selected). */
+	localAthleteKey: string
 	importPlan: LegacyImportPlan<T> | null
 	busy: boolean
 	error: string | null
@@ -48,7 +56,8 @@ function recordsToAthleteStore<T extends { id: string; athleteId: string }>(
 ): AthleteKeyedStore<T> {
 	const next: AthleteKeyedStore<T> = {}
 	for (const record of records) {
-		const key = record.athleteId || 'anonymous'
+		// Partitioning only — never treat "anonymous" as cloud ownership input.
+		const key = toLocalAthleteStorageKey(toActiveAthleteId(record.athleteId))
 		if (!next[key]) next[key] = []
 		next[key].push(record)
 	}
@@ -57,10 +66,10 @@ function recordsToAthleteStore<T extends { id: string; athleteId: string }>(
 
 function mergeAthleteSlice<T extends { id: string }>(
 	prev: AthleteKeyedStore<T>,
-	athleteId: string,
+	athleteKey: string,
 	records: T[]
 ): AthleteKeyedStore<T> {
-	return { ...prev, [athleteId]: records }
+	return { ...prev, [athleteKey]: records }
 }
 
 function applyCloudMirror<T extends { id: string; athleteId: string }>(
@@ -77,17 +86,26 @@ function applyCloudMirror<T extends { id: string; athleteId: string }>(
 	return merged
 }
 
+function resolveLocalSliceKey(
+	recordAthleteId: string | undefined,
+	activeAthleteId: ActiveAthleteId
+): string {
+	return toLocalAthleteStorageKey(toActiveAthleteId(recordAthleteId) ?? activeAthleteId)
+}
+
 /**
  * Dual-path persistence for one workflow domain.
  * Flag off → identical localStorage behavior (no repository queries).
+ * Cloud path requires a real ActiveAthleteId — never the fabricated "anonymous" sentinel.
  */
 export function useWorkflowDomainPersistence<T extends { id: string; athleteId: string }>(
-	athleteId: string,
+	activeAthleteId: ActiveAthleteId,
 	adapters: WorkflowDomainAdapters<T>
 ): UseWorkflowDomainPersistenceResult<T> {
 	const { user, initializing } = useAuth()
 	const cloudEnabled = isWorkflowCloudPersistenceEnabled()
 	const userId = user?.id ?? null
+	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
 
 	/** Session-only deferral — not persisted. Import prompt may return next session. */
 	const [sessionStayLocal, setSessionStayLocal] = useState(false)
@@ -96,8 +114,7 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 		cloudEnabled &&
 		!sessionStayLocal &&
 		Boolean(userId) &&
-		Boolean(athleteId) &&
-		athleteId !== 'anonymous'
+		isCloudEligibleAthleteId(activeAthleteId)
 
 	const [store, setStore] = useState<AthleteKeyedStore<T>>(() =>
 		load<AthleteKeyedStore<T>>(adapters.storageKey, {})
@@ -111,7 +128,7 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 	const cancelledRef = useRef(false)
 
 	const runBootstrap = useCallback(async () => {
-		if (!userId || !canAttemptCloud) return
+		if (!userId || !canAttemptCloud || !isCloudEligibleAthleteId(activeAthleteId)) return
 
 		setMode('checking')
 		setError(null)
@@ -134,12 +151,12 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 				return
 			}
 
-			const localForAthlete = Array.isArray(localStore[athleteId])
-				? (localStore[athleteId] as T[])
+			const localForAthlete = Array.isArray(localStore[activeAthleteId])
+				? (localStore[activeAthleteId] as T[])
 				: []
-			const cloudForAthlete = listed.records.filter((r) => r.athleteId === athleteId)
+			const cloudForAthlete = listed.records.filter((r) => r.athleteId === activeAthleteId)
 			const plan = adapters.planImport(localForAthlete, {
-				activeAthleteId: athleteId,
+				activeAthleteId,
 				existingCloudClientIds: cloudForAthlete.map((r) => r.id),
 				existingCloudByClientId: new Map(cloudForAthlete.map((r) => [r.id, r])),
 			})
@@ -182,12 +199,12 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 			setError(null)
 			setBusy(false)
 		}
-	}, [adapters, athleteId, canAttemptCloud, userId])
+	}, [activeAthleteId, adapters, canAttemptCloud, userId])
 
 	useEffect(() => {
 		cancelledRef.current = false
 
-		if (!cloudEnabled || sessionStayLocal || !athleteId || athleteId === 'anonymous') {
+		if (!cloudEnabled || sessionStayLocal || !isCloudEligibleAthleteId(activeAthleteId)) {
 			setMode('local')
 			setImportPlan(null)
 			setError(null)
@@ -223,8 +240,8 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 			cancelledRef.current = true
 		}
 	}, [
+		activeAthleteId,
 		adapters.storageKey,
-		athleteId,
 		bootstrapNonce,
 		cloudEnabled,
 		initializing,
@@ -234,13 +251,13 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 	])
 
 	const confirmImport = useCallback(async () => {
-		if (!userId || mode !== 'import_required') return
+		if (!userId || mode !== 'import_required' || !isCloudEligibleAthleteId(activeAthleteId)) return
 		setBusy(true)
 		setError(null)
 		try {
 			const localStore = load<AthleteKeyedStore<T>>(adapters.storageKey, {})
-			const localForAthlete = Array.isArray(localStore[athleteId])
-				? (localStore[athleteId] as T[])
+			const localForAthlete = Array.isArray(localStore[activeAthleteId])
+				? (localStore[activeAthleteId] as T[])
 				: []
 
 			const listed = await adapters.listForUser(userId)
@@ -249,9 +266,9 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 				return
 			}
 
-			const cloudForAthlete = listed.records.filter((r) => r.athleteId === athleteId)
+			const cloudForAthlete = listed.records.filter((r) => r.athleteId === activeAthleteId)
 			const plan = adapters.planImport(localForAthlete, {
-				activeAthleteId: athleteId,
+				activeAthleteId,
 				existingCloudClientIds: cloudForAthlete.map((r) => r.id),
 				existingCloudByClientId: new Map(cloudForAthlete.map((r) => [r.id, r])),
 			})
@@ -301,7 +318,7 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 		} finally {
 			setBusy(false)
 		}
-	}, [adapters, athleteId, mode, userId])
+	}, [activeAthleteId, adapters, mode, userId])
 
 	const keepUsingDevice = useCallback(() => {
 		setSessionStayLocal(true)
@@ -315,10 +332,14 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 	const upsert = useCallback(
 		async (record: T): Promise<boolean> => {
 			if (areMutationsDisabled(mode)) return false
-			const key = record.athleteId || athleteId
+			const key = resolveLocalSliceKey(record.athleteId, activeAthleteId)
 
 			if (isCloudWriteMode(mode)) {
 				if (!userId || pendingWrite) return false
+				if (!isCloudEligibleAthleteId(toActiveAthleteId(record.athleteId))) {
+					setError('Could not save to secure storage. Your previous records were left unchanged.')
+					return false
+				}
 				setPendingWrite(true)
 				try {
 					const result = await adapters.upsertForUser(userId, record)
@@ -342,7 +363,7 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 				}
 			}
 
-			// Pure local mode
+			// Pure local mode — may partition under legacy "anonymous" key.
 			setStore((prev) => {
 				const list = prev[key] || []
 				const idx = list.findIndex((r) => r.id === record.id)
@@ -353,15 +374,17 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 			})
 			return true
 		},
-		[adapters, athleteId, mode, pendingWrite, userId]
+		[activeAthleteId, adapters, mode, pendingWrite, userId]
 	)
 
 	const remove = useCallback(
 		async (id: string): Promise<boolean> => {
 			if (areMutationsDisabled(mode)) return false
+			const key = localAthleteKey
 
 			if (isCloudWriteMode(mode)) {
 				if (!userId || pendingWrite) return false
+				if (!isCloudEligibleAthleteId(activeAthleteId)) return false
 				setPendingWrite(true)
 				try {
 					const result = await adapters.deleteForUser(userId, id)
@@ -370,10 +393,10 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 						return false
 					}
 					setStore((prev) => {
-						const list = prev[athleteId] || []
+						const list = prev[key] || []
 						const next = mergeAthleteSlice(
 							prev,
-							athleteId,
+							key,
 							list.filter((r) => r.id !== id)
 						)
 						save(adapters.storageKey, next)
@@ -387,10 +410,10 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 			}
 
 			setStore((prev) => {
-				const list = prev[athleteId] || []
+				const list = prev[key] || []
 				const next = mergeAthleteSlice(
 					prev,
-					athleteId,
+					key,
 					list.filter((r) => r.id !== id)
 				)
 				save(adapters.storageKey, next)
@@ -398,7 +421,7 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 			})
 			return true
 		},
-		[adapters, athleteId, mode, pendingWrite, userId]
+		[activeAthleteId, adapters, localAthleteKey, mode, pendingWrite, userId]
 	)
 
 	const retryBootstrap = useCallback(() => {
@@ -411,6 +434,7 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 	return {
 		mode,
 		store,
+		localAthleteKey,
 		importPlan,
 		busy: busy || (canAttemptCloud && initializing),
 		error,

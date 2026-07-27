@@ -8,6 +8,10 @@ import { AthleteProfile, DealLogEntry, EventPlan, EventType } from '../types'
 import { load } from '../utils/storage'
 import { useWorkflowDomainPersistence } from '../hooks/useWorkflowDomainPersistence'
 import { eventWorkflowAdapters } from '../hooks/workflowDomainAdapters'
+import {
+	toActiveAthleteId,
+	toLocalAthleteStorageKey,
+} from '../persistence/workflows/athleteIdentity'
 import WorkflowImportGate from './workflows/WorkflowImportGate'
 
 type Props = { athlete: AthleteProfile | null }
@@ -27,7 +31,8 @@ function createEmpty(athleteId: string): EventPlan {
 }
 
 export default function EventsPlanner({ athlete }: Props) {
-	const athleteId = athlete?.id || 'anonymous'
+	const activeAthleteId = toActiveAthleteId(athlete?.id)
+	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
 	const {
 		mode,
 		store,
@@ -40,21 +45,21 @@ export default function EventsPlanner({ athlete }: Props) {
 		confirmImport,
 		keepUsingDevice,
 		retryBootstrap,
-	} = useWorkflowDomainPersistence(athleteId, eventWorkflowAdapters)
+	} = useWorkflowDomainPersistence(activeAthleteId, eventWorkflowAdapters)
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [activeTab, setActiveTab] = useState<'list' | 'details' | 'notes'>('list')
 
 	const dealsForAthlete = useMemo(() => {
 		const ds = load<DealStore>('deals.store', {})
-		return (ds[athleteId] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
-	}, [athleteId, store])
+		return (ds[localAthleteKey] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
+	}, [localAthleteKey, store])
 
 	const list = useMemo(() => {
-		const arr = (store[athleteId] || []).slice()
+		const arr = (store[localAthleteKey] || []).slice()
 		return arr.sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id))
-	}, [store, athleteId])
+	}, [store, localAthleteKey])
 
-	const selected = useMemo(() => (selectedId ? (store[athleteId] || []).find(e => e.id === selectedId) || null : null), [selectedId, store, athleteId])
+	const selected = useMemo(() => (selectedId ? (store[localAthleteKey] || []).find(e => e.id === selectedId) || null : null), [selectedId, store, localAthleteKey])
 
 	function upsertLocal(next: EventPlan) {
 		void upsert(next)

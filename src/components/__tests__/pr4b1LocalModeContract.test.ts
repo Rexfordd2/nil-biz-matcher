@@ -23,6 +23,10 @@ describe('PR-4B1 local-mode component contracts', () => {
 			expect(src).toContain('mutationsDisabled')
 			expect(src).toContain('WorkflowImportGate')
 			expect(src).toContain('onKeepUsingDevice')
+			expect(src).toContain('toActiveAthleteId')
+			expect(src).toContain('toLocalAthleteStorageKey')
+			expect(src).not.toContain("athlete?.id || 'anonymous'")
+			expect(src).not.toContain('athlete?.id ?? \'anonymous\'')
 			expect(src).not.toContain('Continue with cloud')
 			expect(src).not.toContain('onContinueWithCloud')
 		}
@@ -42,12 +46,16 @@ describe('PR-4B1 local-mode component contracts', () => {
 		expect(gate).not.toMatch(/Force overwrite|Use cloud|Continue with cloud/i)
 	})
 
-	it('hook blocks mutations and preserves write order comments/contract', () => {
+	it('hook requires cloud-eligible athlete id and never treats anonymous as cloud ownership', () => {
 		const hook = fs.readFileSync(path.join(root, 'src/hooks/useWorkflowDomainPersistence.ts'), 'utf8')
 		expect(hook).toContain('areMutationsDisabled')
 		expect(hook).toContain('sessionStayLocal')
 		expect(hook).toContain('insertMissing')
+		expect(hook).toContain('isCloudEligibleAthleteId')
+		expect(hook).toContain('ActiveAthleteId')
 		expect(hook).toContain('Could not save to secure storage')
+		expect(hook).not.toContain("athleteId !== 'anonymous'")
+		expect(hook).not.toContain("athleteId === 'anonymous'")
 		// Cloud write must not save on failure
 		expect(hook).toMatch(/if \(!result\.ok\)[\s\S]{0,200}return false/)
 	})
