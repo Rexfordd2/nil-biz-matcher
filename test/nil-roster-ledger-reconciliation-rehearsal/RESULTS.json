@@ -1,0 +1,9 @@
+{
+    "proposedWithoutIncludeAll":  "REJECTED by CLI",
+    "failureResume":  "PASS",
+    "finalLedger":  "20241231,20250101,20251227,20260128,20260201,20260202,20260203,20260205,20260223,20260723,20260724",
+    "proposedWithIncludeAll":  "PASS",
+    "alt2":  "PASS",
+    "selected":  "reconcile-first + repair historical/20260724 + db push --include-all for 20260723",
+    "status":  "PASS"
+}
