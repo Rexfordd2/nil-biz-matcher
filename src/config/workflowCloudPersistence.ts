@@ -3,7 +3,7 @@
  *
  * Default absent → false. Only exact string "true" enables.
  * Also requires Supabase configuration. No query param or UI control.
- * PR-4A does not wire this into live components; reserved for PR-4B cutover.
+ * PR-4B1 wires live components behind this flag; production default remains false.
  */
 
 import { supabaseEnvConfigured } from '../lib/supabaseClient'

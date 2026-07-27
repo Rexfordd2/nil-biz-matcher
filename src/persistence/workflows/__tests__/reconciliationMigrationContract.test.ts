@@ -103,8 +103,12 @@ describe('production reconciliation migration static contract', () => {
 })
 
 describe('protected localStorage keys remain unchanged by reconciliation package', () => {
-	it('still references opps.store in OpportunityBoard', () => {
+	it('still references opps.store in OpportunityBoard adapters path', () => {
 		const board = fs.readFileSync(path.join(root, 'src/components/OpportunityBoard.tsx'), 'utf8')
-		expect(board).toContain("'opps.store'")
+		expect(board).toContain('opportunityWorkflowAdapters')
+		const adapters = fs.readFileSync(path.join(root, 'src/hooks/workflowDomainAdapters.ts'), 'utf8')
+		expect(adapters).toContain("'opps.store'")
+		expect(adapters).toContain("'deals.store'")
+		expect(adapters).toContain("'events.store'")
 	})
 })

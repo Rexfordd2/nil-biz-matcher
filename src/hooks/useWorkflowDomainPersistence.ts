@@ -1,0 +1,426 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { isWorkflowCloudPersistenceEnabled } from '../config/workflowCloudPersistence'
+import { useAuth } from '../context/AuthContext'
+import { load, save } from '../utils/storage'
+import type { LegacyImportPlannerOptions } from '../persistence/workflows/importPlanners'
+import type {
+	LegacyImportPlan,
+	RepoInsertMissingResult,
+	RepoListResult,
+	RepoWriteResult,
+} from '../persistence/workflows/types'
+import {
+	areMutationsDisabled,
+	decideWorkflowBootstrapMode,
+	isCloudWriteMode,
+	type WorkflowPersistenceMode,
+} from '../persistence/workflows/persistenceMode'
+
+export type AthleteKeyedStore<T> = Record<string, T[]>
+
+export type WorkflowDomainAdapters<T extends { id: string; athleteId: string }> = {
+	storageKey: 'opps.store' | 'deals.store' | 'events.store'
+	listForUser: (userId: string) => Promise<RepoListResult<T>>
+	upsertForUser: (userId: string, record: T) => Promise<RepoWriteResult>
+	deleteForUser: (userId: string, clientId: string) => Promise<RepoWriteResult>
+	insertMissing: (userId: string, records: T[]) => Promise<RepoInsertMissingResult>
+	planImport: (localRecords: unknown[], options: LegacyImportPlannerOptions) => LegacyImportPlan<T>
+}
+
+export type UseWorkflowDomainPersistenceResult<T extends { id: string; athleteId: string }> = {
+	mode: WorkflowPersistenceMode
+	store: AthleteKeyedStore<T>
+	importPlan: LegacyImportPlan<T> | null
+	busy: boolean
+	error: string | null
+	mutationsDisabled: boolean
+	pendingWrite: boolean
+	upsert: (record: T) => Promise<boolean>
+	remove: (id: string) => Promise<boolean>
+	confirmImport: () => Promise<void>
+	keepUsingDevice: () => void
+	retryBootstrap: () => void
+	cloudEnabled: boolean
+}
+
+function recordsToAthleteStore<T extends { id: string; athleteId: string }>(
+	records: T[]
+): AthleteKeyedStore<T> {
+	const next: AthleteKeyedStore<T> = {}
+	for (const record of records) {
+		const key = record.athleteId || 'anonymous'
+		if (!next[key]) next[key] = []
+		next[key].push(record)
+	}
+	return next
+}
+
+function mergeAthleteSlice<T extends { id: string }>(
+	prev: AthleteKeyedStore<T>,
+	athleteId: string,
+	records: T[]
+): AthleteKeyedStore<T> {
+	return { ...prev, [athleteId]: records }
+}
+
+function applyCloudMirror<T extends { id: string; athleteId: string }>(
+	prev: AthleteKeyedStore<T>,
+	cloudRecords: T[],
+	storageKey: WorkflowDomainAdapters<T>['storageKey']
+): AthleteKeyedStore<T> {
+	const cloudStore = recordsToAthleteStore(cloudRecords)
+	const merged: AthleteKeyedStore<T> = { ...prev }
+	for (const [key, list] of Object.entries(cloudStore)) {
+		merged[key] = list
+	}
+	save(storageKey, merged)
+	return merged
+}
+
+/**
+ * Dual-path persistence for one workflow domain.
+ * Flag off → identical localStorage behavior (no repository queries).
+ */
+export function useWorkflowDomainPersistence<T extends { id: string; athleteId: string }>(
+	athleteId: string,
+	adapters: WorkflowDomainAdapters<T>
+): UseWorkflowDomainPersistenceResult<T> {
+	const { user, initializing } = useAuth()
+	const cloudEnabled = isWorkflowCloudPersistenceEnabled()
+	const userId = user?.id ?? null
+
+	/** Session-only deferral — not persisted. Import prompt may return next session. */
+	const [sessionStayLocal, setSessionStayLocal] = useState(false)
+
+	const canAttemptCloud =
+		cloudEnabled &&
+		!sessionStayLocal &&
+		Boolean(userId) &&
+		Boolean(athleteId) &&
+		athleteId !== 'anonymous'
+
+	const [store, setStore] = useState<AthleteKeyedStore<T>>(() =>
+		load<AthleteKeyedStore<T>>(adapters.storageKey, {})
+	)
+	const [mode, setMode] = useState<WorkflowPersistenceMode>('local')
+	const [importPlan, setImportPlan] = useState<LegacyImportPlan<T> | null>(null)
+	const [busy, setBusy] = useState(false)
+	const [pendingWrite, setPendingWrite] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const [bootstrapNonce, setBootstrapNonce] = useState(0)
+	const cancelledRef = useRef(false)
+
+	const runBootstrap = useCallback(async () => {
+		if (!userId || !canAttemptCloud) return
+
+		setMode('checking')
+		setError(null)
+		setBusy(true)
+		setImportPlan(null)
+
+		try {
+			const localStore = load<AthleteKeyedStore<T>>(adapters.storageKey, {})
+			if (cancelledRef.current) return
+			setStore(localStore)
+
+			const listed = await adapters.listForUser(userId)
+			if (cancelledRef.current) return
+
+			if (!listed.ok) {
+				setMode('unavailable')
+				setImportPlan(null)
+				setError(null)
+				setBusy(false)
+				return
+			}
+
+			const localForAthlete = Array.isArray(localStore[athleteId])
+				? (localStore[athleteId] as T[])
+				: []
+			const cloudForAthlete = listed.records.filter((r) => r.athleteId === athleteId)
+			const plan = adapters.planImport(localForAthlete, {
+				activeAthleteId: athleteId,
+				existingCloudClientIds: cloudForAthlete.map((r) => r.id),
+				existingCloudByClientId: new Map(cloudForAthlete.map((r) => [r.id, r])),
+			})
+
+			if (cancelledRef.current) return
+			setImportPlan(plan)
+
+			const decision = decideWorkflowBootstrapMode(plan, {
+				cloudRejectedCount: listed.rejectedCount,
+			})
+
+			if (decision.mode === 'conflict') {
+				// Keep local visible working copy; do not replace with cloud.
+				setMode('conflict')
+				setBusy(false)
+				return
+			}
+
+			if (decision.mode === 'import_required') {
+				setMode('import_required')
+				setBusy(false)
+				return
+			}
+
+			// Cloud path: only mirror when every listed row decoded.
+			if (listed.rejectedCount > 0) {
+				setMode('conflict')
+				setBusy(false)
+				return
+			}
+
+			setStore((prev) => applyCloudMirror(prev, listed.records, adapters.storageKey))
+			setMode('cloud')
+			setImportPlan(null)
+			setBusy(false)
+		} catch {
+			if (cancelledRef.current) return
+			setMode('unavailable')
+			setImportPlan(null)
+			setError(null)
+			setBusy(false)
+		}
+	}, [adapters, athleteId, canAttemptCloud, userId])
+
+	useEffect(() => {
+		cancelledRef.current = false
+
+		if (!cloudEnabled || sessionStayLocal || !athleteId || athleteId === 'anonymous') {
+			setMode('local')
+			setImportPlan(null)
+			setError(null)
+			setBusy(false)
+			setStore(load<AthleteKeyedStore<T>>(adapters.storageKey, {}))
+			return () => {
+				cancelledRef.current = true
+			}
+		}
+
+		if (initializing) {
+			setMode('checking')
+			setBusy(true)
+			return () => {
+				cancelledRef.current = true
+			}
+		}
+
+		if (!userId) {
+			setMode('local')
+			setImportPlan(null)
+			setError(null)
+			setBusy(false)
+			setStore(load<AthleteKeyedStore<T>>(adapters.storageKey, {}))
+			return () => {
+				cancelledRef.current = true
+			}
+		}
+
+		void runBootstrap()
+
+		return () => {
+			cancelledRef.current = true
+		}
+	}, [
+		adapters.storageKey,
+		athleteId,
+		bootstrapNonce,
+		cloudEnabled,
+		initializing,
+		runBootstrap,
+		sessionStayLocal,
+		userId,
+	])
+
+	const confirmImport = useCallback(async () => {
+		if (!userId || mode !== 'import_required') return
+		setBusy(true)
+		setError(null)
+		try {
+			const localStore = load<AthleteKeyedStore<T>>(adapters.storageKey, {})
+			const localForAthlete = Array.isArray(localStore[athleteId])
+				? (localStore[athleteId] as T[])
+				: []
+
+			const listed = await adapters.listForUser(userId)
+			if (!listed.ok) {
+				setMode('unavailable')
+				return
+			}
+
+			const cloudForAthlete = listed.records.filter((r) => r.athleteId === athleteId)
+			const plan = adapters.planImport(localForAthlete, {
+				activeAthleteId: athleteId,
+				existingCloudClientIds: cloudForAthlete.map((r) => r.id),
+				existingCloudByClientId: new Map(cloudForAthlete.map((r) => [r.id, r])),
+			})
+			setImportPlan(plan)
+
+			const decision = decideWorkflowBootstrapMode(plan, {
+				cloudRejectedCount: listed.rejectedCount,
+			})
+			if (decision.mode !== 'import_required') {
+				setMode(decision.mode)
+				if (decision.mode === 'cloud' && listed.rejectedCount === 0) {
+					setStore((prev) => applyCloudMirror(prev, listed.records, adapters.storageKey))
+					setImportPlan(null)
+				}
+				return
+			}
+
+			const insertIds = new Set(plan.recordsToInsert.map((r) => r.id))
+			const result = await adapters.insertMissing(userId, plan.recordsToInsert)
+			if (!result.ok) {
+				setMode('unavailable')
+				return
+			}
+
+			const verified = await adapters.listForUser(userId)
+			if (!verified.ok) {
+				setMode('unavailable')
+				return
+			}
+			if (verified.rejectedCount > 0) {
+				setMode('conflict')
+				setImportPlan(plan)
+				return
+			}
+
+			const verifiedIds = new Set(verified.records.map((r) => r.id))
+			for (const id of insertIds) {
+				if (!verifiedIds.has(id)) {
+					setMode('unavailable')
+					return
+				}
+			}
+
+			setStore((prev) => applyCloudMirror(prev, verified.records, adapters.storageKey))
+			setMode('cloud')
+			setImportPlan(null)
+		} finally {
+			setBusy(false)
+		}
+	}, [adapters, athleteId, mode, userId])
+
+	const keepUsingDevice = useCallback(() => {
+		setSessionStayLocal(true)
+		setMode('local')
+		setImportPlan(null)
+		setError(null)
+		setBusy(false)
+		setStore(load<AthleteKeyedStore<T>>(adapters.storageKey, {}))
+	}, [adapters.storageKey])
+
+	const upsert = useCallback(
+		async (record: T): Promise<boolean> => {
+			if (areMutationsDisabled(mode)) return false
+			const key = record.athleteId || athleteId
+
+			if (isCloudWriteMode(mode)) {
+				if (!userId || pendingWrite) return false
+				setPendingWrite(true)
+				try {
+					const result = await adapters.upsertForUser(userId, record)
+					if (!result.ok) {
+						setError('Could not save to secure storage. Your previous records were left unchanged.')
+						return false
+					}
+					setStore((prev) => {
+						const list = prev[key] || []
+						const idx = list.findIndex((r) => r.id === record.id)
+						const updated =
+							idx === -1 ? [record, ...list] : list.map((r) => (r.id === record.id ? record : r))
+						const next = mergeAthleteSlice(prev, key, updated)
+						save(adapters.storageKey, next)
+						return next
+					})
+					setError(null)
+					return true
+				} finally {
+					setPendingWrite(false)
+				}
+			}
+
+			// Pure local mode
+			setStore((prev) => {
+				const list = prev[key] || []
+				const idx = list.findIndex((r) => r.id === record.id)
+				const updated = idx === -1 ? [record, ...list] : list.map((r) => (r.id === record.id ? record : r))
+				const next = mergeAthleteSlice(prev, key, updated)
+				save(adapters.storageKey, next)
+				return next
+			})
+			return true
+		},
+		[adapters, athleteId, mode, pendingWrite, userId]
+	)
+
+	const remove = useCallback(
+		async (id: string): Promise<boolean> => {
+			if (areMutationsDisabled(mode)) return false
+
+			if (isCloudWriteMode(mode)) {
+				if (!userId || pendingWrite) return false
+				setPendingWrite(true)
+				try {
+					const result = await adapters.deleteForUser(userId, id)
+					if (!result.ok) {
+						setError('Could not delete from secure storage. Your previous records were left unchanged.')
+						return false
+					}
+					setStore((prev) => {
+						const list = prev[athleteId] || []
+						const next = mergeAthleteSlice(
+							prev,
+							athleteId,
+							list.filter((r) => r.id !== id)
+						)
+						save(adapters.storageKey, next)
+						return next
+					})
+					setError(null)
+					return true
+				} finally {
+					setPendingWrite(false)
+				}
+			}
+
+			setStore((prev) => {
+				const list = prev[athleteId] || []
+				const next = mergeAthleteSlice(
+					prev,
+					athleteId,
+					list.filter((r) => r.id !== id)
+				)
+				save(adapters.storageKey, next)
+				return next
+			})
+			return true
+		},
+		[adapters, athleteId, mode, pendingWrite, userId]
+	)
+
+	const retryBootstrap = useCallback(() => {
+		setSessionStayLocal(false)
+		setBootstrapNonce((n) => n + 1)
+	}, [])
+
+	const mutationsDisabled = areMutationsDisabled(mode) || pendingWrite || busy
+
+	return {
+		mode,
+		store,
+		importPlan,
+		busy: busy || (canAttemptCloud && initializing),
+		error,
+		mutationsDisabled,
+		pendingWrite,
+		upsert,
+		remove,
+		confirmImport,
+		keepUsingDevice,
+		retryBootstrap,
+		cloudEnabled,
+	}
+}
