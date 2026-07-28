@@ -7,6 +7,7 @@ import type {
 	LegacyImportPlan,
 	RepoInsertMissingResult,
 	RepoListResult,
+	RepoUpsertResult,
 	RepoWriteResult,
 } from '../persistence/workflows/types'
 import {
@@ -27,7 +28,7 @@ export type AthleteKeyedStore<T> = Record<string, T[]>
 export type WorkflowDomainAdapters<T extends { id: string; athleteId: string }> = {
 	storageKey: 'opps.store' | 'deals.store' | 'events.store'
 	listForUser: (userId: string) => Promise<RepoListResult<T>>
-	upsertForUser: (userId: string, record: T) => Promise<RepoWriteResult>
+	upsertForUser: (userId: string, record: T) => Promise<RepoUpsertResult<T>>
 	deleteForUser: (userId: string, clientId: string) => Promise<RepoWriteResult>
 	insertMissing: (userId: string, records: T[]) => Promise<RepoInsertMissingResult>
 	planImport: (localRecords: unknown[], options: LegacyImportPlannerOptions) => LegacyImportPlan<T>
@@ -347,11 +348,13 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 						setError('Could not save to secure storage. Your previous records were left unchanged.')
 						return false
 					}
+					// Mirror the canonical encode→decode record so local equals future list/decode.
+					const mirrored = result.record
 					setStore((prev) => {
 						const list = prev[key] || []
-						const idx = list.findIndex((r) => r.id === record.id)
+						const idx = list.findIndex((r) => r.id === mirrored.id)
 						const updated =
-							idx === -1 ? [record, ...list] : list.map((r) => (r.id === record.id ? record : r))
+							idx === -1 ? [mirrored, ...list] : list.map((r) => (r.id === mirrored.id ? mirrored : r))
 						const next = mergeAthleteSlice(prev, key, updated)
 						save(adapters.storageKey, next)
 						return next

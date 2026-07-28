@@ -54,9 +54,23 @@ describe('PR-4B1 local-mode component contracts', () => {
 		expect(hook).toContain('isCloudEligibleAthleteId')
 		expect(hook).toContain('ActiveAthleteId')
 		expect(hook).toContain('Could not save to secure storage')
+		expect(hook).toContain('result.record')
 		expect(hook).not.toContain("athleteId !== 'anonymous'")
 		expect(hook).not.toContain("athleteId === 'anonymous'")
 		// Cloud write must not save on failure
 		expect(hook).toMatch(/if \(!result\.ok\)[\s\S]{0,200}return false/)
+	})
+
+	it('DealCompliance does not auto-write complianceNotes on mount', () => {
+		const src = fs.readFileSync(path.join(root, 'src/components/Deals.tsx'), 'utf8')
+		expect(src).toContain('function DealCompliance')
+		expect(src).not.toMatch(/useEffect\(\(\)\s*=>\s*\{[\s\S]*complianceNotes/)
+		expect(src).not.toContain("deal.licensing || { usesSchoolMarks: false, notes: '' }")
+		const fnStart = src.indexOf('function DealCompliance')
+		const body = src.slice(fnStart, fnStart + 2500)
+		expect(body).not.toContain('useEffect')
+		expect(body).toContain("value={deal.complianceNotes ?? ''}")
+		expect(body).toContain('complianceNotes: _removed')
+		expect(body).toContain('usesSchoolMarks: e.target.checked')
 	})
 })

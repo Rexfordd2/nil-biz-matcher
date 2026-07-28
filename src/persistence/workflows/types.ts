@@ -77,6 +77,14 @@ export type RepoWriteResult =
 	| { ok: true }
 	| { ok: false; error: WorkflowRepoError }
 
+/**
+ * Successful upsert returns the canonical domain record (encode → decode)
+ * so callers mirror exactly what a subsequent list/decode would produce.
+ */
+export type RepoUpsertResult<T> =
+	| { ok: true; record: T }
+	| { ok: false; error: WorkflowRepoError }
+
 export type RepoInsertMissingResult =
 	| { ok: true; inserted: number; skippedExisting: number; skippedInvalid: number }
 	| { ok: false; error: WorkflowRepoError }

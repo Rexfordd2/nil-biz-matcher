@@ -2,7 +2,7 @@ import type { DealLogEntry, EventPlan, Opportunity } from '../../types'
 import { dealClientId, decodeDeal, encodeDeal } from './dealCodec'
 import { decodeEvent, encodeEvent, eventClientId } from './eventCodec'
 import { decodeOpportunity, encodeOpportunity, opportunityClientId } from './opportunityCodec'
-import { isPlainObject } from './stableId'
+import { isPlainObject, workflowRecordsEqual } from './stableId'
 import type { LegacyImportPlan } from './types'
 
 export type LegacyImportPlannerOptions = {
@@ -81,10 +81,7 @@ function planDomainImport<T extends { athleteId: string; id: string }>(
 			const cloudRaw = cloudRecordFor(clientId, options.existingCloudByClientId)
 			if (cloudRaw !== undefined) {
 				const cloudNorm = helpers.tryNormalize(cloudRaw)
-				if (
-					cloudNorm.ok &&
-					JSON.stringify(cloudNorm.record) !== JSON.stringify(record)
-				) {
+				if (cloudNorm.ok && !workflowRecordsEqual(cloudNorm.record, record)) {
 					conflicts.push({ clientId, reason: 'content_mismatch' })
 					continue
 				}

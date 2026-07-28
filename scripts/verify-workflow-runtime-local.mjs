@@ -123,6 +123,22 @@ function stableOppFingerprint(record) {
 	})
 }
 
+/** Order-independent domain equality (mirrors src/persistence/workflows/stableId.ts). */
+function stableStringify(value) {
+	return JSON.stringify(value, (_key, v) => {
+		if (v && typeof v === 'object' && !Array.isArray(v)) {
+			const sorted = {}
+			for (const k of Object.keys(v).sort()) sorted[k] = v[k]
+			return sorted
+		}
+		return v
+	})
+}
+
+function workflowRecordsEqual(a, b) {
+	return stableStringify(a) === stableStringify(b)
+}
+
 /** Minimal planner mirroring committed conflict reasons. */
 function planLocalVsCloud(localRecords, cloudById, activeAthleteId) {
 	const recordsToInsert = []
@@ -149,7 +165,7 @@ function planLocalVsCloud(localRecords, cloudById, activeAthleteId) {
 		}
 		if (cloudById.has(raw.id)) {
 			const cloud = cloudById.get(raw.id)
-			if (stableOppFingerprint(cloud) !== stableOppFingerprint(raw)) {
+			if (!workflowRecordsEqual(cloud, raw)) {
 				conflicts.push({ clientId: raw.id, reason: 'content_mismatch' })
 			} else {
 				alreadyPresent.push(raw)
@@ -310,10 +326,13 @@ function createController(repo, storage) {
 			try {
 				const result = await repo.upsert(userId, record)
 				if (!result.ok) return false
-				const key = record.athleteId
+				// Prefer canonical encode→decode record when repository returns it.
+				const mirrored = result.record || record
+				const key = mirrored.athleteId
 				const list = store[key] || []
-				const idx = list.findIndex((r) => r.id === record.id)
-				const updated = idx === -1 ? [record, ...list] : list.map((r) => (r.id === record.id ? record : r))
+				const idx = list.findIndex((r) => r.id === mirrored.id)
+				const updated =
+					idx === -1 ? [mirrored, ...list] : list.map((r) => (r.id === mirrored.id ? mirrored : r))
 				store = { ...store, [key]: updated }
 				storage.set(store)
 				return true
@@ -413,8 +432,10 @@ function domainRepo(client, table, encodeRow, decodeRow) {
 		},
 		async upsert(userId, record) {
 			const row = encodeRow(userId, record)
+			const decoded = decodeRow(row)
+			if (!decoded) return { ok: false, error: 'decode_failure' }
 			const { error } = await client.from(table).upsert(row, { onConflict: 'user_id,client_id' })
-			return error ? { ok: false, error: 'write_failure' } : { ok: true }
+			return error ? { ok: false, error: 'write_failure' } : { ok: true, record: decoded }
 		},
 		async remove(userId, clientId) {
 			const { error } = await client.from(table).delete().eq('user_id', userId).eq('client_id', clientId)
@@ -526,12 +547,16 @@ async function testDomainCrudAndIsolation(label, repoA, repoB, userA, userB, sam
 	}
 	if (label === 'opportunities') {
 		assert(got.record.linkedDealId === sample.linkedDealId, 'linkedDealId lost')
+		assert(got.record.notes === sample.notes, 'notes lost')
+		assert(got.record.expectedStartDate === sample.expectedStartDate, 'start date lost')
+		assert(got.record.expectedEndDate === sample.expectedEndDate, 'end date lost')
 		assert(got.record.unknownNested?.keep === true, 'unknown field lost')
 	}
 	if (label === 'events') {
 		assert(Array.isArray(got.record.sponsors) && got.record.sponsors.length === 0, 'sponsors lost')
 		assert(got.record.linkedDealId === sample.linkedDealId, 'event linkedDealId lost')
-		assert(got.record.url === sample.url, 'event url lost')
+		assert(got.record.runOfShowUrl === sample.runOfShowUrl, 'event runOfShowUrl lost')
+		assert(got.record.url === sample.url, 'event url extension lost')
 	}
 
 	const updated = { ...sample, ...updateTitle }
@@ -613,6 +638,11 @@ async function main() {
 		category: 'other',
 		status: 'pitched',
 		linkedDealId: 'deal-pr4b1-1',
+		expectedStartDate: '2026-08-01',
+		expectedEndDate: '2026-09-01',
+		notes: 'opp notes keep',
+		description: 'desc',
+		targetBrandName: 'Brand',
 		unknownNested: { keep: true },
 	}
 	const sampleDeal = {
@@ -638,6 +668,9 @@ async function main() {
 		location: 'Gym',
 		linkedDealId: 'deal-pr4b1-1',
 		sponsors: [],
+		runOfShowUrl: 'https://example.invalid/run',
+		waiversUrl: 'https://example.invalid/waiver',
+		notes: 'event notes',
 		url: 'https://example.invalid/event',
 	}
 
@@ -788,6 +821,45 @@ async function main() {
 	assert(!(await cConf.upsert(a.userId, { ...equiv, title: 'x' })), 'conflict create blocked')
 	assert(!(await cConf.remove(a.userId, ATHLETE_A, equiv.id)), 'conflict delete blocked')
 	pass('content_conflict_mirror_frozen')
+
+	// Deal Preview regression: complianceNotes drift → conflict → restore mirror → Retry → delete
+	localPsql(`DELETE FROM public.deals WHERE user_id = '${a.userId}';`)
+	const dealCloud = {
+		id: 'deal-conflict-1',
+		athleteId: ATHLETE_A,
+		title: 'Deal Conflict',
+		dealType: 'other',
+		brandName: 'Brand',
+		status: 'idea',
+		reportedToSchool: false,
+		deliverables: [],
+		documents: [],
+		payments: [],
+		licensing: { usesSchoolMarks: false },
+	}
+	assert((await dealA.upsert(a.userId, dealCloud)).ok, 'deal conflict seed upsert')
+	const dealCanonical = (await dealA.get(a.userId, dealCloud.id)).record
+	assert(dealCanonical, 'deal canonical missing')
+	const dealStorage = memoryStorage({ [ATHLETE_A]: [dealCanonical] })
+	const cDealEq = createController(dealA, dealStorage)
+	assert((await cDealEq.bootstrap(a.userId, ATHLETE_A)) === 'cloud', 'deal equivalent cloud')
+	assert(!cDealEq.mutationsDisabled(), 'deal mutations unlocked')
+	// Harmless local-only complianceNotes invent (Preview DealCompliance mount bug shape)
+	dealStorage.set({
+		[ATHLETE_A]: [{ ...dealCanonical, complianceNotes: '' }],
+	})
+	const cDealConf = createController(dealA, dealStorage)
+	assert((await cDealConf.bootstrap(a.userId, ATHLETE_A)) === 'conflict', 'deal compliance drift conflict')
+	assert(cDealConf.mutationsDisabled(), 'deal conflict locked')
+	assert(!(await cDealConf.remove(a.userId, ATHLETE_A, dealCloud.id)), 'deal delete blocked in conflict')
+	// Restore exact original mirror without hard refresh, then Retry/Recheck (bootstrap rereads storage+cloud)
+	dealStorage.set({ [ATHLETE_A]: [dealCanonical] })
+	assert((await cDealConf.bootstrap(a.userId, ATHLETE_A)) === 'cloud', 'deal retry recovers cloud')
+	assert(!cDealConf.mutationsDisabled(), 'deal controls unlocked after retry')
+	assert(await cDealConf.remove(a.userId, ATHLETE_A, dealCloud.id), 'deal delete after recovery')
+	assert(!(dealStorage.get()[ATHLETE_A] || []).some((r) => r.id === dealCloud.id), 'deal mirror removed')
+	assert(!(await dealA.get(a.userId, dealCloud.id)).record, 'deal cloud removed')
+	pass('deal_conflict_retry_recover_delete')
 
 	// Duplicate local + malformed
 	storage.set({

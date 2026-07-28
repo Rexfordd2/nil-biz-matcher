@@ -267,7 +267,7 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 					) : (
 						<textarea
 							value={selected.notes || ''}
-							onChange={e => upsertLocal({ ...selected, notes: e.target.value })}
+							onChange={e => upsertLocal({ ...selected, notes: e.target.value || undefined })}
 							disabled={mutationsDisabled}
 							className="w-full bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[200px]"
 							placeholder="Freeform notes (meeting summaries, next steps)…"
@@ -287,16 +287,16 @@ function OpportunityEditor({ value, onChange, deals, disabled }: { value: Opport
 				<select value={value.category} onChange={e => onChange({ ...value, category: e.target.value as OpportunityCategory })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
 					{CATEGORIES.map(c => <option key={c} value={c}>{c.replaceAll('_',' ')}</option>)}
 				</select>
-				<input value={value.targetBrandName || ''} onChange={e => onChange({ ...value, targetBrandName: e.target.value })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Target brand (optional)" />
+				<input value={value.targetBrandName || ''} onChange={e => onChange({ ...value, targetBrandName: e.target.value || undefined })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Target brand (optional)" />
 				<select value={value.status} onChange={e => onChange({ ...value, status: e.target.value as OpportunityStatus })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
 					{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 				</select>
-				<input type="date" value={value.expectedStartDate || ''} onChange={e => onChange({ ...value, expectedStartDate: e.target.value })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
-				<input type="date" value={value.expectedEndDate || ''} onChange={e => onChange({ ...value, expectedEndDate: e.target.value })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
+				<input type="date" value={value.expectedStartDate || ''} onChange={e => onChange({ ...value, expectedStartDate: e.target.value || undefined })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
+				<input type="date" value={value.expectedEndDate || ''} onChange={e => onChange({ ...value, expectedEndDate: e.target.value || undefined })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
 			</div>
 			<textarea
 				value={value.description || ''}
-				onChange={e => onChange({ ...value, description: e.target.value })}
+				onChange={e => onChange({ ...value, description: e.target.value || undefined })}
 				disabled={disabled}
 				className="w-full bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[120px]"
 				placeholder="Description / pitch summary"

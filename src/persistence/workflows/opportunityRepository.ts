@@ -10,6 +10,7 @@ import type {
 	RepoGetResult,
 	RepoInsertMissingResult,
 	RepoListResult,
+	RepoUpsertResult,
 	RepoWriteResult,
 } from './types'
 
@@ -81,7 +82,7 @@ export async function getOpportunityByClientId(
 export async function upsertOpportunityForUser(
 	userId: string,
 	record: Opportunity
-): Promise<RepoWriteResult> {
+): Promise<RepoUpsertResult<Opportunity>> {
 	if (!requireUserId(userId)) return { ok: false, error: 'unauthorized' }
 	const client = getWorkflowClient()
 	if (!client) return { ok: false, error: 'unavailable' }
@@ -89,13 +90,16 @@ export async function upsertOpportunityForUser(
 	const encoded = encodeOpportunity(userId, record)
 	if (!encoded.ok) return { ok: false, error: 'decode_failure' }
 
+	const decoded = decodeOpportunity(encoded.value)
+	if (!decoded.ok) return { ok: false, error: 'decode_failure' }
+
 	const row = { ...encoded.value, user_id: userId }
 	const { error } = await client
 		.from('opportunities')
 		.upsert(row, { onConflict: 'user_id,client_id' })
 
 	if (error) return { ok: false, error: 'write_failure' }
-	return { ok: true }
+	return { ok: true, record: decoded.value }
 }
 
 export async function deleteOpportunityForUser(

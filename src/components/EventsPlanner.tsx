@@ -163,7 +163,7 @@ export default function EventsPlanner({ athlete }: Props) {
 					) : (
 						<Textarea
 							value={selected.notes || ''}
-							onChange={e => upsertLocal({ ...selected, notes: e.target.value })}
+							onChange={e => upsertLocal({ ...selected, notes: e.target.value || undefined })}
 							disabled={mutationsDisabled}
 							className="min-h-[200px]"
 							placeholder="Agenda, action items, logistics…"
@@ -185,19 +185,27 @@ function EventEditor({ value, onChange, deals, disabled }: { value: EventPlan; o
 				</Select>
 				<Input type="date" value={value.date} onChange={e => onChange({ ...value, date: e.target.value })} disabled={disabled} />
 				<Input value={value.location} onChange={e => onChange({ ...value, location: e.target.value })} disabled={disabled} placeholder="Location" />
-				<Input value={value.hostOrganization || ''} onChange={e => onChange({ ...value, hostOrganization: e.target.value })} disabled={disabled} placeholder="Host/organizer (optional)" />
+				<Input value={value.hostOrganization || ''} onChange={e => onChange({ ...value, hostOrganization: e.target.value || undefined })} disabled={disabled} placeholder="Host/organizer (optional)" />
 				<Input type="number" min={0} value={value.expectedAttendees ?? ''} onChange={e => onChange({ ...value, expectedAttendees: e.target.value === '' ? undefined : Number(e.target.value) })} disabled={disabled} placeholder="Expected attendees (optional)" />
 			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<Input value={(value.sponsors || []).join(', ')} onChange={e => onChange({ ...value, sponsors: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} disabled={disabled} placeholder="Sponsor names (comma-separated)" />
+				<Input
+					value={(value.sponsors || []).join(', ')}
+					onChange={e => {
+						const sponsors = e.target.value.split(',').map(x => x.trim()).filter(Boolean)
+						onChange({ ...value, sponsors: sponsors.length ? sponsors : undefined })
+					}}
+					disabled={disabled}
+					placeholder="Sponsor names (comma-separated)"
+				/>
 				<Select value={value.linkedDealId || ''} onChange={e => onChange({ ...value, linkedDealId: (e.target.value || undefined) })} disabled={disabled}>
 					<option value="">Link to a Deal (optional)</option>
 					{deals.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
 				</Select>
 			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<Input value={value.runOfShowUrl || ''} onChange={e => onChange({ ...value, runOfShowUrl: e.target.value })} disabled={disabled} placeholder="Run-of-show doc URL (optional)" />
-				<Input value={value.waiversUrl || ''} onChange={e => onChange({ ...value, waiversUrl: e.target.value })} disabled={disabled} placeholder="Waivers doc URL (optional)" />
+				<Input value={value.runOfShowUrl || ''} onChange={e => onChange({ ...value, runOfShowUrl: e.target.value || undefined })} disabled={disabled} placeholder="Run-of-show doc URL (optional)" />
+				<Input value={value.waiversUrl || ''} onChange={e => onChange({ ...value, waiversUrl: e.target.value || undefined })} disabled={disabled} placeholder="Waivers doc URL (optional)" />
 			</div>
 		</div>
 	)

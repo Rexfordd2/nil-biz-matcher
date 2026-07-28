@@ -109,11 +109,39 @@ describe('workflow repositories', () => {
 		const { upsertOpportunityForUser } = await import('../opportunityRepository')
 		const result = await upsertOpportunityForUser('user-1', sampleOpp)
 		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.record).toEqual(sampleOpp)
 		expect(chain.upsert).toHaveBeenCalled()
 		const [row, opts] = chain.upsert.mock.calls[0]
 		expect(row.user_id).toBe('user-1')
 		expect(row.client_id).toBe('opp-1')
 		expect(opts).toEqual({ onConflict: 'user_id,client_id' })
+	})
+
+	it('upsert returns canonical encode→decode record for mirror safety', async () => {
+		const chain = createChain({ data: null, error: null })
+		fromMock.mockReturnValue(chain)
+		const { upsertDealForUser } = await import('../dealRepository')
+		const input: DealLogEntry = {
+			...sampleDeal,
+			valueEstimate: 0,
+			reportedToSchool: false,
+			reportedToCollective: false,
+			deliverables: [],
+			payments: [],
+			documents: [],
+			licensing: { usesSchoolMarks: false },
+		}
+		const result = await upsertDealForUser('user-1', input)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.record.valueEstimate).toBe(0)
+		expect(result.record.reportedToSchool).toBe(false)
+		expect(result.record.reportedToCollective).toBe(false)
+		expect(result.record.deliverables).toEqual([])
+		expect(result.record.payments).toEqual([])
+		expect(result.record.documents).toEqual([])
+		expect(result.record.licensing).toEqual({ usesSchoolMarks: false })
 	})
 
 	it('delete filters both user_id and client_id', async () => {

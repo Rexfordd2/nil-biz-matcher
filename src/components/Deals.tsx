@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
-import { AthleteProfile, Business, DealLogEntry, DealStatus, DealType, PaymentRecord } from '../types'
+import { AthleteProfile, Business, DealLogEntry, DealStatus, DealType, LicensingUsage, PaymentRecord } from '../types'
 import { useWorkflowDomainPersistence } from '../hooks/useWorkflowDomainPersistence'
 import { dealWorkflowAdapters } from '../hooks/workflowDomainAdapters'
 import {
@@ -299,11 +299,11 @@ function DealEditor({ deal, onChange, businesses, onUpdateBusiness, disabled }: 
 				</select>
 				<div className="grid grid-cols-2 gap-2">
 					<input type="number" min={0} value={deal.valueEstimate ?? ''} onChange={e => onChange({ ...deal, valueEstimate: e.target.value === '' ? undefined : Number(e.target.value) })} className="ui-input" placeholder="Value estimate" />
-					<input value={deal.currency || 'USD'} onChange={e => onChange({ ...deal, currency: e.target.value })} className="ui-input" placeholder="Currency (e.g., USD)" />
+					<input value={deal.currency || 'USD'} onChange={e => onChange({ ...deal, currency: e.target.value || undefined })} className="ui-input" placeholder="Currency (e.g., USD)" />
 				</div>
 				<div className="grid grid-cols-2 gap-2">
-					<input type="date" value={deal.startDate || ''} onChange={e => onChange({ ...deal, startDate: e.target.value })} className="ui-input" />
-					<input type="date" value={deal.endDate || ''} onChange={e => onChange({ ...deal, endDate: e.target.value })} className="ui-input" />
+					<input type="date" value={deal.startDate || ''} onChange={e => onChange({ ...deal, startDate: e.target.value || undefined })} className="ui-input" />
+					<input type="date" value={deal.endDate || ''} onChange={e => onChange({ ...deal, endDate: e.target.value || undefined })} className="ui-input" />
 				</div>
 				<select value={deal.businessId || ''} onChange={e => onChange({ ...deal, businessId: e.target.value || undefined })} className="ui-input">
 					<option value="">Link business (optional)</option>
@@ -321,7 +321,7 @@ function DealEditor({ deal, onChange, businesses, onUpdateBusiness, disabled }: 
 						</select>
 					</div>
 				)}
-				<input value={deal.exclusivityNotes || ''} onChange={e => onChange({ ...deal, exclusivityNotes: e.target.value })} className="ui-input" placeholder="Exclusivity notes (if any)" />
+				<input value={deal.exclusivityNotes || ''} onChange={e => onChange({ ...deal, exclusivityNotes: e.target.value || undefined })} className="ui-input" placeholder="Exclusivity notes (if any)" />
 			</div>
 
 			<div>
@@ -390,24 +390,36 @@ function DealEditor({ deal, onChange, businesses, onUpdateBusiness, disabled }: 
 }
 
 function DealCompliance({ deal, onChange, disabled }: { deal: DealLogEntry; onChange: (d: DealLogEntry) => void; disabled?: boolean }) {
-	const licensing = deal.licensing || { usesSchoolMarks: false, notes: '' }
-	const [notes, setNotes] = useState(deal.complianceNotes || '')
-	useEffect(() => {
-		if (disabled) return
-		onChange({ ...deal, complianceNotes: notes })
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [notes])
+	const licensing = deal.licensing
 	return (
 		<div className="space-y-4">
 			<div className="bg-white border border-black/10 rounded-md p-3">
 				<div className="text-black font-semibold mb-2">Licensing</div>
 				<label className="inline-flex items-center gap-2 text-sm text-black/70">
-					<input type="checkbox" checked={!!licensing.usesSchoolMarks} disabled={disabled} onChange={e => onChange({ ...deal, licensing: { ...licensing, usesSchoolMarks: e.target.checked } })} />
+					<input
+						type="checkbox"
+						checked={!!licensing?.usesSchoolMarks}
+						disabled={disabled}
+						onChange={e => {
+							const nextLicensing: LicensingUsage = {
+								usesSchoolMarks: e.target.checked,
+							}
+							if (licensing?.notes !== undefined) nextLicensing.notes = licensing.notes
+							onChange({ ...deal, licensing: nextLicensing })
+						}}
+					/>
 					<span>Uses school marks (logos, uniforms, facilities)?</span>
 				</label>
 				<textarea
-					value={licensing.notes || ''}
-					onChange={e => onChange({ ...deal, licensing: { ...licensing, notes: e.target.value } })}
+					value={licensing?.notes ?? ''}
+					onChange={e => {
+						const notes = e.target.value
+						const nextLicensing: LicensingUsage = {
+							usesSchoolMarks: Boolean(licensing?.usesSchoolMarks),
+						}
+						if (notes !== '') nextLicensing.notes = notes
+						onChange({ ...deal, licensing: nextLicensing })
+					}}
 					disabled={disabled}
 					className="w-full ui-input mt-2"
 					placeholder="Notes about permissions or usage"
@@ -428,8 +440,16 @@ function DealCompliance({ deal, onChange, disabled }: { deal: DealLogEntry; onCh
 			<div className="bg-white border border-black/10 rounded-md p-3">
 				<div className="text-black font-semibold mb-2">Compliance Notes</div>
 				<textarea
-					value={notes}
-					onChange={e => setNotes(e.target.value)}
+					value={deal.complianceNotes ?? ''}
+					onChange={e => {
+						const value = e.target.value
+						if (value === '') {
+							const { complianceNotes: _removed, ...rest } = deal
+							onChange(rest as DealLogEntry)
+						} else {
+							onChange({ ...deal, complianceNotes: value })
+						}
+					}}
 					disabled={disabled}
 					className="w-full ui-input"
 					placeholder="Any compliance considerations, limits, or approvals"

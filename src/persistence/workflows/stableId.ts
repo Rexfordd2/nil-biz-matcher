@@ -67,3 +67,25 @@ export function optionalStringArray(value: unknown): string[] | undefined {
 	if (!Array.isArray(value)) return undefined
 	return value.map((v) => (typeof v === 'string' ? v : String(v)))
 }
+
+/**
+ * Order-independent JSON serialization for equality checks.
+ * Distinguishes undefined (key absent) from null/false/0/""/[].
+ */
+export function stableStringify(value: unknown): string {
+	return JSON.stringify(value, (_key, v) => {
+		if (v && typeof v === 'object' && !Array.isArray(v)) {
+			const sorted: Record<string, unknown> = {}
+			for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+				sorted[k] = (v as Record<string, unknown>)[k]
+			}
+			return sorted
+		}
+		return v
+	})
+}
+
+/** True when two domain records are semantically equal after key-order normalization. */
+export function workflowRecordsEqual(a: unknown, b: unknown): boolean {
+	return stableStringify(a) === stableStringify(b)
+}
