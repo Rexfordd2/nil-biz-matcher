@@ -3,6 +3,7 @@ import { useReactToPrint } from 'react-to-print'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import { AthleteProfile } from '../types'
+import { getPublicAvailabilityLabels } from '../lib/publicProfilePrivacy'
 
 export default function PublicProfile({ athlete }: { athlete: AthleteProfile | null }) {
 	const a = athlete
@@ -17,11 +18,22 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 		return a.sports.map(s => `${s.sportName}${s.positions?.length ? ' — ' + s.positions.join('/') : ''}`).join(' • ')
 	}, [a.sports])
 	const exportedOn = useMemo(() => new Date().toLocaleDateString(), [])
+	const availabilityLabels = useMemo(() => getPublicAvailabilityLabels(a), [a])
 
 	const handlePrint = useReactToPrint({
 		contentRef: profilePrintRef,
 		documentTitle: `${a.name} - Athlete Profile`
 	})
+
+	const hasAcademicPublic =
+		Boolean(a.academicProfile?.schoolName || a.academicProfile?.level) ||
+		(a.academicProfile?.academicInterests || []).length > 0 ||
+		availabilityLabels.length > 0 ||
+		Boolean(a.internationalFlag)
+
+	const hasNilPublic =
+		Boolean(a.nil?.schoolNILPolicyUrl) ||
+		Boolean(a.nil?.associatedCollective?.name)
 
 	return (
 		<>
@@ -30,7 +42,7 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 				<span className="text-sm text-slate-600">Opens print dialog. Choose ‘Save as PDF’ to download.</span>
 			</div>
 
-			<div ref={profilePrintRef}>
+			<div ref={profilePrintRef} data-testid="public-profile">
 				{/* Print-only header */}
 				<div className="hidden print:block mb-4 text-black">
 					<div className="text-2xl font-semibold">{a.name}</div>
@@ -135,45 +147,18 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 				)}
 			</Card>
 
-			<Card title="Contacts & Decision Circle">
-				{(!(a.supportTeam && a.supportTeam.length) && !(a.trustedCircle && a.trustedCircle.length)) ? (
-					<div className="subtle text-sm">No support contacts listed yet.</div>
-				) : (
-					<div className="space-y-3 text-sm text-slate-700 leading-relaxed">
-						{(a.supportTeam || []).length > 0 && (
-							<div>
-								<div className="text-slate-900 font-semibold">Support Team</div>
-								<ul className="list-disc list-inside leading-relaxed">
-									{(a.supportTeam || []).map((s, i) => (
-										<li key={`sup-${i}`}>{s.role.replaceAll('_',' ')} — {s.name}{s.organization ? ` (${s.organization})` : ''}</li>
-									))}
-								</ul>
-							</div>
-						)}
-						{(a.trustedCircle || []).length > 0 && (
-							<div>
-								<div className="text-slate-900 font-semibold">Decision Circle</div>
-								<ul className="list-disc list-inside leading-relaxed">
-									{(a.trustedCircle || []).map((t, i) => (
-										<li key={`tc-${i}`}>{t.role.replaceAll('_',' ')} — {t.name}{t.relationship ? ` (${t.relationship})` : ''}</li>
-									))}
-								</ul>
-							</div>
-						)}
-					</div>
-				)}
-			</Card>
+			{/* Contacts, guardians, and private circle are intentionally omitted from the public/printable surface. */}
 
 			<Card title="Academics & Availability">
-				{!a.academicProfile && !a.availability && !a.internationalFlag ? (
+				{!hasAcademicPublic ? (
 					<div className="subtle text-sm">No academic or availability details yet.</div>
 				) : (
 					<div className="space-y-3 text-sm text-slate-700 leading-relaxed">
-						{a.academicProfile && (
+						{a.academicProfile && (a.academicProfile.schoolName || a.academicProfile.level || (a.academicProfile.academicInterests || []).length > 0) && (
 							<div>
 								<div className="text-slate-900 font-semibold">Academics</div>
 								<div className="text-black">
-									{[a.academicProfile.schoolName, a.academicProfile.level, a.academicProfile.gpaRange && `GPA: ${a.academicProfile.gpaRange.replaceAll('_','.')}`]
+									{[a.academicProfile.schoolName, a.academicProfile.level]
 										.filter(Boolean).join(' • ')}
 								</div>
 								{(a.academicProfile.academicInterests || []).length > 0 && (
@@ -181,12 +166,12 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 								)}
 							</div>
 						)}
-						{(a.availability || []).length > 0 && (
+						{availabilityLabels.length > 0 && (
 							<div>
 								<div className="text-slate-900 font-semibold">Availability</div>
 								<ul className="list-disc list-inside text-black leading-relaxed">
-									{(a.availability || []).map((w, i) => (
-										<li key={`av-${i}`}>{[w.label, (w.days || []).join('/'), w.timeRange].filter(Boolean).join(' — ')}</li>
+									{availabilityLabels.map((label, i) => (
+										<li key={`av-${i}`}>{label}</li>
 									))}
 								</ul>
 							</div>
@@ -197,23 +182,17 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 			</Card>
 
 			<Card title="Compliance & NIL">
-				{!a.nil ? (
-					<div className="subtle text-sm">No NIL compliance info yet.</div>
+				{!hasNilPublic ? (
+					<div className="subtle text-sm">No public NIL policy links yet.</div>
 				) : (
 					<div className="space-y-2 text-sm text-slate-700 leading-relaxed">
-						{a.nil?.complianceContactEmail && <div>Compliance: <span className="text-black">{a.nil.complianceContactEmail}</span></div>}
 						{a.nil?.schoolNILPolicyUrl && (
 							<div>Policy: <a href={a.nil.schoolNILPolicyUrl} target="_blank" rel="noreferrer" className="underline">View school NIL policy</a></div>
 						)}
-						{a.nil?.associatedCollective && (
+						{a.nil?.associatedCollective?.name && (
 							<div>
 								<div className="text-slate-900 font-semibold">Collective</div>
-								<div className="text-black">
-									{a.nil.associatedCollective.name}
-									{a.nil.associatedCollective.contactName ? ` — ${a.nil.associatedCollective.contactName}` : ''}
-									{a.nil.associatedCollective.contactEmail ? ` (${a.nil.associatedCollective.contactEmail})` : ''}
-								</div>
-								{a.nil.associatedCollective.notes && <div className="text-slate-600">{a.nil.associatedCollective.notes}</div>}
+								<div className="text-black">{a.nil.associatedCollective.name}</div>
 							</div>
 						)}
 					</div>
@@ -304,6 +283,3 @@ export default function PublicProfile({ athlete }: { athlete: AthleteProfile | n
 		</>
 	)
 }
-
-
-

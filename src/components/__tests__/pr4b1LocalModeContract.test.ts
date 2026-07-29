@@ -1,0 +1,76 @@
+import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+
+/**
+ * Flag-false / local-mode regression: components still use adapters keyed to legacy stores
+ * and do not hard-require cloud UI when the gate returns null for mode=local.
+ */
+describe('PR-4B1 local-mode component contracts', () => {
+	const files = [
+		'src/components/OpportunityBoard.tsx',
+		'src/components/Deals.tsx',
+		'src/components/EventsPlanner.tsx',
+	]
+
+	it('all three domains still wire workflow adapters and mutation gates', () => {
+		for (const rel of files) {
+			const src = fs.readFileSync(path.join(root, rel), 'utf8')
+			expect(src).toContain('useWorkflowDomainPersistence')
+			expect(src).toContain('mutationsDisabled')
+			expect(src).toContain('WorkflowImportGate')
+			expect(src).toContain('onKeepUsingDevice')
+			expect(src).toContain('toActiveAthleteId')
+			expect(src).toContain('toLocalAthleteStorageKey')
+			expect(src).not.toContain("athlete?.id || 'anonymous'")
+			expect(src).not.toContain('athlete?.id ?? \'anonymous\'')
+			expect(src).not.toContain('Continue with cloud')
+			expect(src).not.toContain('onContinueWithCloud')
+		}
+	})
+
+	it('gate has no force-overwrite / use-cloud actions', () => {
+		const gate = fs.readFileSync(
+			path.join(root, 'src/components/workflows/WorkflowImportGate.tsx'),
+			'utf8'
+		)
+		expect(gate).toContain('Records need review')
+		expect(gate).toContain('Cloud saving is temporarily unavailable')
+		expect(gate).toContain('Save your existing records to NIL Roster')
+		expect(gate).toContain('Keep using this device for now')
+		expect(gate).toContain('Saved to NIL Roster')
+		expect(gate).toContain('Checking secure storage')
+		expect(gate).not.toMatch(/Force overwrite|Use cloud|Continue with cloud/i)
+	})
+
+	it('hook requires cloud-eligible athlete id and never treats anonymous as cloud ownership', () => {
+		const hook = fs.readFileSync(path.join(root, 'src/hooks/useWorkflowDomainPersistence.ts'), 'utf8')
+		expect(hook).toContain('areMutationsDisabled')
+		expect(hook).toContain('sessionStayLocal')
+		expect(hook).toContain('insertMissing')
+		expect(hook).toContain('isCloudEligibleAthleteId')
+		expect(hook).toContain('ActiveAthleteId')
+		expect(hook).toContain('Could not save to secure storage')
+		expect(hook).toContain('result.record')
+		expect(hook).not.toContain("athleteId !== 'anonymous'")
+		expect(hook).not.toContain("athleteId === 'anonymous'")
+		// Cloud write must not save on failure
+		expect(hook).toMatch(/if \(!result\.ok\)[\s\S]{0,200}return false/)
+	})
+
+	it('DealCompliance does not auto-write complianceNotes on mount', () => {
+		const src = fs.readFileSync(path.join(root, 'src/components/Deals.tsx'), 'utf8')
+		expect(src).toContain('function DealCompliance')
+		expect(src).not.toMatch(/useEffect\(\(\)\s*=>\s*\{[\s\S]*complianceNotes/)
+		expect(src).not.toContain("deal.licensing || { usesSchoolMarks: false, notes: '' }")
+		const fnStart = src.indexOf('function DealCompliance')
+		const body = src.slice(fnStart, fnStart + 2500)
+		expect(body).not.toContain('useEffect')
+		expect(body).toContain("value={deal.complianceNotes ?? ''}")
+		expect(body).toContain('complianceNotes: _removed')
+		expect(body).toContain('usesSchoolMarks: e.target.checked')
+	})
+})

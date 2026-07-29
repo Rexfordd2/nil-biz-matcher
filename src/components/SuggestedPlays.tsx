@@ -11,7 +11,7 @@ export default function SuggestedPlays({ athlete, marketingConsent }: { athlete:
 
 	return (
 		<Card title="Suggested Plays for You">
-			<div className="text-gray-400 text-sm mb-4">Based on your Athlete Ledger profile.</div>
+			<div className="text-gray-400 text-sm mb-4">Based on your NIL Roster profile.</div>
 			{suggestions.length === 0 ? (
 				<div className="subtle">Complete more of your profile to see tailored NIL and recruiting ideas.</div>
 			) : (

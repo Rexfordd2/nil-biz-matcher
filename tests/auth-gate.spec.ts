@@ -31,7 +31,7 @@ test.describe('Auth Gate', () => {
 		await expect(page.getByTestId('auth-gate-back-home')).toBeVisible()
 		
 		// Should show welcome message
-		await expect(page.getByText('Welcome to Athlete Ledger')).toBeVisible()
+		await expect(page.getByText('Welcome to NIL Roster')).toBeVisible()
 	})
 
 	test('Auth Gate Login button navigates to login page', async ({ page }) => {
@@ -125,7 +125,7 @@ test.describe('Auth Gate', () => {
 		
 		// Should show Auth Gate (as if logged out)
 		await expect(page.getByTestId('auth-gate-login')).toBeVisible()
-		await expect(page.getByText('Welcome to Athlete Ledger')).toBeVisible()
+		await expect(page.getByText('Welcome to NIL Roster')).toBeVisible()
 		
 		// No dead end - all navigation options are available
 		await expect(page.getByTestId('auth-gate-back-home')).toBeVisible()

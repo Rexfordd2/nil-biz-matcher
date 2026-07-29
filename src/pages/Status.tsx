@@ -137,8 +137,11 @@ export default function Status() {
 
 			<section>
 				<p className="text-sm text-gray-300">
-					Need help? Contact support at{' '}
-					<a className="underline" href="mailto:support@athlete-ledger.com">support@athlete-ledger.com</a>.
+					Need help?{' '}
+					<a className="underline" href="https://athletehouze.com" target="_blank" rel="noreferrer">
+						Contact Athlete Houze
+					</a>
+					.
 				</p>
 			</section>
 		</div>

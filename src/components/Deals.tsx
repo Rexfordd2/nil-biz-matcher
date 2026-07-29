@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
-import { AthleteProfile, Business, DealLogEntry, DealStatus, DealType, PaymentRecord } from '../types'
-import { load, save } from '../utils/storage'
+import { AthleteProfile, Business, DealLogEntry, DealStatus, DealType, LicensingUsage, PaymentRecord } from '../types'
+import { useWorkflowDomainPersistence } from '../hooks/useWorkflowDomainPersistence'
+import { dealWorkflowAdapters } from '../hooks/workflowDomainAdapters'
+import {
+	toActiveAthleteId,
+	toLocalAthleteStorageKey,
+} from '../persistence/workflows/athleteIdentity'
+import WorkflowImportGate from './workflows/WorkflowImportGate'
 
 const businessStatusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Discussion', 'Partnered']
 
@@ -11,8 +17,6 @@ type Props = {
 	businesses: Business[]
 	onUpdateBusiness?: (b: Business) => void
 }
-
-type DealStore = Record<string, DealLogEntry[]> // key: athleteId
 
 const STATUSES: DealStatus[] = ['idea','pitched','in_discussion','agreed','completed','dropped']
 const TYPES: DealType[] = ['brand_sponsorship','appearance','camp_clinic','digital_product','merch_ecommerce','charity_event','other']
@@ -51,50 +55,51 @@ function computeRiskFlags(deal: DealLogEntry): string[] {
 }
 
 export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) {
-	const athleteId = athlete?.id || 'anonymous'
-	const [store, setStore] = useState<DealStore>(() => load<DealStore>('deals.store', {}))
+	const activeAthleteId = toActiveAthleteId(athlete?.id)
+	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
+	const {
+		mode,
+		store,
+		importPlan,
+		busy,
+		error,
+		mutationsDisabled,
+		upsert,
+		remove,
+		confirmImport,
+		keepUsingDevice,
+		retryBootstrap,
+	} = useWorkflowDomainPersistence(activeAthleteId, dealWorkflowAdapters)
 	const [filterStatus, setFilterStatus] = useState<DealStatus | 'all'>('all')
 	const [filterType, setFilterType] = useState<DealType | 'all'>('all')
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 
-	useEffect(() => {
-		save('deals.store', store)
-	}, [store])
-
 	const dealsForAthlete = useMemo(() => {
-		const list = store[athleteId] || []
+		const list = store[localAthleteKey] || []
 		return list
 			.filter(d => (filterStatus === 'all' ? true : d.status === filterStatus))
 			.filter(d => (filterType === 'all' ? true : d.dealType === filterType))
 			.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || '') || b.id.localeCompare(a.id))
-	}, [store, athleteId, filterStatus, filterType])
+	}, [store, localAthleteKey, filterStatus, filterType])
 
 	const selectedDeal = useMemo(() => {
 		if (!selectedId) return null
-		return (store[athleteId] || []).find(d => d.id === selectedId) || null
-	}, [store, athleteId, selectedId])
+		return (store[localAthleteKey] || []).find(d => d.id === selectedId) || null
+	}, [store, localAthleteKey, selectedId])
 
 	function upsertDeal(next: DealLogEntry) {
-		setStore(prev => {
-			const list = prev[athleteId] || []
-			const idx = list.findIndex(d => d.id === next.id)
-			const updated = idx === -1 ? [next, ...list] : list.map(d => (d.id === next.id ? next : d))
-			return { ...prev, [athleteId]: updated }
-		})
+		void upsert(next)
 	}
 
 	function removeDeal(id: string) {
-		setStore(prev => {
-			const list = prev[athleteId] || []
-			return { ...prev, [athleteId]: list.filter(d => d.id !== id) }
-		})
+		void remove(id)
 		if (selectedId === id) setSelectedId(null)
 	}
 
 	function addNewDeal() {
 		if (!athlete) return
 		const d = createEmptyDeal(athlete.id)
-		upsertDeal(d)
+		void upsert(d)
 		setSelectedId(d.id)
 	}
 
@@ -135,6 +140,18 @@ export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) 
 
 	return (
 		<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+			<div className="lg:col-span-3">
+				<WorkflowImportGate
+					domainLabel="Deals"
+					mode={mode}
+					plan={importPlan}
+					busy={busy}
+					error={error}
+					onConfirmImport={() => void confirmImport()}
+					onKeepUsingDevice={keepUsingDevice}
+					onRetry={retryBootstrap}
+				/>
+			</div>
 			<Card title="NIL Deals">
 				<div className="space-y-3">
 					<div className="flex items-center gap-2">
@@ -147,7 +164,7 @@ export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) 
 							{TYPES.map(t => <option key={t} value={t}>{t.replaceAll('_',' ')}</option>)}
 						</select>
 						<div className="flex-1" />
-						<Button onClick={addNewDeal}>Add Deal</Button>
+						<Button onClick={addNewDeal} disabled={mutationsDisabled}>Add Deal</Button>
 					</div>
 
 					<div className="overflow-x-auto">
@@ -174,7 +191,7 @@ export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) 
 											<td className="px-3 py-2 text-black">{d.brandName || '—'}</td>
 											<td className="px-3 py-2 text-black/80">{d.dealType.replaceAll('_',' ')}</td>
 											<td className="px-3 py-2">
-												<select value={d.status} onChange={e => upsertDeal({ ...d, status: e.target.value as DealStatus })} className="ui-input text-xs max-w-[160px]">
+												<select value={d.status} onChange={e => upsertDeal({ ...d, status: e.target.value as DealStatus })} disabled={mutationsDisabled} className="ui-input text-xs max-w-[160px]">
 													{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 												</select>
 											</td>
@@ -187,7 +204,7 @@ export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) 
 												</div>
 											</td>
 											<td className="px-3 py-2 text-right">
-												<Button variant="ghost" onClick={() => removeDeal(d.id)}>Remove</Button>
+												<Button variant="ghost" onClick={() => removeDeal(d.id)} disabled={mutationsDisabled}>Remove</Button>
 											</td>
 										</tr>
 									)
@@ -212,6 +229,7 @@ export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) 
 						onChange={upsertDeal}
 						businesses={businesses}
 						onUpdateBusiness={onUpdateBusiness}
+						disabled={mutationsDisabled}
 					/>
 				)}
 			</Card>
@@ -220,14 +238,14 @@ export default function Deals({ athlete, businesses, onUpdateBusiness }: Props) 
 				{!selectedDeal ? (
 					<div className="text-gray-400">Risk flags and compliance will appear here.</div>
 				) : (
-					<DealCompliance deal={selectedDeal} onChange={upsertDeal} />
+					<DealCompliance deal={selectedDeal} onChange={upsertDeal} disabled={mutationsDisabled} />
 				)}
 			</Card>
 		</div>
 	)
 }
 
-function DealEditor({ deal, onChange, businesses, onUpdateBusiness }: { deal: DealLogEntry; onChange: (d: DealLogEntry) => void; businesses: Business[]; onUpdateBusiness?: (b: Business) => void }) {
+function DealEditor({ deal, onChange, businesses, onUpdateBusiness, disabled }: { deal: DealLogEntry; onChange: (d: DealLogEntry) => void; businesses: Business[]; onUpdateBusiness?: (b: Business) => void; disabled?: boolean }) {
 	const [docUrl, setDocUrl] = useState('')
 	const bizOptions = useMemo(() => businesses.map(b => ({ id: b.id, label: b.name })), [businesses])
 	const linkedBusiness = useMemo(() => deal.businessId ? businesses.find(b => b.id === deal.businessId) ?? null : null, [deal.businessId, businesses])
@@ -271,21 +289,21 @@ function DealEditor({ deal, onChange, businesses, onUpdateBusiness }: { deal: De
 				</div>
 			)}
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<input value={deal.title} onChange={e => onChange({ ...deal, title: e.target.value })} className="ui-input" placeholder="Deal title" />
-				<input value={deal.brandName} onChange={e => onChange({ ...deal, brandName: e.target.value })} className="ui-input" placeholder="Brand name" />
-				<select value={deal.dealType} onChange={e => onChange({ ...deal, dealType: e.target.value as DealType })} className="ui-input">
+				<input value={deal.title} onChange={e => onChange({ ...deal, title: e.target.value })} disabled={disabled} className="ui-input" placeholder="Deal title" />
+				<input value={deal.brandName} onChange={e => onChange({ ...deal, brandName: e.target.value })} disabled={disabled} className="ui-input" placeholder="Brand name" />
+				<select value={deal.dealType} onChange={e => onChange({ ...deal, dealType: e.target.value as DealType })} disabled={disabled} className="ui-input">
 					{TYPES.map(t => <option key={t} value={t}>{t.replaceAll('_',' ')}</option>)}
 				</select>
-				<select value={deal.status} onChange={e => onChange({ ...deal, status: e.target.value as DealStatus })} className="ui-input">
+				<select value={deal.status} onChange={e => onChange({ ...deal, status: e.target.value as DealStatus })} disabled={disabled} className="ui-input">
 					{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 				</select>
 				<div className="grid grid-cols-2 gap-2">
 					<input type="number" min={0} value={deal.valueEstimate ?? ''} onChange={e => onChange({ ...deal, valueEstimate: e.target.value === '' ? undefined : Number(e.target.value) })} className="ui-input" placeholder="Value estimate" />
-					<input value={deal.currency || 'USD'} onChange={e => onChange({ ...deal, currency: e.target.value })} className="ui-input" placeholder="Currency (e.g., USD)" />
+					<input value={deal.currency || 'USD'} onChange={e => onChange({ ...deal, currency: e.target.value || undefined })} className="ui-input" placeholder="Currency (e.g., USD)" />
 				</div>
 				<div className="grid grid-cols-2 gap-2">
-					<input type="date" value={deal.startDate || ''} onChange={e => onChange({ ...deal, startDate: e.target.value })} className="ui-input" />
-					<input type="date" value={deal.endDate || ''} onChange={e => onChange({ ...deal, endDate: e.target.value })} className="ui-input" />
+					<input type="date" value={deal.startDate || ''} onChange={e => onChange({ ...deal, startDate: e.target.value || undefined })} className="ui-input" />
+					<input type="date" value={deal.endDate || ''} onChange={e => onChange({ ...deal, endDate: e.target.value || undefined })} className="ui-input" />
 				</div>
 				<select value={deal.businessId || ''} onChange={e => onChange({ ...deal, businessId: e.target.value || undefined })} className="ui-input">
 					<option value="">Link business (optional)</option>
@@ -303,7 +321,7 @@ function DealEditor({ deal, onChange, businesses, onUpdateBusiness }: { deal: De
 						</select>
 					</div>
 				)}
-				<input value={deal.exclusivityNotes || ''} onChange={e => onChange({ ...deal, exclusivityNotes: e.target.value })} className="ui-input" placeholder="Exclusivity notes (if any)" />
+				<input value={deal.exclusivityNotes || ''} onChange={e => onChange({ ...deal, exclusivityNotes: e.target.value || undefined })} className="ui-input" placeholder="Exclusivity notes (if any)" />
 			</div>
 
 			<div>
@@ -371,24 +389,38 @@ function DealEditor({ deal, onChange, businesses, onUpdateBusiness }: { deal: De
 	)
 }
 
-function DealCompliance({ deal, onChange }: { deal: DealLogEntry; onChange: (d: DealLogEntry) => void }) {
-	const licensing = deal.licensing || { usesSchoolMarks: false, notes: '' }
-	const [notes, setNotes] = useState(deal.complianceNotes || '')
-	useEffect(() => {
-		onChange({ ...deal, complianceNotes: notes })
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [notes])
+function DealCompliance({ deal, onChange, disabled }: { deal: DealLogEntry; onChange: (d: DealLogEntry) => void; disabled?: boolean }) {
+	const licensing = deal.licensing
 	return (
 		<div className="space-y-4">
 			<div className="bg-white border border-black/10 rounded-md p-3">
 				<div className="text-black font-semibold mb-2">Licensing</div>
 				<label className="inline-flex items-center gap-2 text-sm text-black/70">
-					<input type="checkbox" checked={!!licensing.usesSchoolMarks} onChange={e => onChange({ ...deal, licensing: { ...licensing, usesSchoolMarks: e.target.checked } })} />
+					<input
+						type="checkbox"
+						checked={!!licensing?.usesSchoolMarks}
+						disabled={disabled}
+						onChange={e => {
+							const nextLicensing: LicensingUsage = {
+								usesSchoolMarks: e.target.checked,
+							}
+							if (licensing?.notes !== undefined) nextLicensing.notes = licensing.notes
+							onChange({ ...deal, licensing: nextLicensing })
+						}}
+					/>
 					<span>Uses school marks (logos, uniforms, facilities)?</span>
 				</label>
 				<textarea
-					value={licensing.notes || ''}
-					onChange={e => onChange({ ...deal, licensing: { ...licensing, notes: e.target.value } })}
+					value={licensing?.notes ?? ''}
+					onChange={e => {
+						const notes = e.target.value
+						const nextLicensing: LicensingUsage = {
+							usesSchoolMarks: Boolean(licensing?.usesSchoolMarks),
+						}
+						if (notes !== '') nextLicensing.notes = notes
+						onChange({ ...deal, licensing: nextLicensing })
+					}}
+					disabled={disabled}
 					className="w-full ui-input mt-2"
 					placeholder="Notes about permissions or usage"
 				/>
@@ -396,20 +428,29 @@ function DealCompliance({ deal, onChange }: { deal: DealLogEntry; onChange: (d: 
 			<div className="bg-white border border-black/10 rounded-md p-3">
 				<div className="text-black font-semibold mb-2">Reporting</div>
 				<label className="inline-flex items-center gap-2 text-sm text-black/70">
-					<input type="checkbox" checked={!!deal.reportedToSchool} onChange={e => onChange({ ...deal, reportedToSchool: e.target.checked })} />
+					<input type="checkbox" checked={!!deal.reportedToSchool} disabled={disabled} onChange={e => onChange({ ...deal, reportedToSchool: e.target.checked })} />
 					<span>Reported to school?</span>
 				</label>
 				<br />
 				<label className="inline-flex items-center gap-2 text-sm text-black/70">
-					<input type="checkbox" checked={!!deal.reportedToCollective} onChange={e => onChange({ ...deal, reportedToCollective: e.target.checked })} />
+					<input type="checkbox" checked={!!deal.reportedToCollective} disabled={disabled} onChange={e => onChange({ ...deal, reportedToCollective: e.target.checked })} />
 					<span>Reported to collective?</span>
 				</label>
 			</div>
 			<div className="bg-white border border-black/10 rounded-md p-3">
 				<div className="text-black font-semibold mb-2">Compliance Notes</div>
 				<textarea
-					value={notes}
-					onChange={e => setNotes(e.target.value)}
+					value={deal.complianceNotes ?? ''}
+					onChange={e => {
+						const value = e.target.value
+						if (value === '') {
+							const { complianceNotes: _removed, ...rest } = deal
+							onChange(rest as DealLogEntry)
+						} else {
+							onChange({ ...deal, complianceNotes: value })
+						}
+					}}
+					disabled={disabled}
 					className="w-full ui-input"
 					placeholder="Any compliance considerations, limits, or approvals"
 				/>

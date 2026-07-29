@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import Select from './ui/Select'
 import { AthleteProfile, Business, DealLogEntry, Opportunity, OpportunityCategory, OpportunityStatus } from '../types'
-import { load, save } from '../utils/storage'
+import { load } from '../utils/storage'
+import { useWorkflowDomainPersistence } from '../hooks/useWorkflowDomainPersistence'
+import { opportunityWorkflowAdapters } from '../hooks/workflowDomainAdapters'
+import {
+	toActiveAthleteId,
+	toLocalAthleteStorageKey,
+} from '../persistence/workflows/athleteIdentity'
+import WorkflowImportGate from './workflows/WorkflowImportGate'
 
 const businessStatusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Discussion', 'Partnered']
 
@@ -12,7 +19,6 @@ type Props = {
 	businesses?: Business[]
 	onUpdateBusiness?: (b: Business) => void
 }
-type Store = Record<string, Opportunity[]> // key: athleteId
 type DealStore = Record<string, DealLogEntry[]>
 
 const STATUSES: OpportunityStatus[] = ['idea', 'targeted', 'pitched', 'in_discussion', 'launched', 'archived']
@@ -39,50 +45,66 @@ function createEmpty(athleteId: string): Opportunity {
 }
 
 export default function OpportunityBoard({ athlete, businesses = [], onUpdateBusiness }: Props) {
-	const athleteId = athlete?.id || 'anonymous'
-	const [store, setStore] = useState<Store>(() => load<Store>('opps.store', {}))
+	const activeAthleteId = toActiveAthleteId(athlete?.id)
+	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
+	const {
+		mode,
+		store,
+		importPlan,
+		busy,
+		error,
+		mutationsDisabled,
+		upsert,
+		remove,
+		confirmImport,
+		keepUsingDevice,
+		retryBootstrap,
+	} = useWorkflowDomainPersistence(activeAthleteId, opportunityWorkflowAdapters)
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [statusFilter, setStatusFilter] = useState<OpportunityStatus | 'all'>('all')
 	const [activeTab, setActiveTab] = useState<'board' | 'details' | 'notes'>('board')
 
-	useEffect(() => save('opps.store', store), [store])
-
 	const dealsForAthlete = useMemo(() => {
 		const ds = load<DealStore>('deals.store', {})
-		return (ds[athleteId] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
-	}, [athleteId])
+		return (ds[localAthleteKey] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
+	}, [localAthleteKey, store])
 
 	const list = useMemo(() => {
-		const arr = store[athleteId] || []
+		const arr = store[localAthleteKey] || []
 		return arr
 			.filter(o => (statusFilter === 'all' ? true : o.status === statusFilter))
 			.sort((a, b) => (STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status)) || a.id.localeCompare(b.id))
-	}, [store, athleteId, statusFilter])
+	}, [store, localAthleteKey, statusFilter])
 
-	const selected = useMemo(() => (selectedId ? (store[athleteId] || []).find(o => o.id === selectedId) || null : null), [selectedId, store, athleteId])
+	const selected = useMemo(() => (selectedId ? (store[localAthleteKey] || []).find(o => o.id === selectedId) || null : null), [selectedId, store, localAthleteKey])
 
-	function upsert(next: Opportunity) {
-		setStore(prev => {
-			const arr = prev[athleteId] || []
-			const idx = arr.findIndex(o => o.id === next.id)
-			const updated = idx === -1 ? [next, ...arr] : arr.map(o => (o.id === next.id ? next : o))
-			return { ...prev, [athleteId]: updated }
-		})
+	function upsertLocal(next: Opportunity) {
+		void upsert(next)
 	}
-	function remove(id: string) {
-		setStore(prev => ({ ...prev, [athleteId]: (prev[athleteId] || []).filter(o => o.id !== id) }))
+	function removeLocal(id: string) {
+		void remove(id)
 		if (selectedId === id) setSelectedId(null)
 	}
 	function addNew() {
 		if (!athlete) return
 		const o = createEmpty(athlete.id)
-		upsert(o)
+		void upsert(o)
 		setSelectedId(o.id)
 		setActiveTab('details')
 	}
 
 	return (
 		<Card title="Opportunities">
+			<WorkflowImportGate
+				domainLabel="Opportunities"
+				mode={mode}
+				plan={importPlan}
+				busy={busy}
+				error={error}
+				onConfirmImport={() => void confirmImport()}
+				onKeepUsingDevice={keepUsingDevice}
+				onRetry={retryBootstrap}
+			/>
 			<div className="mb-4 flex items-center gap-2">
 				<nav className="flex items-center gap-2">
 					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'board' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('board')}>Board</button>
@@ -95,7 +117,7 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 							<option value="all">All status</option>
 							{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 						</select>
-						<Button onClick={addNew}>New</Button>
+						<Button onClick={addNew} disabled={mutationsDisabled}>New</Button>
 					</div>
 				)}
 			</div>
@@ -140,7 +162,7 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 					{statusFilter === 'all' ? (
 						<div className="space-y-6">
 							{STATUSES.map(s => {
-								const rows = (store[athleteId] || []).filter(o => o.status === s)
+								const rows = (store[localAthleteKey] || []).filter(o => o.status === s)
 								return (
 									<div key={`grp-${s}`}>
 										<div className="text-white font-semibold mb-2">{s.replaceAll('_',' ')}</div>
@@ -162,12 +184,12 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 															<td className="py-2 pr-2 text-gray-300 whitespace-nowrap">{o.category.replaceAll('_',' ')}</td>
 															<td className="py-2 pr-2 text-gray-200">{o.targetBrandName || '—'}</td>
 															<td className="py-2 pr-2">
-																<select value={o.status} onChange={e => upsert({ ...o, status: e.target.value as OpportunityStatus })} className="bg-background border border-border rounded-md px-2 py-1 text-xs text-white">
+																<select value={o.status} onChange={e => upsertLocal({ ...o, status: e.target.value as OpportunityStatus })} disabled={mutationsDisabled} className="bg-background border border-border rounded-md px-2 py-1 text-xs text-white">
 																	{STATUSES.map(s2 => <option key={s2} value={s2}>{s2.replaceAll('_',' ')}</option>)}
 																</select>
 															</td>
 															<td className="py-2 pr-2 text-right">
-																<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => remove(o.id)}>Remove</Button>
+																<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => removeLocal(o.id)} disabled={mutationsDisabled}>Remove</Button>
 															</td>
 														</tr>
 													))}
@@ -202,12 +224,12 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 											<td className="py-2 pr-2 text-gray-300 whitespace-nowrap">{o.category.replaceAll('_',' ')}</td>
 											<td className="py-2 pr-2 text-gray-200">{o.targetBrandName || '—'}</td>
 											<td className="py-2 pr-2">
-												<select value={o.status} onChange={e => upsert({ ...o, status: e.target.value as OpportunityStatus })} className="bg-background border border-border rounded-md px-2 py-1 text-xs text-white">
+												<select value={o.status} onChange={e => upsertLocal({ ...o, status: e.target.value as OpportunityStatus })} disabled={mutationsDisabled} className="bg-background border border-border rounded-md px-2 py-1 text-xs text-white">
 													{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 												</select>
 											</td>
 											<td className="py-2 pr-2 text-right">
-												<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => remove(o.id)}>Remove</Button>
+												<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => removeLocal(o.id)} disabled={mutationsDisabled}>Remove</Button>
 											</td>
 										</tr>
 									))}
@@ -230,8 +252,9 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 					) : (
 						<OpportunityEditor
 							value={selected}
-							onChange={upsert}
+							onChange={upsertLocal}
 							deals={dealsForAthlete}
+							disabled={mutationsDisabled}
 						/>
 					)}
 				</div>
@@ -244,7 +267,8 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 					) : (
 						<textarea
 							value={selected.notes || ''}
-							onChange={e => upsert({ ...selected, notes: e.target.value })}
+							onChange={e => upsertLocal({ ...selected, notes: e.target.value || undefined })}
+							disabled={mutationsDisabled}
 							className="w-full bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[200px]"
 							placeholder="Freeform notes (meeting summaries, next steps)…"
 						/>
@@ -255,34 +279,32 @@ export default function OpportunityBoard({ athlete, businesses = [], onUpdateBus
 	)
 }
 
-function OpportunityEditor({ value, onChange, deals }: { value: Opportunity; onChange: (o: Opportunity) => void; deals: {id: string; label: string}[] }) {
+function OpportunityEditor({ value, onChange, deals, disabled }: { value: Opportunity; onChange: (o: Opportunity) => void; deals: {id: string; label: string}[]; disabled?: boolean }) {
 	return (
 		<div className="space-y-3">
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<input value={value.title} onChange={e => onChange({ ...value, title: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Title" />
-				<select value={value.category} onChange={e => onChange({ ...value, category: e.target.value as OpportunityCategory })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<input value={value.title} onChange={e => onChange({ ...value, title: e.target.value })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Title" />
+				<select value={value.category} onChange={e => onChange({ ...value, category: e.target.value as OpportunityCategory })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
 					{CATEGORIES.map(c => <option key={c} value={c}>{c.replaceAll('_',' ')}</option>)}
 				</select>
-				<input value={value.targetBrandName || ''} onChange={e => onChange({ ...value, targetBrandName: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Target brand (optional)" />
-				<select value={value.status} onChange={e => onChange({ ...value, status: e.target.value as OpportunityStatus })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+				<input value={value.targetBrandName || ''} onChange={e => onChange({ ...value, targetBrandName: e.target.value || undefined })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" placeholder="Target brand (optional)" />
+				<select value={value.status} onChange={e => onChange({ ...value, status: e.target.value as OpportunityStatus })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
 					{STATUSES.map(s => <option key={s} value={s}>{s.replaceAll('_',' ')}</option>)}
 				</select>
-				<input type="date" value={value.expectedStartDate || ''} onChange={e => onChange({ ...value, expectedStartDate: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
-				<input type="date" value={value.expectedEndDate || ''} onChange={e => onChange({ ...value, expectedEndDate: e.target.value })} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
+				<input type="date" value={value.expectedStartDate || ''} onChange={e => onChange({ ...value, expectedStartDate: e.target.value || undefined })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
+				<input type="date" value={value.expectedEndDate || ''} onChange={e => onChange({ ...value, expectedEndDate: e.target.value || undefined })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white" />
 			</div>
 			<textarea
 				value={value.description || ''}
-				onChange={e => onChange({ ...value, description: e.target.value })}
+				onChange={e => onChange({ ...value, description: e.target.value || undefined })}
+				disabled={disabled}
 				className="w-full bg-mid border border-border rounded-md px-3 py-2 text-white min-h-[120px]"
 				placeholder="Description / pitch summary"
 			/>
-			<select value={value.linkedDealId || ''} onChange={e => onChange({ ...value, linkedDealId: (e.target.value || undefined) })} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
+			<select value={value.linkedDealId || ''} onChange={e => onChange({ ...value, linkedDealId: (e.target.value || undefined) })} disabled={disabled} className="bg-mid border border-border rounded-md px-3 py-2 text-white">
 				<option value="">Link to a Deal (optional)</option>
 				{deals.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
 			</select>
 		</div>
 	)
 }
-
-
-

@@ -71,13 +71,14 @@ export default function VendorDirectory() {
                                     <Button variant="ghost">Email</Button>
 								</a>
 							)}
-							<button
-								type="button"
+							<a
+								href="https://athletehouze.com"
+								target="_blank"
+								rel="noreferrer"
 								className="text-xs text-gray-300 underline hover:text-white"
-								onClick={() => window.open(`mailto:support@athleteledger.com?subject=Report%20Listing:%20${encodeURIComponent(v.name)}&body=Please%20describe%20the%20issue%20with%20this%20listing.`, '_blank')}
 							>
-								Report listing
-							</button>
+								Report listing via Athlete Houze Support
+							</a>
 						</div>
 					</Card>
 				))}

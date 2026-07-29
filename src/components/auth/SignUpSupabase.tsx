@@ -95,7 +95,7 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 
 	return (
 		<div className="max-w-lg mx-auto">
-			<Card title="Create your Athlete Ledger account">
+			<Card title="Create your NIL Roster account">
 				<form className="space-y-4" onSubmit={handleSubmit}>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Display name</span>
@@ -157,11 +157,11 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 					</label>
 					{err && <div className="text-red-400 text-sm">{err}</div>}
 					<div className="pt-2">
-						<Button type="submit" className="red-glow" disabled={loading}>{loading ? 'Creating…' : 'Create my Athlete Ledger account'}</Button>
+						<Button type="submit" className="red-glow" disabled={loading}>{loading ? 'Creating…' : 'Create my NIL Roster account'}</Button>
 					</div>
 				</form>
 				<div className="text-xs text-gray-400 mt-3">
-					By using Athlete Ledger, you agree to our <a href="/terms" className="underline">Terms</a>.
+					By using NIL Roster, you agree to our <a href="/terms" className="underline">Terms</a>.
 				</div>
 			</Card>
 		</div>

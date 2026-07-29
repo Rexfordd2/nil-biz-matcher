@@ -23,7 +23,7 @@ try {
         $homeOgTitle = ""
     }
     
-    $expectedTitle = "Athlete Ledger - Connect with College Coaches"
+    $expectedTitle = "NIL Roster — Recruiting, Relationships, and Opportunity Beyond the Game"
     
     if ($homeOgTitle -eq $expectedTitle) {
         Write-Host "  PASS: Home OG title matches expected value" -ForegroundColor Green
@@ -50,7 +50,7 @@ try {
         $demoOgTitle = ""
     }
     
-    $expectedDemoTitle = "Athlete Ledger - Demo"
+    $expectedDemoTitle = "NIL Roster — Demo"
     
     if ($demoOgTitle -eq $expectedDemoTitle) {
         Write-Host "  PASS: Demo OG title matches expected value" -ForegroundColor Green

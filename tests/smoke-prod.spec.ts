@@ -24,7 +24,7 @@ async function loginIfNeeded(page: any) {
 	const currentUrl = page.url()
 	if (currentUrl.includes('/auth/login')) {
 		// Wait for login page to load
-		await page.waitForSelector('h3:has-text("Log in to Athlete Ledger")', { timeout: 10000 })
+		await page.waitForSelector('h3:has-text("Log in to NIL Roster")', { timeout: 10000 })
 		await page.waitForTimeout(1000)
 		
 		const emailInput = page.getByTestId('login-email')

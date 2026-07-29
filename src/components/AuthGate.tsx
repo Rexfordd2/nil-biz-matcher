@@ -16,7 +16,7 @@ export default function AuthGate({ returnTo = '/app', mode }: Props) {
 			<div className="max-w-md w-full">
 				<div className="card p-6 space-y-6">
 					<div className="text-center space-y-2">
-						<h2 className="headline text-2xl">Welcome to Athlete Ledger</h2>
+						<h2 className="headline text-2xl">Welcome to NIL Roster</h2>
 						<p className="text-gray-300 text-sm">
 							Sign in to access your full account, or continue exploring.
 						</p>

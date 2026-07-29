@@ -19,9 +19,10 @@ import { supabaseEnvConfigured } from '../lib/supabaseClient'
 import { isDebugAccessAllowed } from '../lib/debugAccess'
 import { isDemoMode, isBetaMode } from '../config/appMode'
 import { useAuth } from '../context/AuthContext'
-import { PUBLIC_MODE } from '../config/publicMode'
 import RecruitingV2Route from '../pages/RecruitingV2Route'
 import RecruitingLegacyRoute from '../pages/RecruitingLegacyRoute'
+import { isAppPathname, resolveAppPath } from './appRoutes'
+import { isLocalE2EAuthBypassAllowed } from '../config/e2e'
 
 type RouteEntry =
 	| { key: 'home' }
@@ -78,18 +79,20 @@ export function navigate(to: string, replace: boolean = false) {
 }
 
 export default function RootRouter() {
-	const [loc, setLoc] = useState<RouteEntry>(() => parseLocation(window.location.pathname))
+	// Single authoritative pathname + one popstate subscription for app routing.
+	const [pathname, setPathname] = useState(() => window.location.pathname)
+	const loc = useMemo(() => parseLocation(pathname), [pathname])
 	const { user, initializing } = useAuth()
 
 	useEffect(() => {
 		function onPop() {
-			setLoc(parseLocation(window.location.pathname))
+			setPathname(window.location.pathname)
 		}
 		window.addEventListener('popstate', onPop)
 		return () => window.removeEventListener('popstate', onPop)
 	}, [])
 
-	// Redirect effect: handle unknown routes, denied debug routes, and app mode restrictions
+	// Redirect effect: handle unknown routes, denied debug routes, app defaults, and app mode restrictions
 	useEffect(() => {
 		const hasDebugAccess = isDebugAccessAllowed(window.location.search)
 		const isDebugRoute = loc.key === 'debug_discover_recruiting' || loc.key === 'debug_build' || loc.key === 'debug_places_hooks'
@@ -111,10 +114,19 @@ export default function RootRouter() {
 			}
 		}
 
-		if (shouldRedirect && window.location.pathname !== redirectTarget) {
+		// Canonical /app defaults and unknown /app fallback (non-demo only)
+		if (!shouldRedirect && loc.key === 'app' && isAppPathname(pathname)) {
+			const resolved = resolveAppPath(pathname)
+			if (resolved.redirectTo && pathname !== resolved.redirectTo) {
+				shouldRedirect = true
+				redirectTarget = resolved.redirectTo
+			}
+		}
+
+		if (shouldRedirect && pathname !== redirectTarget) {
 			navigate(redirectTarget, true)
 		}
-	}, [loc])
+	}, [loc, pathname])
 
 	// Auth guard: protect /app route when not in PUBLIC_MODE
 	// Note: Now handled by rendering AuthGate instead of redirecting
@@ -176,17 +188,18 @@ export default function RootRouter() {
 		case 'app':
 			// Render app shell under /app/* - show AuthGate if not authenticated
 			// If authenticated or still initializing, render the app
-			if (!user && !initializing) {
-				return <AuthGate returnTo={window.location.pathname} />
+			// Local E2E bypass is loopback-only even if the Vite flag is baked in.
+			if (!user && !initializing && !isLocalE2EAuthBypassAllowed()) {
+				return <AuthGate returnTo={pathname} />
 			}
-			return <App />
+			return <App pathname={pathname} />
 			case 'not_found':
 				// Unknown route: redirect to / (handled by effect above)
 				return <Home />
 			default:
 				return <Home />
 		}
-	}, [loc])
+	}, [loc, pathname, user, initializing])
 
 	return (
 		<div className="min-h-screen bg-background text-foreground">
@@ -199,5 +212,3 @@ export default function RootRouter() {
 		</div>
 	)
 }
-
-

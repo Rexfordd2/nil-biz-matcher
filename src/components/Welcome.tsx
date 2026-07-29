@@ -13,10 +13,10 @@ export default function Welcome({ onStartProfile, onGoResources, onGoGuidelines 
 		<div className="space-y-8">
 			<section className="text-center space-y-4">
 				<h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-					Athlete Ledger: Turn Your Hustle into a Real NIL Game Plan
+					NIL Roster: Recruiting, relationships, and opportunity beyond the game.
 				</h2>
 				<p className="text-gray-200 text-lg max-w-3xl mx-auto">
-					Build a real athlete brand, find the right local businesses, and learn how to talk money without losing your eligibility—or your mind.
+					Build a verified athlete profile, find the right place to play, grow your professional network, connect with businesses, and carry your audience into what comes next.
 				</p>
 				<ul className="text-gray-300 max-w-3xl mx-auto text-left list-disc pl-6 space-y-2">
 					<li>You’re a middle or high school athlete who wants to take NIL seriously, not recklessly.</li>
@@ -46,7 +46,7 @@ export default function Welcome({ onStartProfile, onGoResources, onGoGuidelines 
 					<iframe
 						className="w-full h-full"
 						src={`https://www.youtube.com/embed/${YOUTUBE_INTRO_VIDEO_ID}`}
-						title="Athlete Ledger NIL Intro"
+						title="NIL Roster Intro"
 						frameBorder="0"
 						allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
 						allowFullScreen

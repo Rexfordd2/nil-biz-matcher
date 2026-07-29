@@ -38,6 +38,9 @@ import SignUpSupabase from './components/auth/SignUpSupabase'
 import Login from './components/auth/Login'
 import LoginSupabase from './components/auth/LoginSupabase'
 import Extras from './pages/Extras'
+import NetworkFoundation from './components/NetworkFoundation'
+import CareerStudioFoundation from './components/CareerStudioFoundation'
+import OpportunitiesSubnav from './components/OpportunitiesSubnav'
 import { type CurrentUser } from './utils/auth'
 import { useAutosaveProfile } from './hooks/useAutosaveProfile'
 import { useAnonProfileDraft } from './hooks/useAnonProfileDraft'
@@ -49,14 +52,24 @@ import { SupabaseSessionProvider, useSupabaseSession } from './context/SupabaseS
 import SectionErrorBoundary from './components/ErrorBoundary'
 import { BUILD_ID } from './constants/build'
 import { APP_INSTANCE } from './config/env'
+import { isDebugAccessAllowed } from './lib/debugAccess'
 import Observability from './lib/obs'
 import DiagnosticsPanel from './components/DiagnosticsPanel'
 import DebugDiscoverRecruiting from './pages/DebugDiscoverRecruiting'
 import DebugBuild from './pages/DebugBuild'
 import { navigate } from './routes/RootRouter'
+import {
+	type AppTab,
+	getAppNavSections,
+	pathForTab,
+	PRIMARY_NAV,
+	resolveAppPath,
+	SECONDARY_NAV,
+} from './routes/appRoutes'
 import WaitlistGate from './components/WaitlistGate'
 import BetaWaitlistModal from './components/BetaWaitlistModal'
 import { isBetaMode, isDemoMode } from './config/appMode'
+import { isLocalE2EAuthBypassAllowed } from './config/e2e'
 import AthleteProfileDebugPanel from './components/AthleteProfileDebugPanel'
 import AuthDebugPanel from './components/AuthDebugPanel'
 import GoogleDebugPanel from './components/GoogleDebugPanel'
@@ -88,31 +101,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 	}
 }
 
-type Tab =
-	| 'Welcome'
-	| 'Athlete'
-	| 'Businesses'
-	| 'Discover'
-	| 'Matches'
-	| 'Deals'
-	| 'Opportunities'
-	| 'Events'
-	| 'Dashboard'
-	| 'Profile Preview'
-	| 'Resources'
-	| 'Guidelines'
-	| 'NIL Hub'
-	| 'Vendor Directory'
-	| 'Recruiting'
-	| 'Recruiting Board'
-	| 'Recruiting Blast'
-	| 'Sign Up'
-	| 'Log In'
-	| 'Settings'
-	| 'Extras'
+type Tab = AppTab
 
-function MainApp() {
-	const [tab, setTab] = useState<Tab>('Welcome')
+type MainAppProps = {
+	/** Pathname owned by RootRouter (single popstate authority). */
+	pathname: string
+}
+
+function MainApp({ pathname }: MainAppProps) {
+	const resolved = useMemo(() => resolveAppPath(pathname), [pathname])
+	const tab = resolved.tab
+	const activeDestination = resolved.destination
 	const [athlete, setAthlete] = useState<AthleteProfile | null>(() => migrateAthleteProfile(load('athlete', null)))
 	const [selectedBizId, setSelectedBizId] = useState<string | null>(null)
 	const [matchOverlay, setMatchOverlay] = useState<Record<string, { match: import('./types').MatchResult; level?: import('./types').BusinessLevel }>>({})
@@ -233,7 +232,7 @@ function MainApp() {
 		} else {
 			show('Business added (sign in to save to cloud)')
 		}
-		setTab('Businesses')
+		goToTab('Businesses')
 	}
 
 	async function handleUpdateBusiness(updated: Business) {
@@ -274,7 +273,33 @@ function MainApp() {
 		} else {
 			Observability.log({ feature: 'ui', route: `ui.tab.${next}.open`, status: 'ui_action' })
 		}
-		setTab(next)
+		const path = pathForTab(next)
+		if (path) {
+			navigate(path)
+			return
+		}
+		// Auth tabs use standalone routes rather than in-app tab state
+		if (next === 'Log In') {
+			goToLogin(pathname)
+			return
+		}
+		if (next === 'Sign Up') {
+			navigate(`/auth/signup?returnTo=${encodeURIComponent(pathname)}`)
+			return
+		}
+	}
+
+	function goToPath(path: string) {
+		navigate(path)
+	}
+
+	function goToDestination(destinationKey: string, path?: string) {
+		const target =
+			path ||
+			PRIMARY_NAV.find(n => n.destination === destinationKey)?.path ||
+			SECONDARY_NAV.find(n => n.destination === destinationKey)?.path ||
+			'/app/today'
+		goToPath(target)
 	}
 
 	function runMatches() {
@@ -287,7 +312,7 @@ function MainApp() {
 			}
 		}
 		setMatchOverlay(next)
-		setTab('Matches')
+		goToTab('Matches')
 	}
 
 	function copyToClipboard(text: string) {
@@ -354,13 +379,13 @@ function MainApp() {
 
 	// BETA mode auth gate: redirect unauthenticated users to /auth/login
 	useEffect(() => {
-		if (isBetaMode() && !loading && !user) {
+		if (isBetaMode() && !loading && !user && !isLocalE2EAuthBypassAllowed()) {
 			navigate('/auth/login', true)
 		}
 	}, [user, loading])
 
 	// In BETA mode, if not authenticated, render nothing while redirecting
-	if (isBetaMode() && !loading && !user) {
+	if (isBetaMode() && !loading && !user && !isLocalE2EAuthBypassAllowed()) {
 		return (
 			<ToastProvider>
 				<div className="min-h-screen bg-background light-theme flex items-center justify-center">
@@ -383,15 +408,15 @@ function MainApp() {
 						<div className="flex items-center gap-3">
 							<div className="w-8 h-8 rounded-lg bg-brand-red shadow-glow overflow-hidden">
 								<img
-									src="/athlete-ledger-logo.png"
-									alt="Athlete Ledger Logo"
+									src="/nil-roster-logo.png"
+									alt="NIL Roster Logo"
 									className="w-full h-full object-cover"
 									onError={(e) => {
 										;(e.currentTarget as HTMLImageElement).style.display = 'none'
 									}}
 								/>
 							</div>
-							<h1 className="headline text-2xl">Athlete Ledger</h1>
+							<h1 className="headline text-2xl">NIL Roster</h1>
 						</div>
 						<div className="relative flex flex-col items-end gap-1">
 							<div className="text-xs">
@@ -491,58 +516,17 @@ function MainApp() {
 					<div className="grid grid-cols-1 md:grid-cols-[240px,1fr] gap-6">
 						<div className="hidden md:block">
 							<Sidebar
-								current={tab}
-								onSelect={(k) => goToTab(k as Tab)}
-								sections={[
-									{
-										title: 'Main',
-										items: [
-											{ key: 'Welcome', label: 'Home' },
-											{ key: 'Athlete', label: 'Athlete Profile' },
-											{ key: 'Discover', label: 'Discover' },
-											{ key: 'Matches', label: 'Matches' },
-											{ key: 'Dashboard', label: 'Dashboard' },
-											{ key: 'Recruiting', label: 'Recruiting' },
-											{ key: 'Profile Preview', label: 'Public Profile' },
-											{ key: 'Settings', label: 'Settings' },
-											...(currentUser ? [] as any : [{ key: 'Log In', label: 'Log In' }, { key: 'Sign Up', label: 'Sign Up' }])
-										]
-									},
-									{
-										title: 'Workflows',
-										items: [
-											{ key: 'Businesses', label: 'Businesses' },
-											{ key: 'Deals', label: 'Deals' },
-											{ key: 'Opportunities', label: 'Opportunities' },
-											{ key: 'Events', label: 'Events' }
-										]
-									},
-									{
-										title: 'Recruiting',
-										items: [
-											{ key: 'Recruiting Board', label: 'Board' },
-											{ key: 'Recruiting Blast', label: 'Blast' }
-										]
-									},
-									{
-										title: 'Learn',
-										items: [
-											{ key: 'NIL Hub', label: 'NIL Hub' },
-											{ key: 'Resources', label: 'Resources' },
-											{ key: 'Guidelines', label: 'Guidelines' },
-											{ key: 'Vendor Directory', label: 'Vendors' },
-											{ key: 'Extras', label: 'Extras' }
-										]
-									}
-								]}
+								current={activeDestination}
+								onSelect={(k, path) => goToDestination(k, path)}
+								sections={getAppNavSections()}
 							/>
 						</div>
 						<div className="space-y-6">
 					{tab === 'Welcome' && (
 						<Welcome
 							onStartProfile={() => goToTab('Athlete')}
-							onGoResources={() => setTab('Resources')}
-							onGoGuidelines={() => setTab('Guidelines')}
+							onGoResources={() => goToTab('Resources')}
+							onGoGuidelines={() => goToTab('Guidelines')}
 						/>
 					)}
 					{tab === 'Athlete' && (
@@ -618,6 +602,7 @@ function MainApp() {
 
 					{tab === 'Businesses' && (
 						<>
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -645,7 +630,7 @@ function MainApp() {
 										<div className="flex items-center gap-2">
 											{b.match && <FitBadge rating={b.match.rating} />}
 											{(b.level || b.analysis?.levelGuess) && <LevelBadge level={b.level || b.analysis!.levelGuess} />}
-											<Button variant="ghost" onClick={() => { setSelectedBizId(b.id); setTab('Matches') }}>View Match</Button>
+											<Button variant="ghost" onClick={() => { setSelectedBizId(b.id); goToTab('Matches') }}>View Match</Button>
 										</div>
 									</div>
 								))}
@@ -655,6 +640,7 @@ function MainApp() {
 
 					{tab === 'Discover' && (
 						<>
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -674,6 +660,7 @@ function MainApp() {
 
 					{tab === 'Matches' && (
 						<>
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -825,7 +812,7 @@ function MainApp() {
 											<div className="text-xs text-gray-400 mt-2">This is guidance to help you decide, not a guarantee.</div>
 											<div className="mt-4 flex gap-2 justify-end">
 												<Button variant="ghost" onClick={() => setSelectedBizId(b.id)}>Build Outreach</Button>
-												<Button onClick={() => setTab('Dashboard')}>Save to Dashboard</Button>
+												<Button onClick={() => goToTab('Dashboard')}>Save to Dashboard</Button>
 											</div>
 										</section>
 									)
@@ -839,6 +826,7 @@ function MainApp() {
 
 					{tab === 'Deals' && (
 						<>
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -855,6 +843,7 @@ function MainApp() {
 
 					{tab === 'Opportunities' && (
 						<>
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
 							{showPreflightBanner && (
 								<div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-500/20 px-4 py-3 text-amber-100" role="alert">
 									<p className="font-bold">Admin: Canonical business tables missing (preflight check failed).</p>
@@ -867,7 +856,10 @@ function MainApp() {
 					)}
 
 					{tab === 'Events' && (
-						<EventsPlanner athlete={athlete} />
+						<>
+							<OpportunitiesSubnav currentPath={pathname} onNavigate={goToPath} />
+							<EventsPlanner athlete={athlete} />
+						</>
 					)}
 
 					{tab === 'Dashboard' && (
@@ -879,12 +871,29 @@ function MainApp() {
 							<Dashboard
 								businesses={filteredListWithMatches}
 								onUpdate={handleUpdateBusiness}
-								onBuildOutreach={(b) => { setSelectedBizId(b.id); setTab('Matches') }}
+								onBuildOutreach={(b) => { setSelectedBizId(b.id); goToTab('Matches') }}
 							/>
 						</>
 					)}
 
 					{tab === 'Profile Preview' && <PublicProfile athlete={((currentUser ? autosave.initialProfile : anonDraft.initialProfile) || athlete) ?? null} />}
+
+					{tab === 'Network' && (
+						<NetworkFoundation
+							athlete={((currentUser ? autosave.initialProfile : anonDraft.initialProfile) || athlete) ?? null}
+							onEditPassport={() => goToTab('Athlete')}
+							onReturnToday={() => goToTab('Dashboard')}
+						/>
+					)}
+
+					{tab === 'Career Studio' && (
+						<CareerStudioFoundation
+							athlete={((currentUser ? autosave.initialProfile : anonDraft.initialProfile) || athlete) ?? null}
+							onEditPassport={() => goToTab('Athlete')}
+							onViewPublicProfile={() => goToTab('Profile Preview')}
+							onExploreOpportunities={() => goToTab('Opportunities')}
+						/>
+					)}
 
 					{tab === 'Recruiting' && (
 						<SectionErrorBoundary>
@@ -898,9 +907,9 @@ function MainApp() {
 
 					{tab === 'Sign Up' && (
 						import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? (
-							<SignUpSupabase onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
+							<SignUpSupabase onSignedIn={(u) => { setCurrentUser(u); goToTab('Athlete') }} />
 						) : import.meta.env.DEV ? (
-							<SignUp onSignedIn={(u) => { setCurrentUser(u); setTab('Athlete') }} />
+							<SignUp onSignedIn={(u) => { setCurrentUser(u); goToTab('Athlete') }} />
 						) : (
 							<div className="rounded-md border border-border bg-surface p-4 text-sm text-gray-300">
 								Supabase not configured. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
@@ -911,13 +920,13 @@ function MainApp() {
 					{tab === 'Log In' && (
 						import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? (
 							<LoginSupabase
-								onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
-								onNeedAccount={() => setTab('Sign Up')}
+								onLoggedIn={(u) => { setCurrentUser(u); goToTab('Athlete') }}
+								onNeedAccount={() => goToTab('Sign Up')}
 							/>
 						) : import.meta.env.DEV ? (
 							<Login
-								onLoggedIn={(u) => { setCurrentUser(u); setTab('Athlete') }}
-								onNeedAccount={() => setTab('Sign Up')}
+								onLoggedIn={(u) => { setCurrentUser(u); goToTab('Athlete') }}
+								onNeedAccount={() => goToTab('Sign Up')}
 							/>
 						) : (
 							<div className="rounded-md border border-border bg-surface p-4 text-sm text-gray-300">
@@ -926,7 +935,7 @@ function MainApp() {
 						)
 					)}
 
-					{tab === 'Resources' && <Resources onGoVendors={() => setTab('Vendor Directory')} />}
+					{tab === 'Resources' && <Resources onGoVendors={() => goToTab('Vendor Directory')} />}
 
 					{tab === 'Guidelines' && <Guidelines />}
 
@@ -981,7 +990,7 @@ function MainApp() {
 													Log in to save your progress and access your data across devices.
 												</p>
 												<Button
-													onClick={() => goToTab('Log In')}
+													onClick={() => goToLogin(window.location.pathname)}
 													className="red-glow"
 												>
 													Log In
@@ -999,57 +1008,43 @@ function MainApp() {
 					</div>
 				</main>
 
-				{/* Mobile bottom navigation */}
-				<nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur">
-					<div className="grid grid-cols-6 gap-1 px-2 py-2">
+				{/* Mobile bottom navigation — same destination definitions as desktop */}
+				<nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur" data-testid="mobile-bottom-nav">
+					<div className="grid grid-cols-7 gap-0.5 px-1 py-2">
+						{PRIMARY_NAV.map(item => (
+							<button
+								key={item.destination}
+								type="button"
+								data-testid={`mobile-nav-${item.destination}`}
+								onClick={() => goToDestination(item.destination, item.path)}
+								className={`text-[10px] leading-tight px-1 py-2 rounded-md ${
+									activeDestination === item.destination
+										? 'bg-mid text-white'
+										: 'text-gray-300 hover:bg-mid/60'
+								}`}
+								aria-current={activeDestination === item.destination ? 'page' : undefined}
+							>
+								{item.destination === 'opportunities'
+									? 'Opps'
+									: item.destination === 'passport'
+										? 'Passport'
+										: item.destination === 'career'
+											? 'Career'
+											: item.label}
+							</button>
+						))}
 						<button
+							data-testid="nav-more-button"
 							type="button"
-							onClick={() => goToTab('Welcome')}
-							className={`text-sm px-2 py-2 rounded-md ${tab === 'Welcome' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
+							onClick={() => setMobileMenuOpen(true)}
+							className="text-[10px] leading-tight px-1 py-2 rounded-md text-gray-300 hover:bg-mid/60"
 						>
-							Home
+							More
 						</button>
-						<button
-							type="button"
-							onClick={() => goToTab('Athlete')}
-							className={`text-sm px-2 py-2 rounded-md ${tab === 'Athlete' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
-						>
-							Athlete
-						</button>
-						<button
-							data-testid="nav-discover-button"
-							type="button"
-							onClick={() => goToTab('Discover')}
-							className={`text-sm px-2 py-2 rounded-md ${tab === 'Discover' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
-						>
-							Discover
-						</button>
-						<button
-							type="button"
-							onClick={() => goToTab('Matches')}
-							className={`text-sm px-2 py-2 rounded-md ${tab === 'Matches' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
-						>
-							Matches
-						</button>
-						<button
-							type="button"
-							onClick={() => goToTab('Dashboard')}
-							className={`text-sm px-2 py-2 rounded-md ${tab === 'Dashboard' ? 'bg-mid text-white' : 'text-gray-300 hover:bg-mid/60'}`}
-						>
-							Board
-						</button>
-					<button
-						data-testid="nav-more-button"
-						type="button"
-						onClick={() => setMobileMenuOpen(true)}
-						className="text-sm px-2 py-2 rounded-md text-gray-300 hover:bg-mid/60"
-					>
-						More
-					</button>
 					</div>
 				</nav>
 
-				{/* Mobile full menu overlay */}
+				{/* Mobile full menu overlay — same destination definitions as desktop */}
 				{mobileMenuOpen && (
 					<div className="md:hidden fixed inset-0 z-30">
 						<div className="absolute inset-0 bg-black/60" onClick={() => setMobileMenuOpen(false)} />
@@ -1065,50 +1060,29 @@ function MainApp() {
 								</button>
 							</div>
 							<div className="space-y-5">
-								<div>
-									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Main</div>
-									<div className="grid grid-cols-2 gap-2">
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Welcome') }}>Home</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Athlete') }}>Athlete Profile</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Discover') }}>Discover</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Matches') }}>Matches</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Dashboard') }}>Dashboard</button>
-										<button data-testid="nav-recruiting-button" className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting') }}>Recruiting (V2)</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Profile Preview') }}>Public Profile</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Settings') }}>Settings</button>
-										{!currentUser && (
-											<>
-												<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Log In') }}>Log In</button>
-												<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Sign Up') }}>Sign Up</button>
-											</>
-										)}
+								{getAppNavSections().map(section => (
+									<div key={section.title}>
+										<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">{section.title}</div>
+										<div className="grid grid-cols-2 gap-2">
+											{section.items.map(item => (
+												<button
+													key={item.key}
+													type="button"
+													data-testid={`mobile-menu-${item.key}`}
+													className={`px-3 py-2 rounded-md text-left ${
+														activeDestination === item.key ? 'bg-mid text-white font-semibold' : 'bg-surface'
+													}`}
+													onClick={() => {
+														setMobileMenuOpen(false)
+														goToDestination(item.key, item.path)
+													}}
+												>
+													{item.label}
+												</button>
+											))}
+										</div>
 									</div>
-								</div>
-								<div>
-									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Workflows</div>
-									<div className="grid grid-cols-2 gap-2">
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Businesses') }}>Businesses</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Deals') }}>Deals</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Opportunities') }}>Opportunities</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Events') }}>Events</button>
-									</div>
-								</div>
-								<div>
-									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Recruiting</div>
-									<div className="grid grid-cols-2 gap-2">
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting Board') }}>Board</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Recruiting Blast') }}>Blast</button>
-									</div>
-								</div>
-								<div>
-									<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">Learn</div>
-									<div className="grid grid-cols-2 gap-2">
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('NIL Hub') }}>NIL Hub</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Resources') }}>Resources</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Guidelines') }}>Guidelines</button>
-										<button className="px-3 py-2 rounded-md bg-surface text-left" onClick={() => { setMobileMenuOpen(false); goToTab('Vendor Directory') }}>Vendors</button>
-									</div>
-								</div>
+								))}
 							</div>
 						</div>
 					</div>
@@ -1145,10 +1119,13 @@ function MainApp() {
 							</div>
 						</div>
 					)}
-					{/* App instance label - always visible in footer */}
+					{/* Build always visible; instance only in DEV or authorized debug mode */}
 					<div className="mx-auto max-w-6xl px-4 md:px-6 mt-4">
-						<div className="text-center text-xs text-gray-500">
-							Instance: {APP_INSTANCE} | Build: {BUILD_ID}
+						<div className="text-center text-xs text-gray-500" data-testid="app-footer-build">
+							{(import.meta.env.DEV || isDebugAccessAllowed(typeof window !== 'undefined' ? window.location.search : undefined)) ? (
+								<span data-testid="app-footer-instance">Instance: {APP_INSTANCE} | </span>
+							) : null}
+							Build: {BUILD_ID}
 						</div>
 					</div>
 				</footer>
@@ -1158,7 +1135,7 @@ function MainApp() {
 	)
 }
 
-function AppShell() {
+function AppShell({ pathname }: { pathname: string }) {
 	const { user, loading } = useSupabaseSession()
 	if (!supabaseEnvConfigured) {
 		return (
@@ -1170,15 +1147,14 @@ function AppShell() {
 	}
 	// Don't block rendering - allow unauthenticated access immediately
 	// Session loading happens in background and updates when ready
-	return <MainApp />
+	return <MainApp pathname={pathname} />
 }
 
-export default function App() {
-	const path = typeof window !== 'undefined' ? window.location.pathname : '/'
+export default function App({ pathname }: { pathname: string }) {
 	const showDebugDiscoverRecruiting =
-		path === '/debug/discover-recruiting' &&
+		pathname === '/debug/discover-recruiting' &&
 		((Observability as any).isDiagnosticsEnabled?.() || import.meta.env.DEV)
-	const showDebugBuild = path === '/debug/build'
+	const showDebugBuild = pathname === '/debug/build'
 
 	return (
 		<SupabaseSessionProvider>
@@ -1187,7 +1163,7 @@ export default function App() {
 			) : showDebugBuild ? (
 				<DebugBuild />
 			) : (
-				<AppShell />
+				<AppShell pathname={pathname} />
 			)}
 		</SupabaseSessionProvider>
 	)

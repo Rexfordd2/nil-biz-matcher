@@ -27,8 +27,8 @@ export default function Demo() {
 	// Set Open Graph meta tags
 	useEffect(() => {
 		setOpenGraphTags({
-			title: 'Athlete Ledger - Demo',
-			description: 'Try Athlete Ledger demo: discover local businesses and recruiting programs. No signup required.',
+			title: 'NIL Roster — Demo',
+			description: 'Try NIL Roster demo: discover local businesses and recruiting programs. No signup required.',
 			url: window.location.href,
 			type: 'website'
 		})
@@ -91,13 +91,13 @@ export default function Demo() {
 					<div className="flex items-center gap-3">
 						<div className="w-8 h-8 rounded-lg bg-brand-red shadow-glow overflow-hidden">
 							<img
-								src="/athlete-ledger-logo.png"
-								alt="Athlete Ledger Logo"
+								src="/nil-roster-logo.png"
+								alt="NIL Roster Logo"
 								className="w-full h-full object-cover"
 								onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
 							/>
 						</div>
-						<h1 className="headline text-2xl">Athlete Ledger</h1>
+						<h1 className="headline text-2xl">NIL Roster</h1>
 						<span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">DEMO</span>
 					</div>
 					<div className="flex items-center gap-2">

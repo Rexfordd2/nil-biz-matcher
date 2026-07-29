@@ -1,10 +1,10 @@
 # Vercel Access Handoff for Deployment
 
-## 🚨 Why We're Blocked
+> **Current ownership:** Automatic Production and Preview deploys for `athleteledger/athlete-ledger` are owned by **Vercel Git integration**. See [vercel-deployment-ownership.md](./vercel-deployment-ownership.md). GitHub Actions no longer deploys via the Vercel CLI for routine releases.
 
-Deployment is blocked because GitHub Actions needs a Vercel authentication token and project identifiers to deploy. These must be added as GitHub repository secrets by someone with Vercel access.
+## Legacy context (CLI deploy secrets)
 
-**What's needed:** VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID as GitHub secrets.
+The material below describes the older GitHub Actions → Vercel CLI path. It is retained for historical/emergency reference only.
 
 ---
 

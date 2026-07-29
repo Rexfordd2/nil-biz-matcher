@@ -1,14 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import Input from './ui/Input'
 import Select from './ui/Select'
 import Textarea from './ui/Textarea'
 import { AthleteProfile, DealLogEntry, EventPlan, EventType } from '../types'
-import { load, save } from '../utils/storage'
+import { load } from '../utils/storage'
+import { useWorkflowDomainPersistence } from '../hooks/useWorkflowDomainPersistence'
+import { eventWorkflowAdapters } from '../hooks/workflowDomainAdapters'
+import {
+	toActiveAthleteId,
+	toLocalAthleteStorageKey,
+} from '../persistence/workflows/athleteIdentity'
+import WorkflowImportGate from './workflows/WorkflowImportGate'
 
 type Props = { athlete: AthleteProfile | null }
-type Store = Record<string, EventPlan[]> // key: athleteId
 type DealStore = Record<string, DealLogEntry[]>
 
 const TYPES: EventType[] = ['appearance','signing','charity_event','camp_clinic','other']
@@ -25,47 +31,63 @@ function createEmpty(athleteId: string): EventPlan {
 }
 
 export default function EventsPlanner({ athlete }: Props) {
-	const athleteId = athlete?.id || 'anonymous'
-	const [store, setStore] = useState<Store>(() => load<Store>('events.store', {}))
+	const activeAthleteId = toActiveAthleteId(athlete?.id)
+	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
+	const {
+		mode,
+		store,
+		importPlan,
+		busy,
+		error,
+		mutationsDisabled,
+		upsert,
+		remove,
+		confirmImport,
+		keepUsingDevice,
+		retryBootstrap,
+	} = useWorkflowDomainPersistence(activeAthleteId, eventWorkflowAdapters)
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [activeTab, setActiveTab] = useState<'list' | 'details' | 'notes'>('list')
 
-	useEffect(() => save('events.store', store), [store])
-
 	const dealsForAthlete = useMemo(() => {
 		const ds = load<DealStore>('deals.store', {})
-		return (ds[athleteId] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
-	}, [athleteId])
+		return (ds[localAthleteKey] || []).map(d => ({ id: d.id, label: d.title || d.brandName || d.id }))
+	}, [localAthleteKey, store])
 
 	const list = useMemo(() => {
-		const arr = (store[athleteId] || []).slice()
+		const arr = (store[localAthleteKey] || []).slice()
 		return arr.sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id))
-	}, [store, athleteId])
+	}, [store, localAthleteKey])
 
-	const selected = useMemo(() => (selectedId ? (store[athleteId] || []).find(e => e.id === selectedId) || null : null), [selectedId, store, athleteId])
+	const selected = useMemo(() => (selectedId ? (store[localAthleteKey] || []).find(e => e.id === selectedId) || null : null), [selectedId, store, localAthleteKey])
 
-	function upsert(next: EventPlan) {
-		setStore(prev => {
-			const arr = prev[athleteId] || []
-			const idx = arr.findIndex(e => e.id === next.id)
-			const updated = idx === -1 ? [next, ...arr] : arr.map(e => (e.id === next.id ? next : e))
-			return { ...prev, [athleteId]: updated }
-		})
+	function upsertLocal(next: EventPlan) {
+		void upsert(next)
 	}
-	function remove(id: string) {
-		setStore(prev => ({ ...prev, [athleteId]: (prev[athleteId] || []).filter(e => e.id !== id) }))
+	function removeLocal(id: string) {
+		void remove(id)
 		if (selectedId === id) setSelectedId(null)
 	}
 	function addNew() {
 		if (!athlete) return
 		const e = createEmpty(athlete.id)
-		upsert(e)
+		void upsert(e)
 		setSelectedId(e.id)
 		setActiveTab('details')
 	}
 
 	return (
 		<Card title="Events & Camps">
+			<WorkflowImportGate
+				domainLabel="Events"
+				mode={mode}
+				plan={importPlan}
+				busy={busy}
+				error={error}
+				onConfirmImport={() => void confirmImport()}
+				onKeepUsingDevice={keepUsingDevice}
+				onRetry={retryBootstrap}
+			/>
 			<div className="mb-4 flex items-center gap-2">
 				<nav className="flex items-center gap-2">
 					<button className={`px-3 py-1 rounded-md text-sm ${activeTab === 'list' ? 'bg-mid text-white' : 'bg-surface text-gray-300'}`} onClick={() => setActiveTab('list')}>Events & Camps</button>
@@ -74,7 +96,7 @@ export default function EventsPlanner({ athlete }: Props) {
 				</nav>
 				{activeTab === 'list' && (
 					<div className="ml-auto">
-						<Button onClick={addNew}>New</Button>
+						<Button onClick={addNew} disabled={mutationsDisabled}>New</Button>
 					</div>
 				)}
 			</div>
@@ -105,7 +127,7 @@ export default function EventsPlanner({ athlete }: Props) {
 										{evt.linkedDealId ? (dealsForAthlete.find(d => d.id === evt.linkedDealId)?.label || evt.linkedDealId) : '—'}
 									</td>
 									<td className="px-3 py-2 text-right">
-										<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => remove(evt.id)}>Remove</Button>
+										<Button variant="ghost" className="text-xs px-2 py-1" onClick={() => removeLocal(evt.id)} disabled={mutationsDisabled}>Remove</Button>
 									</td>
 								</tr>
 							))}
@@ -126,8 +148,9 @@ export default function EventsPlanner({ athlete }: Props) {
 					) : (
 						<EventEditor
 							value={selected}
-							onChange={upsert}
+							onChange={upsertLocal}
 							deals={dealsForAthlete}
+							disabled={mutationsDisabled}
 						/>
 					)}
 				</div>
@@ -140,7 +163,8 @@ export default function EventsPlanner({ athlete }: Props) {
 					) : (
 						<Textarea
 							value={selected.notes || ''}
-							onChange={e => upsert({ ...selected, notes: e.target.value })}
+							onChange={e => upsertLocal({ ...selected, notes: e.target.value || undefined })}
+							disabled={mutationsDisabled}
 							className="min-h-[200px]"
 							placeholder="Agenda, action items, logistics…"
 						/>
@@ -151,33 +175,38 @@ export default function EventsPlanner({ athlete }: Props) {
 	)
 }
 
-function EventEditor({ value, onChange, deals }: { value: EventPlan; onChange: (e: EventPlan) => void; deals: { id: string; label: string }[] }) {
+function EventEditor({ value, onChange, deals, disabled }: { value: EventPlan; onChange: (e: EventPlan) => void; deals: { id: string; label: string }[]; disabled?: boolean }) {
 	return (
 		<div className="space-y-3">
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<Input value={value.name} onChange={e => onChange({ ...value, name: e.target.value })} placeholder="Event name" />
-				<Select value={value.type} onChange={e => onChange({ ...value, type: e.target.value as EventType })}>
+				<Input value={value.name} onChange={e => onChange({ ...value, name: e.target.value })} disabled={disabled} placeholder="Event name" />
+				<Select value={value.type} onChange={e => onChange({ ...value, type: e.target.value as EventType })} disabled={disabled}>
 					{TYPES.map(t => <option key={t} value={t}>{t.replaceAll('_',' ')}</option>)}
 				</Select>
-				<Input type="date" value={value.date} onChange={e => onChange({ ...value, date: e.target.value })} />
-				<Input value={value.location} onChange={e => onChange({ ...value, location: e.target.value })} placeholder="Location" />
-				<Input value={value.hostOrganization || ''} onChange={e => onChange({ ...value, hostOrganization: e.target.value })} placeholder="Host/organizer (optional)" />
-				<Input type="number" min={0} value={value.expectedAttendees ?? ''} onChange={e => onChange({ ...value, expectedAttendees: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="Expected attendees (optional)" />
+				<Input type="date" value={value.date} onChange={e => onChange({ ...value, date: e.target.value })} disabled={disabled} />
+				<Input value={value.location} onChange={e => onChange({ ...value, location: e.target.value })} disabled={disabled} placeholder="Location" />
+				<Input value={value.hostOrganization || ''} onChange={e => onChange({ ...value, hostOrganization: e.target.value || undefined })} disabled={disabled} placeholder="Host/organizer (optional)" />
+				<Input type="number" min={0} value={value.expectedAttendees ?? ''} onChange={e => onChange({ ...value, expectedAttendees: e.target.value === '' ? undefined : Number(e.target.value) })} disabled={disabled} placeholder="Expected attendees (optional)" />
 			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<Input value={(value.sponsors || []).join(', ')} onChange={e => onChange({ ...value, sponsors: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} placeholder="Sponsor names (comma-separated)" />
-				<Select value={value.linkedDealId || ''} onChange={e => onChange({ ...value, linkedDealId: (e.target.value || undefined) })}>
+				<Input
+					value={(value.sponsors || []).join(', ')}
+					onChange={e => {
+						const sponsors = e.target.value.split(',').map(x => x.trim()).filter(Boolean)
+						onChange({ ...value, sponsors: sponsors.length ? sponsors : undefined })
+					}}
+					disabled={disabled}
+					placeholder="Sponsor names (comma-separated)"
+				/>
+				<Select value={value.linkedDealId || ''} onChange={e => onChange({ ...value, linkedDealId: (e.target.value || undefined) })} disabled={disabled}>
 					<option value="">Link to a Deal (optional)</option>
 					{deals.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
 				</Select>
 			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<Input value={value.runOfShowUrl || ''} onChange={e => onChange({ ...value, runOfShowUrl: e.target.value })} placeholder="Run-of-show doc URL (optional)" />
-				<Input value={value.waiversUrl || ''} onChange={e => onChange({ ...value, waiversUrl: e.target.value })} placeholder="Waivers doc URL (optional)" />
+				<Input value={value.runOfShowUrl || ''} onChange={e => onChange({ ...value, runOfShowUrl: e.target.value || undefined })} disabled={disabled} placeholder="Run-of-show doc URL (optional)" />
+				<Input value={value.waiversUrl || ''} onChange={e => onChange({ ...value, waiversUrl: e.target.value || undefined })} disabled={disabled} placeholder="Waivers doc URL (optional)" />
 			</div>
 		</div>
 	)
 }
-
-
-

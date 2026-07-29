@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import Select from './ui/Select'
 import { Business, BusinessLevel, FitRating } from '../types'
 import { FitBadge, LevelBadge } from './ui/Badge'
-import { getTargetsFor } from '../recruiting/pipeline'
-import { load } from '../utils/storage'
+import { useRecruitingBoardSummary } from '../hooks/useRecruitingBoardSummary'
 
 type Props = {
 	businesses: Business[]
@@ -18,7 +17,8 @@ const statusOptions: Business['status'][] = ['Not Contacted', 'Pending', 'In Dis
 export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Props) {
 	const [filterLevel, setFilterLevel] = useState<BusinessLevel | 'ALL'>('ALL')
 	const [filterFit, setFilterFit] = useState<FitRating | 'ALL'>('ALL')
-	const [recruitingCounts, setRecruitingCounts] = useState<{ pursue: number; inConversation: number }>({ pursue: 0, inConversation: 0 })
+	const { summary, loading: recruitingLoading, error: recruitingError, signedOut } =
+		useRecruitingBoardSummary()
 
 	const countsByStatus = useMemo(() => {
 		const counts: Record<string, number> = {
@@ -34,21 +34,31 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 		return counts
 	}, [businesses])
 
-	useEffect(() => {
-		const athlete = load<any>('athlete', null)
-		const athleteId: string | null = athlete?.id || null
-		const targets = getTargetsFor(athleteId || undefined)
-		const pursue = targets.filter((t) => t.interestLevel === 'pursue').length
-		const inConversation = targets.filter((t) => t.status === 'in_conversation').length
-		setRecruitingCounts({ pursue, inConversation })
-	}, [])
-
 	const filtered = businesses.filter(b => {
 		const levelOk = filterLevel === 'ALL' || b.level === filterLevel || b.analysis?.levelGuess === filterLevel
 		const fit = b.match?.rating
 		const fitOk = filterFit === 'ALL' || fit === filterFit
 		return levelOk && fitOk
 	})
+
+	function renderRecruitingMetric(label: string, value: number | null) {
+		return (
+			<div className="bg-white border border-black/10 rounded-md p-3" data-testid={`recruiting-metric-${label}`}>
+				<div className="text-black/70 text-xs">{label}</div>
+				{recruitingLoading ? (
+					<div className="text-black/40 text-2xl font-bold" aria-busy="true">
+						—
+					</div>
+				) : recruitingError ? (
+					<div className="text-black/50 text-sm mt-1">Unavailable</div>
+				) : signedOut ? (
+					<div className="text-black/50 text-sm mt-1">Sign in to view</div>
+				) : (
+					<div className="text-black text-2xl font-bold">{value ?? 0}</div>
+				)}
+			</div>
+		)
+	}
 
 	return (
 		<Card title="Business Portfolio Dashboard" actions={
@@ -68,15 +78,9 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 				</Select>
 			</div>
 		}>
-			<div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-				<div className="bg-white border border-black/10 rounded-md p-3">
-					<div className="text-black/70 text-xs">Programs marked "Pursue"</div>
-					<div className="text-black text-2xl font-bold">{recruitingCounts.pursue}</div>
-				</div>
-				<div className="bg-white border border-black/10 rounded-md p-3">
-					<div className="text-black/70 text-xs">In conversation</div>
-					<div className="text-black text-2xl font-bold">{recruitingCounts.inConversation}</div>
-				</div>
+			<div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="recruiting-board-summary">
+				{renderRecruitingMetric('Total Targets', summary?.total ?? null)}
+				{renderRecruitingMetric('In Progress', summary?.byStatus['In Progress'] ?? null)}
 			</div>
 			<div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
 				{statusOptions.map(s => (
@@ -136,5 +140,3 @@ export default function Dashboard({ businesses, onUpdate, onBuildOutreach }: Pro
 		</Card>
 	)
 }
-
-

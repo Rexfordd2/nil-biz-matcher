@@ -1,4 +1,4 @@
-name: Deploy to Vercel
+name: NIL Roster CI
 
 on:
   push:
@@ -9,13 +9,13 @@ on:
     branches:
       - main
       - master
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
-  verify-and-deploy:
-    name: Verify Access & Deploy
+  validate:
+    name: NIL Roster CI
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,51 +26,30 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Verify Vercel token + scope access (no secrets printed)
-        run: |
-          echo "ORG_ID=$VERCEL_ORG_ID"
-          npx vercel whoami --token=$VERCEL_TOKEN
-          npx vercel teams ls --token=$VERCEL_TOKEN
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Run type checking
+      - name: Type check
         run: npm run verify:lint
 
       - name: Run tests
         run: npm test
 
-      - name: Deploy to Vercel (Preview)
-        if: github.event_name == 'pull_request'
-        run: |
-          npx vercel pull --yes --environment=preview --token=$VERCEL_TOKEN
-          npx vercel build --token=$VERCEL_TOKEN
-          npx vercel deploy --prebuilt --token=$VERCEL_TOKEN
+      - name: Flag-off Production build
+        run: npm run build
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_APP_MODE: beta
           VITE_PUBLIC_MODE: 'true'
+          VITE_ALLOW_MISSING_GOOGLE_MAPS_KEY: 'true'
+          VITE_WORKFLOW_CLOUD_PERSISTENCE: 'false'
 
-      - name: Deploy to Vercel (Production)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        run: |
-          npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-          npx vercel build --prod --token=$VERCEL_TOKEN
-          npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VITE_PUBLIC_MODE: 'true'
-
-      - name: Deployment Summary
+      - name: Validation summary
         if: success()
         run: |
-          echo "🚀 Deployment successful!"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
+          echo "event=${{ github.event_name }}"
+          echo "ref=${{ github.ref }}"
+          echo "sha=${{ github.sha }}"
+          echo "tests=passed"
+          echo "flag_off_build=passed"
+          echo "deployment_owner=Vercel Git integration"
+          echo "github_actions_deployment=none"
