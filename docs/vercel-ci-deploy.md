@@ -38,4 +38,4 @@ Legacy project ID. For Production, the canonical project is `prj_h2A1iIMWow5RMu3
 2. Wait for **NIL Roster CI** (lint, tests, flag-off build) and Vercel Preview checks.
 3. After founder acceptance, merge to `main`.
 4. Vercel Git integration deploys Production for `athlete-ledger`.
-5. Keep `VITE_WORKFLOW_CLOUD_PERSISTENCE` absent/false until a separately authorized activation.
+5. Keep `VITE_WORKFLOW_CLOUD_PERSISTENCE` absent/false (and mode off / existing-user login false) until a separately authorized activation. See [workflow-cloud-persistence-rollout.md](./workflow-cloud-persistence-rollout.md). **NOT ENABLED BY THIS COMMIT.**

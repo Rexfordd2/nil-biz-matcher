@@ -21,6 +21,8 @@ describe('athlete identity (local vs cloud)', () => {
 		expect(isCloudEligibleAthleteId(toActiveAthleteId('ath-1'))).toBe(true)
 		expect(isCloudEligibleAthleteId(null)).toBe(false)
 		expect(isCloudEligibleAthleteId(toActiveAthleteId('anonymous'))).toBe(false)
+		expect(isCloudEligibleAthleteId('   ')).toBe(false)
+		expect(isCloudEligibleAthleteId(' ath-1 ')).toBe(false)
 	})
 
 	it('maps null active id to legacy anonymous localStorage key only', () => {

@@ -221,7 +221,8 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 				email: u.email || email,
 				fullName: (u.user_metadata?.full_name as string) || u.email || 'User',
 				role: (u.user_metadata?.role as string) || 'athlete',
-				marketingConsent: Boolean(u.user_metadata?.marketingConsent)
+				marketingConsent: Boolean(u.user_metadata?.marketingConsent),
+				workflowCloudPersistenceCanary: u.app_metadata?.workflow_cloud_persistence_canary === true,
 			}
 			if (DEBUG_AUTH) console.log('[login] success', { userId: current.id })
 			try {

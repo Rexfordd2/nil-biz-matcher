@@ -82,7 +82,8 @@ export default function SignUpSupabase({ onSignedIn }: Props) {
 				email: result.data.email || email,
 				fullName: displayName || result.data.email || 'User',
 				role,
-				marketingConsent: false
+				marketingConsent: false,
+				workflowCloudPersistenceCanary: false,
 			}
 			onSignedIn(current)
 		} catch (e: any) {

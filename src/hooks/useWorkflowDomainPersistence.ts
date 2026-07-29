@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isWorkflowCloudPersistenceEnabled } from '../config/workflowCloudPersistence'
+import {
+	getWorkflowCloudPersistenceMode,
+	isWorkflowCloudPersistenceEnabled,
+} from '../config/workflowCloudPersistence'
 import { useAuth } from '../context/AuthContext'
 import { load, save } from '../utils/storage'
 import type { LegacyImportPlannerOptions } from '../persistence/workflows/importPlanners'
@@ -16,6 +19,7 @@ import {
 	toLocalAthleteStorageKey,
 	type ActiveAthleteId,
 } from '../persistence/workflows/athleteIdentity'
+import { evaluateWorkflowCloudEligibility } from '../persistence/workflows/cloudEligibility'
 import {
 	areMutationsDisabled,
 	decideWorkflowBootstrapMode,
@@ -104,9 +108,18 @@ export function useWorkflowDomainPersistence<T extends { id: string; athleteId: 
 	adapters: WorkflowDomainAdapters<T>
 ): UseWorkflowDomainPersistenceResult<T> {
 	const { user, initializing } = useAuth()
-	const cloudEnabled = isWorkflowCloudPersistenceEnabled()
 	const userId = user?.id ?? null
 	const localAthleteKey = toLocalAthleteStorageKey(activeAthleteId)
+
+	const eligibility = evaluateWorkflowCloudEligibility({
+		masterEnabled: isWorkflowCloudPersistenceEnabled(),
+		mode: getWorkflowCloudPersistenceMode(),
+		authenticated: Boolean(userId),
+		athleteId: activeAthleteId,
+		workflowCloudPersistenceCanary: user?.workflowCloudPersistenceCanary === true,
+	})
+	/** True only when master + mode + auth + athlete + (canary claim when needed) all pass. */
+	const cloudEnabled = eligibility.enabled
 
 	/** Session-only deferral — not persisted. Import prompt may return next session. */
 	const [sessionStayLocal, setSessionStayLocal] = useState(false)
