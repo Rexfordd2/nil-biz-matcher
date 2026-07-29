@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { CurrentUser } from '../utils/auth'
-import { authLogin, authLogout, authRegister } from '../utils/auth'
+import { authLogin, authRegister } from '../utils/auth'
 import { supabase } from '../lib/supabaseClient'
 import { goToLogout } from '../lib/auth/navigation'
+import { mapSupabaseUserToCurrent } from '../lib/auth/mapSupabaseUser'
 
 type AuthContextValue = {
 	user: CurrentUser | null
@@ -15,24 +16,20 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+/** Ensure local/mock users default the canary claim to false unless explicitly set. */
+function withDefaultCanary(user: CurrentUser): CurrentUser {
+	return {
+		...user,
+		workflowCloudPersistenceCanary: user.workflowCloudPersistenceCanary === true,
+	}
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<CurrentUser | null>(null)
 	const [initializing, setInitializing] = useState(true)
 
 	// Debug flag for verbose auth logging (dev or ?debugAuth=1)
 	const DEBUG_AUTH = import.meta.env.DEV || window.location.search.includes('debugAuth=1')
-
-	function mapSupabaseUserToCurrent(userLike: any | null | undefined): CurrentUser | null {
-		const su = userLike as any | null | undefined
-		if (!su) return null
-		return {
-			id: su.id,
-			email: su.email || '',
-			fullName: (su.user_metadata?.full_name as string) || su.email || 'User',
-			role: (su.user_metadata?.role as string) || 'athlete',
-			marketingConsent: Boolean(su.user_metadata?.marketingConsent)
-		}
-	}
 
 	const refresh = useCallback(async () => {
 		if (DEBUG_AUTH) console.log('[auth] refresh: auth getSession start')
@@ -156,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
 				if (!mounted) return
 				if (DEBUG_AUTH) console.log('[auth] auth state change', event, { hasSession: Boolean(session) })
+				// New login / refresh / sign-out: remap claim from session user (null → signed out).
 				setUser(mapSupabaseUserToCurrent(session?.user))
 				// If initializing was stuck, unstick it
 				setInitializing(false)
@@ -180,13 +178,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	}, [])
 
 	const login = useCallback(async (email: string) => {
-		const u = await authLogin({ email })
+		const u = withDefaultCanary(await authLogin({ email }))
 		setUser(u)
 		return u
 	}, [])
 
 	const signup = useCallback(async (input: { fullName: string; email: string; phone?: string; marketingConsent?: boolean }) => {
-		const u = await authRegister(input)
+		const u = withDefaultCanary(await authRegister(input))
 		setUser(u)
 		return u
 	}, [])
@@ -206,5 +204,3 @@ export function useAuth(): AuthContextValue {
 	if (!ctx) throw new Error('useAuth must be used within an AuthProvider')
 	return ctx
 }
-
-

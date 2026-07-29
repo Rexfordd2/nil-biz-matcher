@@ -188,7 +188,8 @@ function MainApp({ pathname }: MainAppProps) {
 				email: user.email || '',
 				fullName: (user.user_metadata?.full_name as string) || user.email || 'User',
 				role: (user.user_metadata?.role as string) || 'athlete',
-				marketingConsent: Boolean(user.user_metadata?.marketingConsent)
+				marketingConsent: Boolean(user.user_metadata?.marketingConsent),
+				workflowCloudPersistenceCanary: user.app_metadata?.workflow_cloud_persistence_canary === true,
 			}
 			setCurrentUser(mapped)
 		} else {

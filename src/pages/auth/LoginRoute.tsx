@@ -5,11 +5,13 @@ import { useMemo } from 'react'
 import { navigate } from '../../routes/RootRouter'
 import type { CurrentUser } from '../../utils/auth'
 import { PUBLIC_MODE } from '../../config/publicMode'
+import { isExistingUserLoginEnabled } from '../../config/existingUserLogin'
 import PublicAuthDisabled from '../../components/auth/PublicAuthDisabled'
 
 export default function LoginRoute() {
-	// In public mode, auth is disabled
-	if (PUBLIC_MODE) {
+	// Public mode disables login by default. Existing-user login may reopen login
+	// independently while signup stays gated by PUBLIC_MODE alone.
+	if (PUBLIC_MODE && !isExistingUserLoginEnabled()) {
 		return <PublicAuthDisabled kind="login" />
 	}
 

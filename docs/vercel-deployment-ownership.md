@@ -35,9 +35,12 @@ GitHub Actions must **not** call `vercel pull`, `vercel build`, or `vercel deplo
 
 ## Feature flags and follow-ons
 
-- Workflow cloud persistence remains **absent/false** in Production.
-- Account-level canary remains a **separate future change**.
-- Do not enable `VITE_WORKFLOW_CLOUD_PERSISTENCE=true` via CI or deployment ownership changes.
+- Workflow cloud persistence remains **absent/false** in Production (`VITE_WORKFLOW_CLOUD_PERSISTENCE` off; mode defaults off).
+- Account-level canary code may exist on `main` after PR-4B2, but Production activation remains a **separately authorized** env + Auth metadata change.
+- Do not enable `VITE_WORKFLOW_CLOUD_PERSISTENCE=true`, `VITE_WORKFLOW_CLOUD_PERSISTENCE_MODE=canary|all`, or `VITE_EXISTING_USER_LOGIN_ENABLED=true` via CI or deployment ownership changes without explicit founder authorization.
+- See [workflow-cloud-persistence-rollout.md](./workflow-cloud-persistence-rollout.md).
+
+**NOT ENABLED BY THIS COMMIT.**
 
 ## Secrets
 

@@ -5,6 +5,12 @@ export type CurrentUser = {
 	phone?: string | null
 	role: string
 	marketingConsent?: boolean
+	/**
+	 * Sanitized admin-controlled canary claim from Auth app_metadata.
+	 * Exact boolean only. Default false for local/mock/E2E users.
+	 * Rollout control — not a substitute for ownership RLS.
+	 */
+	workflowCloudPersistenceCanary?: boolean
 }
 
 import { createLocalUser, getCurrentUser as getLocalCurrentUser, loginLocalUser, logoutUser } from '../lib/authClient'

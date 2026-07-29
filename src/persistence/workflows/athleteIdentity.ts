@@ -32,5 +32,7 @@ export function toLocalAthleteStorageKey(active: ActiveAthleteId): LocalAthleteS
 
 /** True only for non-empty ids that are safe to pass into cloud planners/repositories. */
 export function isCloudEligibleAthleteId(id: ActiveAthleteId): id is string {
-	return typeof id === 'string' && id.length > 0 && id !== LOCAL_ANONYMOUS_ATHLETE_KEY
+	if (typeof id !== 'string') return false
+	const trimmed = id.trim()
+	return trimmed.length > 0 && trimmed !== LOCAL_ANONYMOUS_ATHLETE_KEY && trimmed === id
 }
