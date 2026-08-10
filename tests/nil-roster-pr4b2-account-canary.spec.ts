@@ -55,13 +55,13 @@ test.describe('NIL Roster PR-4B2 account canary (flag-off / login gates)', () =>
 	test('existing-user login disabled under public mode', async ({ page }) => {
 		await page.goto('/auth/login')
 		await expect(page.getByTestId('auth-disabled')).toBeVisible({ timeout: 15000 })
-		await expect(page.getByTestId('auth-disabled-message')).toContainText(/Login disabled/i)
+		await expect(page.getByTestId('auth-disabled-message')).toContainText(/not enabled|unavailable|private beta/i)
 	})
 
 	test('signup remains disabled under public mode', async ({ page }) => {
 		await page.goto('/auth/signup')
 		await expect(page.getByTestId('auth-disabled')).toBeVisible({ timeout: 15000 })
-		await expect(page.getByTestId('auth-disabled-message')).toContainText(/Login disabled|Sign up|disabled/i)
+		await expect(page.getByTestId('auth-disabled-message')).toContainText(/private beta|invitation|disabled|unavailable/i)
 	})
 
 	test('query parameters do not enable login', async ({ page }) => {

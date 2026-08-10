@@ -14,27 +14,37 @@
 
 export type AppMode = 'demo' | 'beta'
 
+export type AppModeInput = {
+	/** Raw VITE_APP_MODE value. */
+	appModeFlag?: string
+	/** Whether public mode is active. */
+	publicMode?: boolean
+}
+
+/** Pure resolver for tests and build/runtime readers. */
+export function resolveAppMode(input: AppModeInput = {}): AppMode {
+	const flag = String(input.appModeFlag || '').toLowerCase()
+	if (flag === 'demo') return 'demo'
+	if (flag === 'beta') return 'beta'
+	if (input.publicMode) return 'demo'
+	return 'beta'
+}
+
 export function getAppMode(): AppMode {
 	// Check both client-side (import.meta.env) and build-time (process.env)
 	if (typeof import.meta !== 'undefined' && import.meta.env) {
-		const clientFlag = String(import.meta.env.VITE_APP_MODE || '').toLowerCase()
-		if (clientFlag === 'demo') return 'demo'
-		if (clientFlag === 'beta') return 'beta'
-		
-		// Fallback: if PUBLIC_MODE is true, default to demo
-		const publicMode = String(import.meta.env.VITE_PUBLIC_MODE || '').toLowerCase() === 'true'
-		if (publicMode) return 'demo'
+		return resolveAppMode({
+			appModeFlag: String(import.meta.env.VITE_APP_MODE || ''),
+			publicMode: String(import.meta.env.VITE_PUBLIC_MODE || '').toLowerCase() === 'true',
+		})
 	}
 	
 	// Fallback for build-time/server contexts
 	if (typeof process !== 'undefined' && process.env) {
-		const serverFlag = String(process.env.VITE_APP_MODE || '').toLowerCase()
-		if (serverFlag === 'demo') return 'demo'
-		if (serverFlag === 'beta') return 'beta'
-		
-		// Fallback: if PUBLIC_MODE is true, default to demo
-		const publicMode = String(process.env.VITE_PUBLIC_MODE || '').toLowerCase() === 'true'
-		if (publicMode) return 'demo'
+		return resolveAppMode({
+			appModeFlag: String(process.env.VITE_APP_MODE || ''),
+			publicMode: String(process.env.VITE_PUBLIC_MODE || '').toLowerCase() === 'true',
+		})
 	}
 	
 	// Final fallback: beta (full app)

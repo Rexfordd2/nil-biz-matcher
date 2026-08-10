@@ -38,7 +38,7 @@ export default function LoginRoute() {
 			)}
 			
 			<div className="max-w-md mx-auto text-center space-y-2">
-				<div className="flex items-center justify-center gap-4 text-sm">
+				<div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
 					<button
 						onClick={() => navigate('/app')}
 						className="text-gray-300 hover:text-white underline"
@@ -54,6 +54,16 @@ export default function LoginRoute() {
 					>
 						Back home
 					</button>
+					<span className="text-gray-500">•</span>
+					<a
+						href="https://athletehouze.com"
+						target="_blank"
+						rel="noreferrer"
+						className="text-gray-300 hover:text-white underline"
+						data-testid="login-route-athlete-houze"
+					>
+						Athlete Houze
+					</a>
 				</div>
 			</div>
 		</div>

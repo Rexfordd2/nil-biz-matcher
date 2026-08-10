@@ -6,6 +6,7 @@ import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 import { navigate } from '../../routes/RootRouter'
+import { isBetaMode } from '../../config/appMode'
 import '../../lib/fetchProbe' // Initialize fetch probe if VITE_DIAGNOSTICS=true
 
 type Props = {
@@ -282,6 +283,11 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	return (
 		<div className="max-w-md mx-auto">
 			<Card title="Log in to NIL Roster">
+				{isBetaMode() && (
+					<p className="text-sm text-gray-300 mb-4" data-testid="login-beta-message">
+						Existing beta members can sign in below.
+					</p>
+				)}
 				<form 
 					data-testid="login-form" 
 					className="space-y-4" 
@@ -371,18 +377,42 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 						>
 							{loading ? <span data-testid="login-loading">Logging in…</span> : 'Log in'}
 						</Button>
-						{onNeedAccount && (
-							<button type="button" onClick={onNeedAccount} className="text-sm text-gray-300 hover:text-white">Need an account? Sign up</button>
-						)}
 					</div>
 					<div className="flex items-center justify-between">
 						<button type="button" onClick={handleForgotPassword} className="text-xs text-gray-300 underline hover:text-white" disabled={sendingReset}>
 							{sendingReset ? 'Sending reset…' : 'Forgot password?'}
 						</button>
+						{onNeedAccount && (
+							<button type="button" onClick={onNeedAccount} className="text-xs text-gray-300 underline hover:text-white">
+								Need an account?
+							</button>
+						)}
 					</div>
 				</form>
-				<div className="text-xs text-gray-400 mt-3">
-					By using NIL Roster, you agree to our <a href="/terms" className="underline">Terms</a>.
+				<div className="text-xs text-gray-400 mt-3 space-y-2">
+					<p>
+						By using NIL Roster, you agree to our <a href="/terms" className="underline">Terms</a>.
+					</p>
+					<div className="flex items-center justify-center gap-3 pt-1">
+						<a
+							href="https://athletehouze.com"
+							target="_blank"
+							rel="noreferrer"
+							className="underline hover:text-white"
+							data-testid="login-athlete-houze"
+						>
+							Athlete Houze
+						</a>
+						<span className="text-gray-600">•</span>
+						<button
+							type="button"
+							onClick={() => navigate('/demo')}
+							className="underline hover:text-white"
+							data-testid="login-nil-roster-demo"
+						>
+							NIL Roster demo
+						</button>
+					</div>
 				</div>
 			</Card>
 			{SHOW_DEBUG_OVERLAY && (

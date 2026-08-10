@@ -101,15 +101,15 @@ test.describe('Public Release Acceptance Tests', () => {
 		const disabledMessage = page.getByTestId('auth-disabled-message')
 		await expect(disabledMessage).toBeVisible()
 		const messageText = await disabledMessage.textContent()
-		expect(messageText).toContain('Login disabled')
+		expect(messageText).toMatch(/not enabled|unavailable|private beta/i)
 		
 		// Should have navigation buttons
-		const goAppButton = page.getByTestId('auth-disabled-go-app')
-		await expect(goAppButton).toBeVisible()
+		const goHomeButton = page.getByTestId('auth-disabled-go-home')
+		await expect(goHomeButton).toBeVisible()
 		
-		// Verify button navigates to /app
-		await goAppButton.click()
-		await expect(page).toHaveURL(/\/app/)
+		// Verify home navigation remains available
+		await goHomeButton.click()
+		await expect(page).toHaveURL('/')
 		
 		// Visit /auth/signup
 		await page.goto('/auth/signup')
