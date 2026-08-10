@@ -18,14 +18,16 @@ export type SupabaseLikeError = {
 }
 
 type FriendlyAuthOptions = {
-	context?: 'signup' | 'login'
+	context?: 'signup' | 'login' | 'reset'
 }
 
 export function friendlyAuthErrorMessage(err: SupabaseLikeError | string | null | undefined, opts?: FriendlyAuthOptions): string {
-	const context: 'signup' | 'login' = opts?.context ?? 'login'
+	const context = opts?.context ?? 'login'
 	const defaultSignup = "We couldn't create your account. Please try again shortly."
 	const defaultLogin = 'We could not sign you in. Please try again.'
-	const defaultMessage = context === 'signup' ? defaultSignup : defaultLogin
+	const defaultReset = 'We could not update your password. Please request a new reset link and try again.'
+	const defaultMessage =
+		context === 'signup' ? defaultSignup : context === 'reset' ? defaultReset : defaultLogin
 
 	const rawMessage = typeof err === 'string' ? err : err?.message || ''
 	const status = typeof err === 'object' ? err?.status : undefined
@@ -36,13 +38,24 @@ export function friendlyAuthErrorMessage(err: SupabaseLikeError | string | null 
 	}
 	if (messageLc.includes('database error saving new user') || messageLc.includes('new row violates row-level security')) {
 		// Intermittent Supabase/DB errors during signup creation
-		return context === 'signup' ? defaultSignup : defaultLogin
+		return context === 'signup' ? defaultSignup : context === 'reset' ? defaultReset : defaultLogin
 	}
 	if (messageLc.includes('invalid login credentials') || messageLc.includes('invalid email or password')) {
 		return 'Invalid email or password. Please try again.'
 	}
 	if (messageLc.includes('failed to fetch') || messageLc.includes('networkerror') || messageLc.includes('network')) {
 		return 'Network error. Check your connection and try again.'
+	}
+	if (context === 'reset') {
+		if (messageLc.includes('session') || messageLc.includes('jwt') || messageLc.includes('expired') || messageLc.includes('auth session missing')) {
+			return 'This reset link is invalid or expired. Please request a new reset email.'
+		}
+		// Prefer a safe default over leaking provider internals for reset failures.
+		if (err) {
+			// eslint-disable-next-line no-console
+			console.warn('Auth error (reset unclassified)')
+		}
+		return defaultReset
 	}
 	// Unknown/unclassified: log for diagnostics
 	if (err) {

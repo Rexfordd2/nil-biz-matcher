@@ -2,8 +2,9 @@
  * Existing-user login control — independent from public signup.
  *
  * When VITE_PUBLIC_MODE=true, login and signup are both disabled by default.
- * Setting VITE_EXISTING_USER_LOGIN_ENABLED=true permits password login for
- * already-confirmed accounts while signup remains disabled under public mode.
+ * Setting VITE_EXISTING_USER_LOGIN_ENABLED=true permits password login and
+ * password recovery for already-confirmed accounts while signup remains
+ * disabled under public mode.
  *
  * Default / absent / any value other than exact "true" → false.
  * Not enabled by query parameters, client storage, or UI.

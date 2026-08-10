@@ -13,6 +13,7 @@ type MatrixRow = {
 	appModeFlag?: string
 	existingUserLogin?: string
 	expectLoginEnabled: boolean
+	expectResetEnabled: boolean
 	expectSignupDisabled: boolean
 	expectAppRedirectsToDemo: boolean
 }
@@ -24,6 +25,7 @@ const matrix: MatrixRow[] = [
 		appModeFlag: 'demo',
 		existingUserLogin: 'false',
 		expectLoginEnabled: false,
+		expectResetEnabled: false,
 		expectSignupDisabled: true,
 		expectAppRedirectsToDemo: true,
 	},
@@ -33,6 +35,7 @@ const matrix: MatrixRow[] = [
 		appModeFlag: 'beta',
 		existingUserLogin: 'true',
 		expectLoginEnabled: true,
+		expectResetEnabled: true,
 		expectSignupDisabled: true,
 		expectAppRedirectsToDemo: false,
 	},
@@ -42,6 +45,7 @@ const matrix: MatrixRow[] = [
 		appModeFlag: 'beta',
 		existingUserLogin: 'false',
 		expectLoginEnabled: false,
+		expectResetEnabled: false,
 		expectSignupDisabled: true,
 		expectAppRedirectsToDemo: false,
 	},
@@ -51,6 +55,7 @@ const matrix: MatrixRow[] = [
 		appModeFlag: undefined,
 		existingUserLogin: undefined,
 		expectLoginEnabled: false,
+		expectResetEnabled: false,
 		expectSignupDisabled: true,
 		expectAppRedirectsToDemo: true,
 	},
@@ -65,10 +70,12 @@ describe('closed beta auth contract matrix', () => {
 			})
 			const loginEnabled =
 				!row.publicMode || isExistingUserLoginEnabled({ envFlag: row.existingUserLogin })
+			const resetEnabled = loginEnabled
 			const signupDisabled = row.publicMode
 			const appRedirectsToDemo = appMode === 'demo'
 
 			expect(loginEnabled).toBe(row.expectLoginEnabled)
+			expect(resetEnabled).toBe(row.expectResetEnabled)
 			expect(signupDisabled).toBe(row.expectSignupDisabled)
 			expect(appRedirectsToDemo).toBe(row.expectAppRedirectsToDemo)
 		})
@@ -86,6 +93,7 @@ describe('closed beta auth contract matrix', () => {
 	it('no query parameter, localStorage, or Clerk path enables auth', () => {
 		const login = fs.readFileSync(path.join(root, 'src/pages/auth/LoginRoute.tsx'), 'utf8')
 		const signup = fs.readFileSync(path.join(root, 'src/pages/auth/SignupRoute.tsx'), 'utf8')
+		const reset = fs.readFileSync(path.join(root, 'src/pages/auth/ResetRoute.tsx'), 'utf8')
 		const existing = fs.readFileSync(path.join(root, 'src/config/existingUserLogin.ts'), 'utf8')
 		const pkg = fs.readFileSync(path.join(root, 'package.json'), 'utf8')
 
@@ -96,6 +104,7 @@ describe('closed beta auth contract matrix', () => {
 		expect(pkg).not.toMatch(/@clerk\//)
 		expect(login).not.toMatch(/ClerkProvider|@clerk/)
 		expect(signup).not.toMatch(/ClerkProvider|@clerk/)
+		expect(reset).not.toMatch(/ClerkProvider|@clerk/)
 	})
 
 	it('E2E bypass remains local-only', () => {

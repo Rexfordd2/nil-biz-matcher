@@ -95,6 +95,32 @@ test.describe('Closed beta auth surface', () => {
 		await expect(page.getByTestId('auth-gate-login')).toBeVisible({ timeout: 15000 })
 	})
 
+	test('password reset route is available and rejects missing recovery session', async ({ page }) => {
+		await page.goto('/auth/reset')
+		await expect(page.getByTestId('auth-disabled')).toHaveCount(0)
+		const unavailable = page.getByTestId('auth-unavailable')
+		const form = page.getByTestId('reset-form')
+		await expect(form.or(unavailable)).toBeVisible({ timeout: 15000 })
+		if (await unavailable.isVisible().catch(() => false)) {
+			test.skip(true, 'Supabase env not baked into this build')
+		}
+		await expect(form).toBeVisible()
+		await expect(page.getByTestId('reset-invalid-session')).toBeVisible({ timeout: 15000 })
+		await expect(page.getByTestId('reset-submit')).toBeDisabled()
+		await expect(page.locator('form')).toHaveCount(1)
+	})
+
+	test('forgot-password control is present on login', async ({ page }) => {
+		await page.goto('/auth/login')
+		const loginForm = page.getByTestId('login-form')
+		const unavailable = page.getByTestId('auth-unavailable')
+		await expect(loginForm.or(unavailable)).toBeVisible({ timeout: 15000 })
+		if (await unavailable.isVisible().catch(() => false)) {
+			test.skip(true, 'Supabase env not baked into this build')
+		}
+		await expect(page.getByTestId('login-forgot-password')).toBeVisible()
+	})
+
 	test('invalid password shows a friendly error without blanking the form', async ({ page }) => {
 		await page.goto('/auth/login')
 		const loginForm = page.getByTestId('login-form')
