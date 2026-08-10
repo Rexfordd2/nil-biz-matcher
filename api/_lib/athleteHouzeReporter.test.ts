@@ -12,6 +12,14 @@ describe('Athlete Houze NILRoster reporter', () => {
 		expect(
 			loadAthleteHouzeReporterConfig({ ATHLETE_HOUZE_REPORT_URL: 'https://example.test' })
 		).toBeNull()
+		expect(
+			loadAthleteHouzeReporterConfig({
+				ATHLETE_HOUZE_REPORT_URL: 'https://example.test/api/app-reports',
+				ATHLETE_HOUZE_REPORT_HMAC_SECRET: 'test-secret',
+				ATHLETE_HOUZE_REPORTING_MODE: 'all',
+				ATHLETE_HOUZE_REPORT_CANARY_EXTERNAL_ID: 'nil-canary-0001',
+			})
+		).toBeNull()
 	})
 
 	it('builds deterministic, privacy-minimized NIL opportunity evidence', () => {
@@ -28,6 +36,7 @@ describe('Athlete Houze NILRoster reporter', () => {
 		expect(first.eventId).toBe(second.eventId)
 		expect(first.idempotencyKey).toBe(second.idempotencyKey)
 		expect(first.sourceSystem).toBe('nil_roster')
+		expect(first.evidencePayload.attributes.synthetic_test_data).toBe(true)
 		expect(JSON.stringify(first)).not.toContain('email')
 		expect(JSON.stringify(first)).not.toContain('phone')
 		expect(JSON.stringify(first)).not.toContain('school')
@@ -43,6 +52,8 @@ describe('Athlete Houze NILRoster reporter', () => {
 		const result = await sendAthleteHouzeReport(report, {
 			endpoint: 'https://example.test/api/app-reports',
 			hmacSecret: secret,
+			mode: 'canary',
+			canaryExternalAthleteId: 'nil-canary-0001',
 			maxAttempts: 2,
 			fetchImpl,
 		})
