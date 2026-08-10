@@ -30,10 +30,8 @@ test.describe('Password recovery surface', () => {
 		}
 		await expect(page.getByTestId('reset-invalid-session')).toBeVisible({ timeout: 15000 })
 		await expect(page.getByTestId('reset-submit')).toBeDisabled()
-		await page.getByTestId('reset-password').fill('short')
-		await page.getByTestId('reset-password-confirm').fill('short')
-		// Submit remains disabled without a recovery session.
-		await expect(page.getByTestId('reset-submit')).toBeDisabled()
+		await expect(page.getByTestId('reset-password')).toBeDisabled()
+		await expect(page.getByTestId('reset-password-confirm')).toBeDisabled()
 	})
 
 	test('signup remains disabled while reset is available', async ({ page }) => {
@@ -57,13 +55,8 @@ test.describe('Password recovery surface', () => {
 		const email = process.env.RESET_TEST_EMAIL || 'closed-beta-reset-probe@example.com'
 		await page.getByTestId('login-email').fill(email)
 		await page.getByTestId('login-forgot-password').click()
-		await expect(page.getByTestId('login-reset-info').or(page.getByTestId('login-error'))).toBeVisible({
-			timeout: 20000,
-		})
-		const info = page.getByTestId('login-reset-info')
-		if (await info.isVisible().catch(() => false)) {
-			await expect(info).toContainText(/If an account exists for that email/i)
-		}
+		await expect(page.getByTestId('login-reset-info')).toBeVisible({ timeout: 20000 })
+		await expect(page.getByTestId('login-reset-info')).toContainText(/If an account exists for that email/i)
 		const body = await page.locator('body').innerText()
 		expect(body).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}/)
 		expect(body).not.toMatch(/access_token|refresh_token/i)
