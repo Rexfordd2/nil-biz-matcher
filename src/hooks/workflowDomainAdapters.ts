@@ -22,12 +22,21 @@ import {
 	upsertOpportunityForUser,
 } from '../persistence/workflows/opportunityRepository'
 import type { DealLogEntry, EventPlan, Opportunity } from '../types'
+import { reportNilRosterOpportunity } from '../lib/athleteHouzeEvidence'
 import type { WorkflowDomainAdapters } from './useWorkflowDomainPersistence'
 
 export const opportunityWorkflowAdapters: WorkflowDomainAdapters<Opportunity> = {
 	storageKey: 'opps.store',
 	listForUser: listOpportunitiesForUser,
-	upsertForUser: upsertOpportunityForUser,
+	upsertForUser: async (userId, record) => {
+		const result = await upsertOpportunityForUser(userId, record)
+		if (result.ok) {
+			// The helper returns locally for every non-synthetic user. Canary
+			// delivery failure never changes the committed Opportunity result.
+			await reportNilRosterOpportunity(record.id)
+		}
+		return result
+	},
 	deleteForUser: deleteOpportunityForUser,
 	insertMissing: insertMissingLegacyOpportunities,
 	planImport: planOpportunityLegacyImport,
