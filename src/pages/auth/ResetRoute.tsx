@@ -11,8 +11,8 @@ import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 import { validateNewPassword } from '../../lib/auth/passwordReset'
 
 export default function ResetRoute() {
-	// Closed beta: reset follows the same existing-user-login gate as login.
-	// Signup remains independently blocked by PUBLIC_MODE alone.
+	// Production public auth: PUBLIC_MODE=false → reset always available.
+	// Demo public surface may reopen reset with existing-user login enablement.
 	if (PUBLIC_MODE && !isExistingUserLoginEnabled()) {
 		return <PublicAuthDisabled kind="reset" />
 	}

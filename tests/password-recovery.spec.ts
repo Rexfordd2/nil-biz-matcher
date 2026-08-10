@@ -34,10 +34,12 @@ test.describe('Password recovery surface', () => {
 		await expect(page.getByTestId('reset-password-confirm')).toBeDisabled()
 	})
 
-	test('signup remains disabled while reset is available', async ({ page }) => {
+	test('signup and reset are both publicly available', async ({ page }) => {
 		await page.goto('/auth/signup')
-		await expect(page.getByTestId('auth-disabled')).toBeVisible({ timeout: 15000 })
-		await expect(page.locator('form')).toHaveCount(0)
+		await expect(page.getByTestId('auth-disabled')).toHaveCount(0)
+		const signupForm = page.getByTestId('signup-form')
+		const unavailable = page.getByTestId('auth-unavailable')
+		await expect(signupForm.or(unavailable)).toBeVisible({ timeout: 15000 })
 
 		await page.goto('/auth/reset')
 		await expect(page.getByTestId('auth-disabled')).toHaveCount(0)

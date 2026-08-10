@@ -1,25 +1,15 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * Closed-beta auth surface checks.
+ * Compatibility suite retained for older CI wiring.
+ * Canonical public-auth coverage lives in tests/public-auth.spec.ts.
  *
- * Against Production (config-enabled closed beta):
- *   $env:BASE_URL="https://athlete-ledger.vercel.app"
- *   npx playwright test tests/closed-beta-auth.spec.ts
- *
- * Against a local beta build:
- *   $env:VITE_PUBLIC_MODE="true"
- *   $env:VITE_APP_MODE="beta"
- *   $env:VITE_EXISTING_USER_LOGIN_ENABLED="true"
- *   npm run build
- *   npx vite preview --host 127.0.0.1 --port 4173
- *   $env:BASE_URL="http://127.0.0.1:4173"
- *   npx playwright test tests/closed-beta-auth.spec.ts
- *
- * Does not require credentials. Does not enable workflow cloud or canary claims.
+ * Expects Production contract:
+ *   VITE_PUBLIC_MODE=false
+ *   VITE_APP_MODE=beta
  */
 
-test.describe('Closed beta auth surface', () => {
+test.describe('Public auth surface (compat)', () => {
 	test.beforeEach(async ({ context }) => {
 		await context.clearCookies()
 		await context.addInitScript(() => {
@@ -27,7 +17,7 @@ test.describe('Closed beta auth surface', () => {
 		})
 	})
 
-	test('login form is available for existing members', async ({ page }) => {
+	test('login form is available', async ({ page }) => {
 		await page.goto('/auth/login')
 		await expect(page.getByTestId('auth-disabled')).toHaveCount(0)
 		await expect(page.getByText(/Login disabled in public release/i)).toHaveCount(0)
@@ -35,7 +25,6 @@ test.describe('Closed beta auth surface', () => {
 
 		const loginForm = page.getByTestId('login-form')
 		const unavailable = page.getByTestId('auth-unavailable')
-		// Local preview builds may omit Supabase keys; Production must expose the form.
 		await expect(loginForm.or(unavailable)).toBeVisible({ timeout: 15000 })
 		if (await unavailable.isVisible().catch(() => false)) {
 			test.skip(
@@ -49,20 +38,17 @@ test.describe('Closed beta auth surface', () => {
 		await expect(page.getByTestId('login-submit')).toBeVisible()
 	})
 
-	test('signup remains invitation-only / disabled', async ({ page }) => {
-		const signupRequests: string[] = []
-		page.on('request', (req) => {
-			const url = req.url()
-			if (/signup|register|signUp/i.test(url) && req.method() !== 'GET') {
-				signupRequests.push(`${req.method()} ${url}`)
-			}
-		})
-
+	test('signup is publicly available', async ({ page }) => {
 		await page.goto('/auth/signup')
-		await expect(page.getByTestId('auth-disabled')).toBeVisible({ timeout: 15000 })
-		await expect(page.getByTestId('auth-disabled-message')).toContainText(/private beta|invitation/i)
-		await expect(page.locator('form')).toHaveCount(0)
-		expect(signupRequests).toEqual([])
+		await expect(page.getByTestId('auth-disabled')).toHaveCount(0)
+		await expect(page.getByText(/private beta|invitation/i)).toHaveCount(0)
+		const signupForm = page.getByTestId('signup-form')
+		const unavailable = page.getByTestId('auth-unavailable')
+		await expect(signupForm.or(unavailable)).toBeVisible({ timeout: 15000 })
+		if (await unavailable.isVisible().catch(() => false)) {
+			test.skip(true, 'Supabase env not baked into this build')
+		}
+		await expect(signupForm).toBeVisible()
 	})
 
 	test('unauthenticated /app routes stay behind AuthGate', async ({ page }) => {
@@ -86,11 +72,7 @@ test.describe('Closed beta auth surface', () => {
 		expect(new URL(page.url()).pathname).toBe('/')
 	})
 
-	test('query parameters do not enable signup or bypass auth', async ({ page }) => {
-		await page.goto('/auth/signup?enableSignup=true&signup=1&public=false')
-		await expect(page.getByTestId('auth-disabled')).toBeVisible({ timeout: 15000 })
-		await expect(page.locator('form')).toHaveCount(0)
-
+	test('query parameters do not bypass auth', async ({ page }) => {
 		await page.goto('/app?e2eBypass=true&bypassAuth=1&VITE_E2E_BYPASS_AUTH=true')
 		await expect(page.getByTestId('auth-gate-login')).toBeVisible({ timeout: 15000 })
 	})

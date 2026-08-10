@@ -6,8 +6,8 @@ import type { CurrentUser } from '../../utils/auth'
 import { supabase } from '../../lib/supabaseClient'
 import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
 import { navigate } from '../../routes/RootRouter'
-import { isBetaMode } from '../../config/appMode'
 import '../../lib/fetchProbe' // Initialize fetch probe if VITE_DIAGNOSTICS=true
+import { postAuthDestination } from '../../lib/auth/onboardingState'
 
 type Props = {
 	onLoggedIn: (user: CurrentUser) => void
@@ -244,10 +244,10 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 				// eslint-disable-next-line no-console
 				console.warn('[login] onLoggedIn error', cbErr)
 			}
-			// Redirect immediately after success
+			// Redirect immediately after success (onboarding if needed)
 			const url = new URL(window.location.href)
-			const returnTo = url.searchParams.get('returnTo')
-			navigate(returnTo || '/app', true)
+			const returnTo = url.searchParams.get('returnTo') || '/app/today'
+			navigate(postAuthDestination(current.id, returnTo), true)
 		} catch (e: any) {
 			// Capture exception details
 			const exceptionDetails = {
@@ -305,11 +305,9 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	return (
 		<div className="max-w-md mx-auto">
 			<Card title="Log in to NIL Roster">
-				{isBetaMode() && (
-					<p className="text-sm text-gray-300 mb-4" data-testid="login-beta-message">
-						Existing beta members can sign in below.
-					</p>
-				)}
+				<p className="text-sm text-gray-300 mb-4" data-testid="login-public-message">
+					Sign in to access your NIL Roster account.
+				</p>
 				{passwordUpdatedNotice && (
 					<p className="text-sm text-green-300 mb-4" data-testid="password-updated-notice">
 						Password updated. Sign in with your new password.
@@ -347,6 +345,8 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 						<Input
 							data-testid="login-email"
 							type="email"
+							name="email"
+							autoComplete="email"
 							value={email}
 							onChange={e => setEmail(e.target.value)}
 							placeholder="you@example.com"
@@ -357,6 +357,8 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 						<Input
 							data-testid="login-password"
 							type="password"
+							name="password"
+							autoComplete="current-password"
 							value={password}
 							onChange={e => setPassword(e.target.value)}
 							placeholder="••••••••"
@@ -421,8 +423,13 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 							{sendingReset ? 'Sending reset…' : 'Forgot password?'}
 						</button>
 						{onNeedAccount && (
-							<button type="button" onClick={onNeedAccount} className="text-xs text-gray-300 underline hover:text-white">
-								Need an account?
+							<button
+								type="button"
+								onClick={onNeedAccount}
+								className="text-xs text-gray-300 underline hover:text-white"
+								data-testid="login-need-account"
+							>
+								Create an account
 							</button>
 						)}
 					</div>

@@ -7,6 +7,10 @@ import { resolveAppMode } from '../appMode'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 
+/**
+ * Legacy matrix for the demo/public surface (PUBLIC_MODE=true).
+ * Production public auth uses PUBLIC_MODE=false — see publicAuthContract.test.ts.
+ */
 type MatrixRow = {
 	name: string
 	publicMode: boolean
@@ -30,7 +34,7 @@ const matrix: MatrixRow[] = [
 		expectAppRedirectsToDemo: true,
 	},
 	{
-		name: 'closed beta, login on',
+		name: 'public demo surface, login on (signup still off)',
 		publicMode: true,
 		appModeFlag: 'beta',
 		existingUserLogin: 'true',
@@ -40,7 +44,7 @@ const matrix: MatrixRow[] = [
 		expectAppRedirectsToDemo: false,
 	},
 	{
-		name: 'closed beta, login off',
+		name: 'public demo surface, login off',
 		publicMode: true,
 		appModeFlag: 'beta',
 		existingUserLogin: 'false',
@@ -50,18 +54,18 @@ const matrix: MatrixRow[] = [
 		expectAppRedirectsToDemo: false,
 	},
 	{
-		name: 'absent app mode + public mode defaults to demo',
-		publicMode: true,
-		appModeFlag: undefined,
+		name: 'production public auth contract',
+		publicMode: false,
+		appModeFlag: 'beta',
 		existingUserLogin: undefined,
-		expectLoginEnabled: false,
-		expectResetEnabled: false,
-		expectSignupDisabled: true,
-		expectAppRedirectsToDemo: true,
+		expectLoginEnabled: true,
+		expectResetEnabled: true,
+		expectSignupDisabled: false,
+		expectAppRedirectsToDemo: false,
 	},
 ]
 
-describe('closed beta auth contract matrix', () => {
+describe('auth contract matrix', () => {
 	for (const row of matrix) {
 		it(row.name, () => {
 			const appMode = resolveAppMode({
@@ -113,15 +117,17 @@ describe('closed beta auth contract matrix', () => {
 		expect(e2e).toMatch(/localhost|127\.0\.0\.1/)
 	})
 
-	it('beta login UX copy does not claim public demo login is disabled', () => {
+	it('public login UX copy is available without closed-beta invitation claims', () => {
 		const login = fs.readFileSync(path.join(root, 'src/components/auth/LoginSupabase.tsx'), 'utf8')
 		const disabled = fs.readFileSync(
 			path.join(root, 'src/components/auth/PublicAuthDisabled.tsx'),
 			'utf8',
 		)
 		expect(login).toContain('Log in to NIL Roster')
-		expect(login).toContain('Existing beta members can sign in below.')
-		expect(disabled).toContain('New accounts are opened by invitation.')
+		expect(login).toContain('Sign in to access your NIL Roster account.')
+		expect(login).not.toContain('Existing beta members can sign in below.')
+		expect(disabled).not.toContain('New accounts are opened by invitation.')
 		expect(disabled).not.toContain('Login disabled in public release')
+		expect(disabled).not.toMatch(/private beta/i)
 	})
 })

@@ -9,18 +9,18 @@ type Props = {
 const copy = {
 	login: {
 		title: 'Login unavailable',
-		message: 'Existing-member login is not enabled for this release.',
-		detail: 'NIL Roster is currently in private beta. If you already have an account, check back soon or contact Athlete Houze for access.',
+		message: 'Login is not enabled on this public demo surface.',
+		detail: 'Use the full NIL Roster app to sign in to your account, or explore the demo.',
 	},
 	signup: {
-		title: 'Private beta',
-		message: 'NIL Roster is currently in private beta. New accounts are opened by invitation.',
-		detail: 'Existing beta members can sign in from the login page when access is enabled.',
+		title: 'Create account on NIL Roster',
+		message: 'Account creation is not available on this public demo surface.',
+		detail: 'Open NIL Roster to create an Athlete, Parent/Guardian, or Coach account, or explore the demo below.',
 	},
 	reset: {
 		title: 'Password reset unavailable',
-		message: 'Password reset is not available in this release.',
-		detail: 'If you need help accessing your beta account, contact Athlete Houze support.',
+		message: 'Password reset is not available on this public demo surface.',
+		detail: 'Use the full NIL Roster login page when you need to recover your password.',
 	},
 } as const
 

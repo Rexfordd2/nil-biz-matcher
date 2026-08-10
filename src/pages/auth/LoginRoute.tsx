@@ -7,20 +7,22 @@ import type { CurrentUser } from '../../utils/auth'
 import { PUBLIC_MODE } from '../../config/publicMode'
 import { isExistingUserLoginEnabled } from '../../config/existingUserLogin'
 import PublicAuthDisabled from '../../components/auth/PublicAuthDisabled'
+import { postAuthDestination } from '../../lib/auth/onboardingState'
 
 export default function LoginRoute() {
-	// Public mode disables login by default. Existing-user login may reopen login
-	// independently while signup stays gated by PUBLIC_MODE alone.
+	// Production public auth: PUBLIC_MODE=false → login always available.
+	// Demo public surface (PUBLIC_MODE=true) may optionally reopen login via
+	// VITE_EXISTING_USER_LOGIN_ENABLED without enabling signup.
 	if (PUBLIC_MODE && !isExistingUserLoginEnabled()) {
 		return <PublicAuthDisabled kind="login" />
 	}
 
 	const returnTo = useMemo(() => {
 		const sp = new URLSearchParams(window.location.search)
-		return sp.get('returnTo') || '/app'
+		return sp.get('returnTo') || '/app/today'
 	}, [])
-	function onLoggedIn(_: CurrentUser) {
-		navigate(returnTo)
+	function onLoggedIn(user: CurrentUser) {
+		navigate(postAuthDestination(user.id, returnTo), true)
 	}
 	return (
 		<div className="mx-auto max-w-3xl px-4 md:px-6 py-10 space-y-4">

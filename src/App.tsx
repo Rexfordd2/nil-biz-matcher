@@ -74,6 +74,7 @@ import AthleteProfileDebugPanel from './components/AthleteProfileDebugPanel'
 import AuthDebugPanel from './components/AuthDebugPanel'
 import GoogleDebugPanel from './components/GoogleDebugPanel'
 import { goToLogin, goToLogout } from './lib/auth/navigation'
+import ChangePasswordForm from './components/auth/ChangePasswordForm'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -949,15 +950,16 @@ function MainApp({ pathname }: MainAppProps) {
 							<div className="card p-6">
 								<h2 className="headline text-xl mb-4">Settings</h2>
 								{currentUser ? (
-									<div className="space-y-4">
+									<div className="space-y-6">
 										<div>
 											<div className="text-sm text-gray-400 mb-2">Account</div>
-											<div className="text-white">{currentUser.email}</div>
+											<div className="text-white" data-testid="settings-account-email">{currentUser.email}</div>
 										</div>
 										<div>
 											<div className="text-sm text-gray-400 mb-2">Cloud Sync</div>
 											<div className="text-white">{cloudAvailable ? 'Enabled' : 'Unavailable'}</div>
 										</div>
+										<ChangePasswordForm />
 									</div>
 								) : (
 									<div className="space-y-4">

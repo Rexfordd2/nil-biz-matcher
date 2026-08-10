@@ -1,15 +1,15 @@
 /**
  * Existing-user login control — independent from public signup.
  *
- * When VITE_PUBLIC_MODE=true, login and signup are both disabled by default.
- * Setting VITE_EXISTING_USER_LOGIN_ENABLED=true permits password login and
- * password recovery for already-confirmed accounts while signup remains
- * disabled under public mode.
+ * Production public auth uses VITE_PUBLIC_MODE=false, so login/reset/signup
+ * are available without this flag.
+ *
+ * When VITE_PUBLIC_MODE=true (demo surface), login and signup are both
+ * disabled by default. Setting VITE_EXISTING_USER_LOGIN_ENABLED=true permits
+ * password login and password recovery while signup remains disabled.
  *
  * Default / absent / any value other than exact "true" → false.
  * Not enabled by query parameters, client storage, or UI.
- *
- * NOT ENABLED BY THIS COMMIT in Production / Preview.
  */
 
 export type ExistingUserLoginInput = {

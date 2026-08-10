@@ -8,7 +8,7 @@ import Observability from '../lib/obs'
 import { setOpenGraphTags } from '../lib/metaTags'
 import WaitlistForm from '../components/WaitlistForm'
 import WaitlistEmbed from '../components/WaitlistEmbed'
-import { isDemoMode, isBetaMode } from '../config/appMode'
+import { isDemoMode } from '../config/appMode'
 import { hasWaitlistJoined } from '../lib/waitlistState'
 import { goToLogin } from '../lib/auth/navigation'
 import AuthDebugPanel from '../components/AuthDebugPanel'
@@ -107,7 +107,10 @@ export default function Home() {
 						) : isDemoMode() ? (
 							<Button data-testid="header-save-progress-button" onClick={handleSaveProgress} className="red-glow">Save my progress</Button>
 						) : (
-							<Button data-testid="header-login-button" onClick={() => goToLogin('/app')} className="red-glow">Log In</Button>
+							<>
+								<Button data-testid="header-signup-button" onClick={() => navigate('/auth/signup')} className="red-glow">Create Account</Button>
+								<Button data-testid="header-login-button" onClick={() => goToLogin('/app')} variant="secondary">Log In</Button>
+							</>
 						)}
 					</div>
 				</div>
@@ -132,8 +135,8 @@ export default function Home() {
 							</>
 						) : (
 							<>
-								<Button data-testid="get-started-button" onClick={() => navigate('/app')} className="red-glow">
-									Get Started
+								<Button data-testid="get-started-button" onClick={() => navigate('/auth/signup')} className="red-glow">
+									Create Account
 								</Button>
 								<Button data-testid="login-button" onClick={() => goToLogin('/app')} variant="secondary">
 									Log In
@@ -142,7 +145,9 @@ export default function Home() {
 						)}
 					</div>
 					<p className="text-sm text-gray-600 mt-2">
-						{isDemoMode() ? 'No login required. Save progress with email.' : 'Create an account or log in to get started.'}
+						{isDemoMode()
+							? 'No login required. Save progress with email.'
+							: 'Create a free account or log in to open NIL Roster.'}
 					</p>
 					<div className="aspect-video w-full max-w-3xl mx-auto rounded-lg overflow-hidden border border-border bg-mid">
 						<iframe
@@ -260,9 +265,9 @@ export default function Home() {
 						<p className="text-sm text-gray-600">No login required. Save progress with email.</p>
 					</div>
 				) : (
-					<div className="flex flex-col items-center justify-center gap-3">
-						<Button data-testid="footer-get-started-button" onClick={() => navigate('/app')} className="red-glow">Get Started</Button>
-						<p className="text-sm text-gray-600">Create an account to save your progress.</p>
+					<div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+						<Button data-testid="footer-get-started-button" onClick={() => navigate('/auth/signup')} className="red-glow">Create Account</Button>
+						<Button data-testid="footer-login-button" onClick={() => goToLogin('/app')} variant="secondary">Log In</Button>
 					</div>
 				)}
 			</section>
