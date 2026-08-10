@@ -43,6 +43,15 @@ export function friendlyAuthErrorMessage(err: SupabaseLikeError | string | null 
 	if (messageLc.includes('invalid login credentials') || messageLc.includes('invalid email or password')) {
 		return 'Invalid email or password. Please try again.'
 	}
+	if (
+		context === 'signup' &&
+		(messageLc.includes('already registered') ||
+			messageLc.includes('user already exists') ||
+			messageLc.includes('already been registered') ||
+			messageLc.includes('email address is already'))
+	) {
+		return 'Unable to create an account with that email. Try logging in or resetting your password.'
+	}
 	if (messageLc.includes('failed to fetch') || messageLc.includes('networkerror') || messageLc.includes('network')) {
 		return 'Network error. Check your connection and try again.'
 	}

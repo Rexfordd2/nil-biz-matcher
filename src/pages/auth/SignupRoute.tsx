@@ -6,20 +6,24 @@ import { navigate } from '../../routes/RootRouter'
 import type { CurrentUser } from '../../utils/auth'
 import { PUBLIC_MODE } from '../../config/publicMode'
 import PublicAuthDisabled from '../../components/auth/PublicAuthDisabled'
+import { postAuthDestination } from '../../lib/auth/onboardingState'
 
 export default function SignupRoute() {
-	// In public mode, auth is disabled
+	// Demo / public-release surface may still disable account creation.
+	// Production public auth runs with PUBLIC_MODE=false so signup is available.
 	if (PUBLIC_MODE) {
 		return <PublicAuthDisabled kind="signup" />
 	}
 
 	const returnTo = useMemo(() => {
 		const sp = new URLSearchParams(window.location.search)
-		return sp.get('returnTo') || '/app'
+		return sp.get('returnTo') || '/app/today'
 	}, [])
-	function onSignedIn(_: CurrentUser) {
-		navigate(returnTo)
+
+	function onSignedIn(user: CurrentUser) {
+		navigate(postAuthDestination(user.id, returnTo), true)
 	}
+
 	return (
 		<div className="mx-auto max-w-3xl px-4 md:px-6 py-10 space-y-4">
 			{supabaseEnvConfigured ? (
@@ -34,15 +38,23 @@ export default function SignupRoute() {
 					</p>
 				</div>
 			)}
-			
+
 			<div className="max-w-md mx-auto text-center space-y-2">
-				<div className="flex items-center justify-center gap-4 text-sm">
+				<div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
 					<button
 						onClick={() => navigate('/app')}
 						className="text-gray-300 hover:text-white underline"
 						data-testid="signup-back-to-gate"
 					>
 						Back to access gate
+					</button>
+					<span className="text-gray-500">•</span>
+					<button
+						onClick={() => navigate('/auth/login')}
+						className="text-gray-300 hover:text-white underline"
+						data-testid="signup-back-to-login"
+					>
+						Log in
 					</button>
 					<span className="text-gray-500">•</span>
 					<button
@@ -57,5 +69,3 @@ export default function SignupRoute() {
 		</div>
 	)
 }
-
-
