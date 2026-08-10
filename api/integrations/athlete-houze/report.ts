@@ -18,27 +18,23 @@ function bearerToken(req: VercelRequest): string | null {
 }
 
 function operatorExternalAthleteId(user: {
-	id: string
 	app_metadata?: Record<string, unknown>
-}): string {
+}): string | null {
 	const configured = user.app_metadata?.athlete_houze_external_id
 	return typeof configured === 'string' && CLIENT_ID_PATTERN.test(configured)
 		? configured
-		: user.id
+		: null
 }
 
 function integrationAllowed(
 	user: { app_metadata?: Record<string, unknown> },
-	externalAthleteId: string
+	externalAthleteId: string,
+	expectedCanaryId: string
 ): boolean {
-	const mode = process.env.ATHLETE_HOUZE_REPORTING_MODE?.trim().toLowerCase()
-	if (mode === 'all') return process.env.ATHLETE_HOUZE_REPORT_ALL_ENABLED === 'true'
-	if (mode !== 'canary') return false
-	const expectedCanaryId = process.env.ATHLETE_HOUZE_REPORT_CANARY_EXTERNAL_ID?.trim()
 	return (
-		Boolean(expectedCanaryId) &&
 		externalAthleteId === expectedCanaryId &&
-		user.app_metadata?.workflow_cloud_persistence_canary === true
+		user.app_metadata?.workflow_cloud_persistence_canary === true &&
+		user.app_metadata?.synthetic_test_data === true
 	)
 }
 
@@ -70,8 +66,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	})
 	const { data: authData, error: authError } = await supabase.auth.getUser(accessToken)
 	if (authError || !authData.user) return res.status(401).json({ error: 'Unauthorized' })
+	const config = loadAthleteHouzeReporterConfig()
+	if (!config) return res.status(503).json({ error: 'Integration unavailable' })
 	const externalAthleteId = operatorExternalAthleteId(authData.user)
-	if (!integrationAllowed(authData.user, externalAthleteId)) {
+	if (
+		!externalAthleteId ||
+		!integrationAllowed(
+			authData.user,
+			externalAthleteId,
+			config.canaryExternalAthleteId
+		)
+	) {
 		return res.status(403).json({ error: 'Integration disabled' })
 	}
 
@@ -84,9 +89,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	if (sourceError || !source) {
 		return res.status(404).json({ error: 'Source record not found' })
 	}
-
-	const config = loadAthleteHouzeReporterConfig()
-	if (!config) return res.status(503).json({ error: 'Integration unavailable' })
 
 	const report = buildNilRosterOpportunityReport({
 		externalAthleteId,
