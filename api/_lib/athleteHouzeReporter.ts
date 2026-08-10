@@ -13,9 +13,13 @@ export type DeliveryResult =
 export type ReporterConfig = {
 	endpoint: string
 	hmacSecret: string
+	mode: 'canary'
+	canaryExternalAthleteId: string
 	maxAttempts?: number
 	fetchImpl?: typeof fetch
 }
+
+type ReporterEnvironment = Readonly<Record<string, string | undefined>>
 
 export type NilRosterOpportunityReport = {
 	externalAthleteId: string
@@ -35,12 +39,17 @@ function isPermanentStatus(status: number): boolean {
 }
 
 export function loadAthleteHouzeReporterConfig(
-	env: NodeJS.ProcessEnv = process.env
+	env: ReporterEnvironment = process.env
 ): ReporterConfig | null {
 	const endpoint = env.ATHLETE_HOUZE_REPORT_URL?.trim()
 	const hmacSecret = env.ATHLETE_HOUZE_REPORT_HMAC_SECRET?.trim()
-	if (!endpoint || !hmacSecret) return null
-	return { endpoint, hmacSecret }
+	const mode = env.ATHLETE_HOUZE_REPORTING_MODE?.trim().toLowerCase()
+	const canaryExternalAthleteId =
+		env.ATHLETE_HOUZE_REPORT_CANARY_EXTERNAL_ID?.trim()
+	if (!endpoint || !hmacSecret || mode !== 'canary' || !canaryExternalAthleteId) {
+		return null
+	}
+	return { endpoint, hmacSecret, mode: 'canary', canaryExternalAthleteId }
 }
 
 export function signAthleteHouzeBody(
@@ -160,6 +169,7 @@ export function buildNilRosterOpportunityReport(input: NilRosterOpportunityRepor
 				category: input.category,
 			},
 			domainHints: ['nil_market'],
+			attributes: { synthetic_test_data: true },
 		},
 		units: {},
 		provenance: {
@@ -173,7 +183,7 @@ export function buildNilRosterOpportunityReport(input: NilRosterOpportunityRepor
 }
 
 export function sourceEnvironment(
-	env: NodeJS.ProcessEnv = process.env
+	env: ReporterEnvironment = process.env
 ): NilRosterOpportunityReport['environment'] {
 	if (env.VERCEL_ENV === 'production') return 'production'
 	if (env.VERCEL_ENV === 'preview') return 'preview'
