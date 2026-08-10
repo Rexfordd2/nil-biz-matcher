@@ -8,8 +8,20 @@ import { supabase } from './supabaseClient'
 export async function reportNilRosterOpportunity(clientId: string): Promise<boolean> {
 	if (!supabase || !clientId) return false
 	const { data, error } = await supabase.auth.getSession()
-	const accessToken = data.session?.access_token
-	if (error || !accessToken) return false
+	const session = data.session
+	const accessToken = session?.access_token
+	const appMetadata = session?.user.app_metadata
+	const externalAthleteId = appMetadata?.athlete_houze_external_id
+	if (
+		error ||
+		!accessToken ||
+		appMetadata?.workflow_cloud_persistence_canary !== true ||
+		appMetadata?.synthetic_test_data !== true ||
+		typeof externalAthleteId !== 'string' ||
+		!/^nil-canary-[A-Za-z0-9._:-]+$/.test(externalAthleteId)
+	) {
+		return false
+	}
 
 	try {
 		const response = await fetch('/api/integrations/athlete-houze/report', {
