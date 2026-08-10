@@ -5,13 +5,18 @@ import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabaseClient'
 import { navigate } from '../../routes/RootRouter'
 import { PUBLIC_MODE } from '../../config/publicMode'
+import { isExistingUserLoginEnabled } from '../../config/existingUserLogin'
 import PublicAuthDisabled from '../../components/auth/PublicAuthDisabled'
+import { friendlyAuthErrorMessage } from '../../lib/supabaseErrors'
+import { validateNewPassword } from '../../lib/auth/passwordReset'
 
 export default function ResetRoute() {
-	// In public mode, auth is disabled
-	if (PUBLIC_MODE) {
+	// Closed beta: reset follows the same existing-user-login gate as login.
+	// Signup remains independently blocked by PUBLIC_MODE alone.
+	if (PUBLIC_MODE && !isExistingUserLoginEnabled()) {
 		return <PublicAuthDisabled kind="reset" />
 	}
+
 	const [password, setPassword] = useState('')
 	const [confirm, setConfirm] = useState('')
 	const [showPassword, setShowPassword] = useState(false)
@@ -21,16 +26,31 @@ export default function ResetRoute() {
 
 	useEffect(() => {
 		let canceled = false
+		if (!supabase) {
+			setHasSession(false)
+			return
+		}
+		const sb = supabase
+
 		async function check() {
-			if (!supabase) {
-				setHasSession(false)
-				return
-			}
-			const { data } = await supabase.auth.getSession()
+			const { data } = await sb.auth.getSession()
 			if (!canceled) setHasSession(Boolean(data.session))
 		}
+
 		check()
-		return () => { canceled = true }
+
+		const { data: listener } = sb.auth.onAuthStateChange((_event, session) => {
+			if (!canceled) setHasSession(Boolean(session))
+		})
+
+		return () => {
+			canceled = true
+			try {
+				listener.subscription.unsubscribe()
+			} catch {
+				// ignore
+			}
+		}
 	}, [])
 
 	async function handleSubmit(e: React.FormEvent) {
@@ -40,25 +60,30 @@ export default function ResetRoute() {
 			setErr('Cloud auth not configured')
 			return
 		}
-		if (password.length < 8) {
-			setErr('Password must be at least 8 characters')
+		if (hasSession !== true) {
+			setErr('This reset link is invalid or expired. Please request a new reset email.')
 			return
 		}
-		if (password !== confirm) {
-			setErr('Passwords do not match')
+		const validationError = validateNewPassword(password, confirm)
+		if (validationError) {
+			setErr(validationError)
 			return
 		}
 		setLoading(true)
-		const { error } = await supabase.auth.updateUser({ password })
-		setLoading(false)
-		if (error) {
-			setErr(error.message)
-			return
+		try {
+			const { error } = await supabase.auth.updateUser({ password })
+			if (error) {
+				setErr(friendlyAuthErrorMessage(error, { context: 'reset' }))
+				return
+			}
+			navigate('/auth/login?passwordUpdated=1', true)
+		} catch (e: any) {
+			setErr(friendlyAuthErrorMessage(e, { context: 'reset' }))
+		} finally {
+			setLoading(false)
 		}
-		navigate('/app', true)
 	}
 
-	// If Supabase isn't configured, show a friendly unavailable message
 	if (!supabase) {
 		return (
 			<div className="mx-auto max-w-md px-4 md:px-6 py-10">
@@ -79,22 +104,40 @@ export default function ResetRoute() {
 	return (
 		<div className="mx-auto max-w-md px-4 md:px-6 py-10">
 			<Card title="Set a new password">
+				{hasSession === null && (
+					<p className="text-sm text-gray-300 mb-4" data-testid="reset-session-loading">
+						Checking your reset link…
+					</p>
+				)}
 				{hasSession === false && (
-					<div className="text-sm text-gray-300 mb-4">
+					<div className="text-sm text-gray-300 mb-4" data-testid="reset-invalid-session">
 						This reset link is invalid or expired. Please request a new reset email.
 					</div>
 				)}
-				<form className="space-y-4" onSubmit={handleSubmit}>
+				{hasSession === true && (
+					<p className="text-sm text-gray-300 mb-4" data-testid="reset-session-ready">
+						Choose a new password for your account.
+					</p>
+				)}
+				<form className="space-y-4" data-testid="reset-form" onSubmit={handleSubmit}>
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">New password</span>
 						<div className="flex gap-2">
 							<Input
+								data-testid="reset-password"
 								type={showPassword ? 'text' : 'password'}
 								value={password}
 								onChange={e => setPassword(e.target.value)}
 								placeholder="••••••••"
+								disabled={hasSession !== true || loading}
+								autoComplete="new-password"
 							/>
-							<button type="button" className="text-xs text-gray-300 hover:text-white px-2" onClick={() => setShowPassword(v => !v)}>
+							<button
+								type="button"
+								className="text-xs text-gray-300 hover:text-white px-2"
+								onClick={() => setShowPassword(v => !v)}
+								disabled={hasSession !== true || loading}
+							>
 								{showPassword ? 'Hide' : 'Show'}
 							</button>
 						</div>
@@ -102,16 +145,28 @@ export default function ResetRoute() {
 					<label className="flex flex-col gap-2">
 						<span className="subtle text-sm">Confirm password</span>
 						<Input
+							data-testid="reset-password-confirm"
 							type={showPassword ? 'text' : 'password'}
 							value={confirm}
 							onChange={e => setConfirm(e.target.value)}
 							placeholder="••••••••"
+							disabled={hasSession !== true || loading}
+							autoComplete="new-password"
 						/>
 					</label>
-					{err && <div className="text-red-400 text-sm">{err}</div>}
+					{err && (
+						<div className="text-red-400 text-sm" data-testid="reset-error" aria-live="polite">
+							{err}
+						</div>
+					)}
 					<div className="pt-2">
-						<Button type="submit" className="red-glow" disabled={loading || hasSession === false}>
-							{loading ? 'Saving…' : 'Save password'}
+						<Button
+							type="submit"
+							className="red-glow"
+							data-testid="reset-submit"
+							disabled={loading || hasSession !== true}
+						>
+							{loading ? <span data-testid="reset-saving">Saving…</span> : 'Save password'}
 						</Button>
 					</div>
 				</form>
@@ -119,5 +174,3 @@ export default function ResetRoute() {
 		</div>
 	)
 }
-
-

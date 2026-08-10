@@ -33,6 +33,8 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	const [loading, setLoading] = useState(false)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [sendingReset, setSendingReset] = useState(false)
+	const [resetInfo, setResetInfo] = useState<string | null>(null)
+	const [passwordUpdatedNotice, setPasswordUpdatedNotice] = useState(false)
 	const [slow, setSlow] = useState(false)
 	const [submitCapturedCount, setSubmitCapturedCount] = useState(0)
 	const [clickCapturedCount, setClickCapturedCount] = useState(0)
@@ -88,6 +90,16 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		const t = window.setTimeout(() => setSlow(true), 8000)
 		return () => window.clearTimeout(t)
 	}, [loading])
+
+	useEffect(() => {
+		const sp = new URLSearchParams(window.location.search)
+		if (sp.get('passwordUpdated') === '1') {
+			setPasswordUpdatedNotice(true)
+			sp.delete('passwordUpdated')
+			const next = `${window.location.pathname}${sp.toString() ? `?${sp.toString()}` : ''}${window.location.hash}`
+			window.history.replaceState({}, '', next)
+		}
+	}, [])
 
 	// Update online status when it changes
 	useEffect(() => {
@@ -267,14 +279,24 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 	async function handleForgotPassword() {
 		if (!email) {
 			setErr('Enter your email to reset password')
+			setResetInfo(null)
 			return
 		}
 		setErr(null)
+		setResetInfo(null)
 		setSendingReset(true)
 		try {
-			await supabase!.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth/reset` })
+			const { error } = await sb.auth.resetPasswordForEmail(email, {
+				redirectTo: `${window.location.origin}/auth/reset`,
+			})
+			if (error) {
+				setErr(friendlyAuthErrorMessage(error, { context: 'reset' }))
+				return
+			}
+			// Neutral copy — do not reveal whether the account exists.
+			setResetInfo('If an account exists for that email, a password reset link has been sent.')
 		} catch (e: any) {
-			setErr(e?.message || 'Failed to send reset email')
+			setErr(friendlyAuthErrorMessage(e, { context: 'reset' }) || 'We could not send a reset email. Please try again.')
 		} finally {
 			setSendingReset(false)
 		}
@@ -286,6 +308,11 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 				{isBetaMode() && (
 					<p className="text-sm text-gray-300 mb-4" data-testid="login-beta-message">
 						Existing beta members can sign in below.
+					</p>
+				)}
+				{passwordUpdatedNotice && (
+					<p className="text-sm text-green-300 mb-4" data-testid="password-updated-notice">
+						Password updated. Sign in with your new password.
 					</p>
 				)}
 				<form 
@@ -365,6 +392,11 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					<div data-testid="login-error" aria-live="polite" className="text-red-400 text-sm">
 						{err ?? ''}
 					</div>
+					{resetInfo && (
+						<div data-testid="login-reset-info" aria-live="polite" className="text-green-300 text-sm">
+							{resetInfo}
+						</div>
+					)}
 					{slow && !err && <div className="text-amber-300 text-xs">Login is taking longer than expected. Refresh and try again.</div>}
 					<div className="flex items-center justify-between">
 						<Button 
@@ -372,14 +404,20 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 							data-testid-loading={loading ? 'true' : 'false'} 
 							className="red-glow" 
 							type="submit" 
-							disabled={isSubmitting}
+							disabled={isSubmitting || sendingReset}
 							onClick={() => setClickCapturedCount(c => c + 1)}
 						>
 							{loading ? <span data-testid="login-loading">Logging in…</span> : 'Log in'}
 						</Button>
 					</div>
 					<div className="flex items-center justify-between">
-						<button type="button" onClick={handleForgotPassword} className="text-xs text-gray-300 underline hover:text-white" disabled={sendingReset}>
+						<button
+							type="button"
+							onClick={handleForgotPassword}
+							className="text-xs text-gray-300 underline hover:text-white"
+							data-testid="login-forgot-password"
+							disabled={sendingReset || isSubmitting}
+						>
 							{sendingReset ? 'Sending reset…' : 'Forgot password?'}
 						</button>
 						{onNeedAccount && (

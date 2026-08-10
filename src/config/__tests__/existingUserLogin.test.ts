@@ -24,9 +24,12 @@ describe('login gate source contracts', () => {
 	it('login can be enabled while signup stays PUBLIC_MODE-gated', () => {
 		const login = fs.readFileSync(path.join(root, 'src/pages/auth/LoginRoute.tsx'), 'utf8')
 		const signup = fs.readFileSync(path.join(root, 'src/pages/auth/SignupRoute.tsx'), 'utf8')
+		const reset = fs.readFileSync(path.join(root, 'src/pages/auth/ResetRoute.tsx'), 'utf8')
 
 		expect(login).toContain('isExistingUserLoginEnabled')
 		expect(login).toContain('PUBLIC_MODE && !isExistingUserLoginEnabled()')
+		expect(reset).toContain('isExistingUserLoginEnabled')
+		expect(reset).toContain('PUBLIC_MODE && !isExistingUserLoginEnabled()')
 		expect(signup).toContain('PUBLIC_MODE')
 		expect(signup).toContain("PublicAuthDisabled kind=\"signup\"")
 		expect(signup).not.toContain('isExistingUserLoginEnabled')
