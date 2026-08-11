@@ -337,7 +337,7 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 					}}
 					onClickCapture={() => setClickCapturedCount(c => c + 1)}
 				>
-					<div data-testid="diag-compiled" style={{ position: 'absolute', left: -9999 }}>
+					<div data-testid="diag-compiled" hidden aria-hidden="true">
 						{DIAG}
 					</div>
 					<label className="flex flex-col gap-2">
@@ -364,31 +364,31 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 							placeholder="••••••••"
 						/>
 					</label>
-					<div data-testid="login-status" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-status" hidden aria-hidden="true">
 						{isSubmitting ? 'submitting' : 'idle'}
 					</div>
-					<div data-testid="login-submit-captured" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-submit-captured" hidden aria-hidden="true">
 						{submitCapturedCount}
 					</div>
-					<div data-testid="login-click-captured" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-click-captured" hidden aria-hidden="true">
 						{clickCapturedCount}
 					</div>
-					<div data-testid="login-native-submit-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-native-submit-count" hidden aria-hidden="true">
 						{nativeSubmitCount}
 					</div>
-					<div data-testid="login-handle-submit-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-handle-submit-count" hidden aria-hidden="true">
 						{handleSubmitCount}
 					</div>
-					<div data-testid="login-submit-start-count" style={{ position: 'absolute', left: '-9999px' }}>
+					<div data-testid="login-submit-start-count" hidden aria-hidden="true">
 						{submitStartCount}
 					</div>
-					<div data-testid="login-capture-default-prevented" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-capture-default-prevented" hidden aria-hidden="true">
 						{captureDefaultPrevented ? 'true' : 'false'}
 					</div>
-					<div data-testid="login-capture-event-phase" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-capture-event-phase" hidden aria-hidden="true">
 						{captureEventPhase}
 					</div>
-					<div data-testid="login-bridge-fired-count" aria-live="polite" style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+					<div data-testid="login-bridge-fired-count" hidden aria-hidden="true">
 						{bridgeFiredCount}
 					</div>
 					<div data-testid="login-error" aria-live="polite" className="text-red-400 text-sm">
@@ -493,5 +493,4 @@ export default function LoginSupabase({ onLoggedIn, onNeedAccount }: Props) {
 		</div>
 	)
 }
-
 
