@@ -23,6 +23,8 @@ import RecruitingV2Route from '../pages/RecruitingV2Route'
 import RecruitingLegacyRoute from '../pages/RecruitingLegacyRoute'
 import { isAppPathname, resolveAppPath } from './appRoutes'
 import { isLocalE2EAuthBypassAllowed } from '../config/e2e'
+import AthleteHouzeHandoffBanner from '../components/AthleteHouzeHandoffBanner'
+import { captureAthleteHouzeSource } from '../lib/athleteHouzeHandoff'
 
 type RouteEntry =
 	| { key: 'home' }
@@ -81,6 +83,8 @@ export function navigate(to: string, replace: boolean = false) {
 export default function RootRouter() {
 	// Single authoritative pathname + one popstate subscription for app routing.
 	const [pathname, setPathname] = useState(() => window.location.pathname)
+	// Captured before any canonical redirect drops the query string.
+	const [fromAthleteHouze] = useState(() => captureAthleteHouzeSource(window.location.search))
 	const loc = useMemo(() => parseLocation(pathname), [pathname])
 	const { user, initializing } = useAuth()
 
@@ -208,6 +212,7 @@ export default function RootRouter() {
 					<span className="font-semibold">Supabase not configured</span> — set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> (DEV only banner)
 				</div>
 			)}
+			{fromAthleteHouze && <AthleteHouzeHandoffBanner />}
 			{outlet}
 		</div>
 	)
