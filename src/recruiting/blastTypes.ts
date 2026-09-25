@@ -35,3 +35,12 @@ export type CoachOutreach = {
 }
 
 
+export type OutreachDraft = {
+	id: string
+	athleteId: string
+	subject: string
+	body: string
+	clipId?: string
+	recipientIds: string[]
+	updatedAt: number
+}
