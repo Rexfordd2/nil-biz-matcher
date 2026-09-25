@@ -44,6 +44,7 @@ export async function sendMail(params: {
 	text?: string
 	html?: string
 	from?: string
+	replyTo?: string
 }) {
 	const transporter = getEmailTransporter()
 	const defaultFrom = cachedFrom || process.env.SMTP_FROM
@@ -57,7 +58,8 @@ export async function sendMail(params: {
 		to: params.to,
 		subject: params.subject,
 		text: params.text,
-		html: params.html
+		html: params.html,
+		replyTo: params.replyTo
 	})
 }
 
