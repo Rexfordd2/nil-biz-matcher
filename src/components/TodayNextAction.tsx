@@ -75,7 +75,7 @@ export default function TodayNextAction({ role, intent, athlete, onNavigate, onC
 				</div>
 			</dl>
 			{plan.guardianNote && (
-				<p className="mt-3 text-xs text-amber-200" data-testid="today-guardian-note">{plan.guardianNote}</p>
+				<p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="today-guardian-note">{plan.guardianNote}</p>
 			)}
 			<div className="mt-4 flex flex-wrap items-center gap-3">
 				<Button className="red-glow" onClick={() => onNavigate(step.path)} data-testid="today-next-action-cta">
