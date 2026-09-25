@@ -30,7 +30,9 @@ import Welcome from './components/Welcome'
 import Resources from './components/Resources'
 import Guidelines from './components/Guidelines'
 import RecruitingBoard from './components/RecruitingBoard'
-import RecruitingBlast from './components/RecruitingBlast'
+import OutreachDrafts from './components/OutreachDrafts'
+import RecruitingSubnav from './components/RecruitingSubnav'
+import TodayNextAction from './components/TodayNextAction'
 import Sidebar from './components/Sidebar'
 import RecruitingV2 from './components/RecruitingV2'
 import SignUp from './components/auth/SignUp'
@@ -61,11 +63,14 @@ import { navigate } from './routes/RootRouter'
 import {
 	type AppTab,
 	getAppNavSections,
+	getPrimaryNav,
 	pathForTab,
 	PRIMARY_NAV,
 	resolveAppPath,
 	SECONDARY_NAV,
 } from './routes/appRoutes'
+import { isAthleteExperience, normalizeProductRole } from './lib/productRole'
+import { resolveOnboardingIntent } from './lib/auth/onboardingState'
 import WaitlistGate from './components/WaitlistGate'
 import BetaWaitlistModal from './components/BetaWaitlistModal'
 import { isBetaMode, isDemoMode } from './config/appMode'
@@ -130,6 +135,11 @@ function MainApp({ pathname }: MainAppProps) {
 	const autosave = useAutosaveProfile({ user, debounceMs: 800 })
 	const anonDraft = useAnonProfileDraft({ debounceMs: 800 })
 	const cloudConfigured = supabaseEnvConfigured
+	const productRole = normalizeProductRole(user?.user_metadata?.role)
+	const athleteExperience = isAthleteExperience(productRole)
+	const onboardingIntent = resolveOnboardingIntent(user?.id, user?.user_metadata?.onboardingIntent)
+	const navSections = getAppNavSections({ athleteExperience })
+	const primaryNav = getPrimaryNav({ athleteExperience })
 
 	// Debug-only health check state
 	const [healthRunning, setHealthRunning] = useState(false)
@@ -520,7 +530,7 @@ function MainApp({ pathname }: MainAppProps) {
 							<Sidebar
 								current={activeDestination}
 								onSelect={(k, path) => goToDestination(k, path)}
-								sections={getAppNavSections()}
+								sections={navSections}
 							/>
 						</div>
 						<div className="space-y-6">
@@ -866,6 +876,13 @@ function MainApp({ pathname }: MainAppProps) {
 
 					{tab === 'Dashboard' && (
 						<>
+							<TodayNextAction
+								role={productRole}
+								intent={onboardingIntent}
+								athlete={athlete ?? ((currentUser ? autosave.initialProfile : anonDraft.initialProfile) || null)}
+								onNavigate={goToPath}
+								onChangeFocus={user && athleteExperience ? () => navigate('/onboarding?step=focus') : undefined}
+							/>
 							<SuggestedPlays athlete={athlete} marketingConsent={currentUser?.marketingConsent} />
 							<div className="mb-4">
 								<BusinessFilterBar businesses={businesses} filters={filters} onFiltersChange={setFilters} statusOnly />
@@ -898,14 +915,27 @@ function MainApp({ pathname }: MainAppProps) {
 					)}
 
 					{tab === 'Recruiting' && (
-						<SectionErrorBoundary>
-							<RecruitingV2 />
-						</SectionErrorBoundary>
+						<>
+							<RecruitingSubnav currentPath={pathname} onNavigate={goToPath} />
+							<SectionErrorBoundary>
+								<RecruitingV2 />
+							</SectionErrorBoundary>
+						</>
 					)}
 
-					{tab === 'Recruiting Board' && <RecruitingBoard />}
+					{tab === 'Recruiting Board' && (
+						<>
+							<RecruitingSubnav currentPath={pathname} onNavigate={goToPath} />
+							<RecruitingBoard />
+						</>
+					)}
 
-					{tab === 'Recruiting Blast' && <RecruitingBlast athlete={athlete} />}
+					{tab === 'Outreach Drafts' && (
+						<>
+							<RecruitingSubnav currentPath={pathname} onNavigate={goToPath} />
+							<OutreachDrafts athlete={athlete} />
+						</>
+					)}
 
 					{tab === 'Sign Up' && (
 						import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? (
@@ -1013,8 +1043,11 @@ function MainApp({ pathname }: MainAppProps) {
 
 				{/* Mobile bottom navigation — same destination definitions as desktop */}
 				<nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur" data-testid="mobile-bottom-nav">
-					<div className="grid grid-cols-7 gap-0.5 px-1 py-2">
-						{PRIMARY_NAV.map(item => (
+					<div
+						className="grid gap-0.5 px-1 py-2"
+						style={{ gridTemplateColumns: `repeat(${primaryNav.length + 1}, minmax(0, 1fr))` }}
+					>
+						{primaryNav.map(item => (
 							<button
 								key={item.destination}
 								type="button"
@@ -1063,7 +1096,7 @@ function MainApp({ pathname }: MainAppProps) {
 								</button>
 							</div>
 							<div className="space-y-5">
-								{getAppNavSections().map(section => (
+								{navSections.map(section => (
 									<div key={section.title}>
 										<div className="text-xs uppercase tracking-wide text-foreground/60 mb-2">{section.title}</div>
 										<div className="grid grid-cols-2 gap-2">

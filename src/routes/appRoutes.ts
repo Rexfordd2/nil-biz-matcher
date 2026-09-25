@@ -31,7 +31,7 @@ export type AppTab =
 	| 'Vendor Directory'
 	| 'Recruiting'
 	| 'Recruiting Board'
-	| 'Recruiting Blast'
+	| 'Outreach Drafts'
 	| 'Settings'
 	| 'Extras'
 	| 'Network'
@@ -55,7 +55,7 @@ export const APP_ROUTES: readonly AppRouteDef[] = [
 
 	{ path: '/app/recruiting/search', tab: 'Recruiting', destination: 'recruiting' },
 	{ path: '/app/recruiting/board', tab: 'Recruiting Board', destination: 'recruiting' },
-	{ path: '/app/recruiting/blast', tab: 'Recruiting Blast', destination: 'recruiting' },
+	{ path: '/app/recruiting/drafts', tab: 'Outreach Drafts', destination: 'recruiting' },
 
 	{ path: '/app/network', tab: 'Network', destination: 'network' },
 
@@ -85,6 +85,9 @@ export const APP_DEFAULT_REDIRECTS: Readonly<Record<string, string>> = {
 	'/app/passport/': '/app/passport/profile',
 	'/app/recruiting': '/app/recruiting/search',
 	'/app/recruiting/': '/app/recruiting/search',
+	// Legacy Recruiting Blast URL stays valid as an alias.
+	'/app/recruiting/blast': '/app/recruiting/drafts',
+	'/app/recruiting/blast/': '/app/recruiting/drafts',
 	'/app/opportunities': '/app/opportunities/pipeline',
 	'/app/opportunities/': '/app/opportunities/pipeline',
 	'/app/learn': '/app/learn/nil-hub',
@@ -114,19 +117,61 @@ export const SECONDARY_NAV: readonly NavItem[] = [
 	{ destination: 'settings', label: 'Settings', path: '/app/settings' },
 ]
 
+/** Athlete beta: first-order navigation stays to four destinations. */
+export const ATHLETE_PRIMARY_NAV: readonly NavItem[] = PRIMARY_NAV.filter(n =>
+	(['today', 'passport', 'recruiting', 'opportunities'] as AppDestination[]).includes(n.destination),
+)
+
+/** Athlete beta: kept reachable under "More / Explore" instead of first-order nav. */
+export const EXPLORE_NAV: readonly NavItem[] = [
+	...PRIMARY_NAV.filter(n => n.destination === 'network' || n.destination === 'career'),
+	...SECONDARY_NAV.filter(n => n.destination === 'learn'),
+]
+
+export const ACCOUNT_NAV: readonly NavItem[] = SECONDARY_NAV.filter(n => n.destination === 'settings')
+
+export type AppNavSection = {
+	title: string
+	/** Rendered collapsed until opened or until one of its destinations is active. */
+	collapsible?: boolean
+	items: Array<{ key: string; label: string; path: string }>
+}
+
+function toItems(items: readonly NavItem[]) {
+	return items.map(n => ({ key: n.destination, label: n.label, path: n.path }))
+}
+
+/** First-order destinations for the bottom bar / primary list. */
+export function getPrimaryNav(options: { athleteExperience?: boolean } = {}): readonly NavItem[] {
+	return options.athleteExperience ? ATHLETE_PRIMARY_NAV : PRIMARY_NAV
+}
+
 /** Shared sidebar / mobile menu sections (single definition). */
-export function getAppNavSections(): Array<{ title: string; items: Array<{ key: string; label: string; path: string }> }> {
+export function getAppNavSections(options: { athleteExperience?: boolean } = {}): AppNavSection[] {
+	if (options.athleteExperience) {
+		return [
+			{ title: 'Primary', items: toItems(ATHLETE_PRIMARY_NAV) },
+			{ title: 'More / Explore', collapsible: true, items: toItems(EXPLORE_NAV) },
+			{ title: 'Account', items: toItems(ACCOUNT_NAV) },
+		]
+	}
 	return [
-		{
-			title: 'Primary',
-			items: PRIMARY_NAV.map(n => ({ key: n.destination, label: n.label, path: n.path })),
-		},
-		{
-			title: 'Secondary',
-			items: SECONDARY_NAV.map(n => ({ key: n.destination, label: n.label, path: n.path })),
-		},
+		{ title: 'Primary', items: toItems(PRIMARY_NAV) },
+		{ title: 'Secondary', items: toItems(SECONDARY_NAV) },
 	]
 }
+
+export type RecruitingSubnavItem = {
+	path: string
+	label: string
+	testId: string
+}
+
+export const RECRUITING_SUBNAV: readonly RecruitingSubnavItem[] = [
+	{ path: '/app/recruiting/search', label: 'Search', testId: 'search' },
+	{ path: '/app/recruiting/board', label: 'Board', testId: 'board' },
+	{ path: '/app/recruiting/drafts', label: 'Outreach Drafts', testId: 'drafts' },
+]
 
 export type OpportunitiesSubnavItem = {
 	path: string

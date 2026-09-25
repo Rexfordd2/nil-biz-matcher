@@ -2,8 +2,14 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import {
 	hasCompletedOnboarding,
 	markOnboardingComplete,
+	onboardingIntentStorageKey,
 	onboardingStorageKey,
+	parseOnboardingIntent,
 	postAuthDestination,
+	readOnboardingIntent,
+	resolveOnboardingIntent,
+	safeReturnPath,
+	saveOnboardingIntent,
 } from '../onboardingState'
 
 describe('onboardingState', () => {
@@ -40,5 +46,32 @@ describe('onboardingState', () => {
 	it('routes completed users to preferred destination', () => {
 		markOnboardingComplete('done-user')
 		expect(postAuthDestination('done-user', '/app/settings')).toBe('/app/settings')
+	})
+
+	it('persists the first-focus intent per user next to the onboarding marker', () => {
+		expect(readOnboardingIntent('u1')).toBeNull()
+		saveOnboardingIntent('u1', 'recruiting')
+		expect(store.get(onboardingIntentStorageKey('u1'))).toBe('recruiting')
+		expect(onboardingIntentStorageKey('u1')).toBe('athleteLedger:onboarding:intent:u1')
+		expect(readOnboardingIntent('u1')).toBe('recruiting')
+		expect(readOnboardingIntent('u2')).toBeNull()
+	})
+
+	it('account metadata intent wins over the local mirror and invalid values are ignored', () => {
+		saveOnboardingIntent('u1', 'recruiting')
+		expect(resolveOnboardingIntent('u1', 'nil_identity')).toBe('nil_identity')
+		expect(resolveOnboardingIntent('u1', 'send_blast')).toBe('recruiting')
+		expect(parseOnboardingIntent('admin')).toBeNull()
+		store.set(onboardingIntentStorageKey('u3'), 'not-an-intent')
+		expect(readOnboardingIntent('u3')).toBeNull()
+	})
+
+	it('only accepts same-origin paths as onboarding returnTo', () => {
+		expect(safeReturnPath('/app/recruiting/board')).toBe('/app/recruiting/board')
+		expect(safeReturnPath('https://evil.example')).toBe('/app/today')
+		expect(safeReturnPath('//evil.example')).toBe('/app/today')
+		expect(safeReturnPath('/\\evil.example')).toBe('/app/today')
+		expect(safeReturnPath('javascript:alert(1)')).toBe('/app/today')
+		expect(safeReturnPath(null)).toBe('/app/today')
 	})
 })
