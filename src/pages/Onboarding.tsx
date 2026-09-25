@@ -5,7 +5,16 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { navigate } from '../routes/RootRouter'
 import { goToLogin } from '../lib/auth/navigation'
-import { hasCompletedOnboarding, markOnboardingComplete } from '../lib/auth/onboardingState'
+import {
+	hasCompletedOnboarding,
+	markOnboardingComplete,
+	ONBOARDING_INTENT_LABELS,
+	ONBOARDING_INTENTS,
+	type OnboardingIntent,
+	readOnboardingIntent,
+	safeReturnPath,
+	saveOnboardingIntent,
+} from '../lib/auth/onboardingState'
 
 type RoleChoice =
 	| 'athlete_18_plus'
@@ -35,20 +44,25 @@ export default function Onboarding() {
 	const [ackGuardian, setAckGuardian] = useState(false)
 	const [saving, setSaving] = useState(false)
 	const [completed, setCompleted] = useState(false)
+	const [roleSaved, setRoleSaved] = useState(false)
+	const [intent, setIntent] = useState<OnboardingIntent | ''>('')
+	const [savingIntent, setSavingIntent] = useState(false)
 
 	const returnTo = useMemo(() => {
 		const sp = new URLSearchParams(window.location.search)
-		return sp.get('returnTo') || '/app/today'
+		return safeReturnPath(sp.get('returnTo'))
 	}, [])
 
 	useEffect(() => {
 		if (!user) return
-		if (hasCompletedOnboarding(user.id)) {
-			setCompleted(true)
-			return
-		}
 		const fromSignup = mapSignupRoleToChoice(user.role)
 		if (fromSignup) setRole(fromSignup)
+		const savedIntent = readOnboardingIntent(user.id)
+		if (savedIntent) setIntent(savedIntent)
+		if (hasCompletedOnboarding(user.id)) {
+			setCompleted(true)
+			if (fromSignup) setRoleSaved(true)
+		}
 	}, [user])
 
 	async function saveRole() {
@@ -64,20 +78,53 @@ export default function Onboarding() {
 						role,
 						onboardingRole: role,
 						guardianRequired: role === 'athlete_under_18',
+						...(isAthleteRole(role) ? {} : { onboardingCompletedAt: new Date().toISOString() }),
+					},
+				})
+			}
+			setRoleSaved(true)
+			// Athletes finish onboarding after choosing what to work on first.
+			if (!isAthleteRole(role)) {
+				markOnboardingComplete(user.id)
+				setCompleted(true)
+			}
+		} finally {
+			setSaving(false)
+		}
+	}
+
+	async function saveIntent() {
+		if (!user || !intent) return
+		setSavingIntent(true)
+		try {
+			if (supabase) {
+				await supabase.auth.updateUser({
+					data: {
+						// Drives only Today's initial recommendation — not an authorization claim.
+						onboardingIntent: intent,
 						onboardingCompletedAt: new Date().toISOString(),
 					},
 				})
 			}
+			saveOnboardingIntent(user.id, intent)
 			markOnboardingComplete(user.id)
 			setCompleted(true)
+			navigate('/app/today', true)
 		} finally {
-			setSaving(false)
+			setSavingIntent(false)
 		}
 	}
 
 	function continueToApp() {
 		navigate(returnTo, true)
 	}
+
+	function chooseRole(next: RoleChoice) {
+		setRole(next)
+		setRoleSaved(false)
+	}
+
+	const showIntentStep = roleSaved && isAthleteRole(role)
 
 	if (initializing) {
 		return (
@@ -111,34 +158,34 @@ export default function Onboarding() {
 				</p>
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
 					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
-						<input type="radio" name="role" checked={role === 'athlete_18_plus'} onChange={() => setRole('athlete_18_plus')} />
+						<input type="radio" name="role" data-testid="onboarding-role-athlete_18_plus" checked={role === 'athlete_18_plus'} onChange={() => chooseRole('athlete_18_plus')} />
 						<span>Athlete (18+)</span>
 					</label>
 					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
-						<input type="radio" name="role" checked={role === 'athlete_under_18'} onChange={() => setRole('athlete_under_18')} />
+						<input type="radio" name="role" data-testid="onboarding-role-athlete_under_18" checked={role === 'athlete_under_18'} onChange={() => chooseRole('athlete_under_18')} />
 						<span>Athlete (Under 18)</span>
 					</label>
 					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
-						<input type="radio" name="role" checked={role === 'parent_guardian'} onChange={() => setRole('parent_guardian')} />
+						<input type="radio" name="role" data-testid="onboarding-role-parent_guardian" checked={role === 'parent_guardian'} onChange={() => chooseRole('parent_guardian')} />
 						<span>Parent/Guardian</span>
 					</label>
 					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
-						<input type="radio" name="role" checked={role === 'agent_rep'} onChange={() => setRole('agent_rep')} />
+						<input type="radio" name="role" checked={role === 'agent_rep'} onChange={() => chooseRole('agent_rep')} />
 						<span>Agent/Rep</span>
 					</label>
 					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
-						<input type="radio" name="role" checked={role === 'coach_staff'} onChange={() => setRole('coach_staff')} />
+						<input type="radio" name="role" checked={role === 'coach_staff'} onChange={() => chooseRole('coach_staff')} />
 						<span>Coach/Staff</span>
 					</label>
 					<label className="inline-flex items-center gap-2 text-sm text-gray-300">
-						<input type="radio" name="role" checked={role === 'business_brand'} onChange={() => setRole('business_brand')} />
+						<input type="radio" name="role" checked={role === 'business_brand'} onChange={() => chooseRole('business_brand')} />
 						<span>Business/Brand</span>
 					</label>
 				</div>
 				{role === 'athlete_under_18' && (
 					<div className="mt-2">
 						<label className="inline-flex items-center gap-2 text-sm text-gray-300">
-							<input type="checkbox" checked={ackGuardian} onChange={e => setAckGuardian(e.target.checked)} />
+							<input type="checkbox" data-testid="onboarding-guardian-ack" checked={ackGuardian} onChange={e => setAckGuardian(e.target.checked)} />
 							<span>Parent/guardian will be involved in any agreements (required).</span>
 						</label>
 					</div>
@@ -155,41 +202,75 @@ export default function Onboarding() {
 				</div>
 			</Card>
 
-			<Card className="space-y-3" data-testid="onboarding-next-steps">
-				<div className="text-white font-semibold">Step 2: What to do next</div>
-				{isAthleteRole(role) || !role ? (
-					<ol className="list-decimal pl-6 space-y-2 text-gray-300">
-						<li>Open Athlete Passport and add a short starter profile (name, sport, story).</li>
-						<li>Visit Today for your next recommended action.</li>
-					</ol>
-				) : role === 'parent_guardian' ? (
-					<div className="space-y-2 text-gray-300 text-sm">
-						<p>
-							Your parent/guardian account is ready. Athlete association and shared management tools will guide you
-							from Today — we do not invent an athlete identity for you.
+			{isAthleteRole(role) || !role ? (
+				<Card className="space-y-4">
+					<div data-testid="onboarding-intent-step" className="space-y-4">
+						<div className="text-white font-semibold">Step 2: What are you here to work on first?</div>
+						<p className="text-xs text-gray-400">
+							This only sets your first recommended action on Today. Everything else stays available, and you can change it later.
 						</p>
-						<p>Next: open Today, then use Network when you are ready to connect with an athlete.</p>
-					</div>
-				) : (
-					<div className="space-y-2 text-gray-300 text-sm">
-						<p>
-							Your coach/agent account is ready for organizing recruiting and opportunity workflows. Selecting this
-							role does not grant elevated admin access.
-						</p>
-						<p>Next: open Today, then Recruiting Board or Opportunities as needed.</p>
-					</div>
-				)}
-				{completed && (
-					<div className="space-y-3">
-						<div className="text-green-300 text-sm" data-testid="onboarding-complete">
-							Onboarding complete. Continue into NIL Roster.
+						{!showIntentStep && (
+							<p className="text-sm text-gray-400" data-testid="onboarding-intent-locked">Save your role to choose a focus.</p>
+						)}
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-2" role="radiogroup" aria-label="First focus">
+							{ONBOARDING_INTENTS.map(key => (
+								<label key={key} className={`inline-flex items-center gap-2 text-sm ${showIntentStep ? 'text-gray-300' : 'text-gray-500'}`}>
+									<input
+										type="radio"
+										name="intent"
+										data-testid={`onboarding-intent-${key}`}
+										disabled={!showIntentStep}
+										checked={intent === key}
+										onChange={() => setIntent(key)}
+									/>
+									<span>{ONBOARDING_INTENT_LABELS[key]}</span>
+								</label>
+							))}
 						</div>
-						<Button data-testid="onboarding-go-app" className="red-glow" onClick={continueToApp}>
-							Go to Today
+						<Button
+							data-testid="onboarding-save-intent"
+							onClick={saveIntent}
+							disabled={!showIntentStep || !intent || savingIntent}
+							className="red-glow"
+						>
+							{savingIntent ? 'Saving…' : 'Continue to Today'}
 						</Button>
 					</div>
-				)}
-			</Card>
+				</Card>
+			) : (
+				<Card className="space-y-3">
+					<div data-testid="onboarding-next-steps" className="space-y-3">
+						<div className="text-white font-semibold">Step 2: What to do next</div>
+						{role === 'parent_guardian' ? (
+							<div className="space-y-2 text-gray-300 text-sm">
+								<p>
+									Your parent/guardian account is ready. Athlete association and shared management tools will guide you
+									from Today — we do not invent an athlete identity for you.
+								</p>
+								<p>Next: open Today for your first recommended step.</p>
+							</div>
+						) : (
+							<div className="space-y-2 text-gray-300 text-sm">
+								<p>
+									Your account is ready for organizing recruiting and opportunity workflows. Selecting this
+									role does not grant elevated admin access.
+								</p>
+								<p>Next: open Today, then Recruiting Board or Opportunities as needed.</p>
+							</div>
+						)}
+						{completed && (
+							<div className="space-y-3">
+								<div className="text-green-300 text-sm" data-testid="onboarding-complete">
+									Onboarding complete. Continue into NIL Roster.
+								</div>
+								<Button data-testid="onboarding-go-app" className="red-glow" onClick={continueToApp}>
+									Go to Today
+								</Button>
+							</div>
+						)}
+					</div>
+				</Card>
+			)}
 		</div>
 	)
 }

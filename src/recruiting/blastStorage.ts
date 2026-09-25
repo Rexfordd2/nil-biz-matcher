@@ -1,9 +1,10 @@
 import { load, save } from '../utils/storage'
-import type { CoachOutreach, CoachOutreachStatus, HighlightClip, RecruitingCoach } from './blastTypes'
+import type { CoachOutreach, CoachOutreachStatus, HighlightClip, OutreachDraft, RecruitingCoach } from './blastTypes'
 
 const COACHES_KEY = 'recruiting.coaches'
 const CLIPS_KEY = 'recruiting.clips'
 const OUTREACH_KEY = 'recruiting.outreach'
+const DRAFTS_KEY = 'recruiting.outreachDrafts'
 
 function generateId(prefix: string): string {
 	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -121,3 +122,21 @@ export function recordClickByToken(token: string) {
 }
 
 
+// Outreach drafts (review/copy only — never sent automatically)
+export function getOutreachDrafts(athleteId?: string): OutreachDraft[] {
+	const all = load<OutreachDraft[]>(DRAFTS_KEY, [])
+	const list = Array.isArray(all) ? all : []
+	return athleteId ? list.filter(d => d.athleteId === athleteId) : list
+}
+
+export function upsertOutreachDraft(next: Omit<OutreachDraft, 'id' | 'updatedAt'> & { id?: string }): OutreachDraft {
+	const all = getOutreachDrafts()
+	const id = next.id || generateId('draft')
+	const record: OutreachDraft = { ...next, id, updatedAt: Date.now() }
+	save(DRAFTS_KEY, [record, ...all.filter(d => d.id !== id)])
+	return record
+}
+
+export function deleteOutreachDraft(id: string) {
+	save(DRAFTS_KEY, getOutreachDrafts().filter(d => d.id !== id))
+}

@@ -25,7 +25,9 @@ const PROTECTED_LITERALS = [
 	'events.store',
 	'recruiting.coaches',
 	'recruiting.clips',
-	'recruiting.outreach'
+	'recruiting.outreach',
+	'recruiting.outreachDrafts',
+	'athleteLedger:onboarding:intent:'
 ]
 
 function walk(dir: string, files: string[] = []): string[] {

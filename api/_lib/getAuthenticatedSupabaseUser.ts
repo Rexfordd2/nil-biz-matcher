@@ -4,7 +4,15 @@ import { PUBLIC_MODE_SERVER } from './publicMode'
 
 type AuthResult =
 	| { bypassed: true; user: null }
-	| { bypassed: false; user: { id: string; email?: string } }
+	| {
+			bypassed: false
+			user: {
+				id: string
+				email?: string
+				app_metadata?: Record<string, unknown>
+				user_metadata?: Record<string, unknown>
+			}
+	  }
 	| { bypassed: false; user: null }
 
 /**
@@ -49,7 +57,9 @@ export async function getAuthenticatedSupabaseUser(
 			bypassed: false,
 			user: {
 				id: data.user.id,
-				email: data.user.email
+				email: data.user.email,
+				app_metadata: data.user.app_metadata,
+				user_metadata: data.user.user_metadata
 			}
 		}
 	} catch (err) {

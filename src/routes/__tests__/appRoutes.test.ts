@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
 	destinationForPath,
+	getAppNavSections,
+	getPrimaryNav,
+	PRIMARY_NAV,
 	pathForTab,
 	resolveAppPath,
 	UNKNOWN_APP_FALLBACK,
@@ -53,8 +56,48 @@ describe('appRoutes resolveAppPath', () => {
 	})
 
 	it('pathForTab and destinationForPath stay aligned', () => {
-		expect(pathForTab('Recruiting Blast')).toBe('/app/recruiting/blast')
+		expect(pathForTab('Outreach Drafts')).toBe('/app/recruiting/drafts')
 		expect(destinationForPath('/app/learn/guidelines')).toBe('learn')
 		expect(destinationForPath('/app/today/welcome')).toBe('today')
+	})
+})
+
+describe('athlete beta wayfinding routes', () => {
+	it('keeps the legacy Recruiting Blast URL as an alias for Outreach Drafts', () => {
+		for (const legacy of ['/app/recruiting/blast', '/app/recruiting/blast/']) {
+			const r = resolveAppPath(legacy)
+			expect(r.redirectTo).toBe('/app/recruiting/drafts')
+			expect(r.tab).toBe('Outreach Drafts')
+			expect(r.destination).toBe('recruiting')
+			expect(r.known).toBe(true)
+		}
+		expect(resolveAppPath('/app/recruiting/drafts')).toMatchObject({ tab: 'Outreach Drafts', known: true })
+	})
+
+	it('reduces athlete first-order navigation to four destinations', () => {
+		expect(getPrimaryNav({ athleteExperience: true }).map(n => n.label)).toEqual([
+			'Today',
+			'Athlete Passport',
+			'Recruiting',
+			'Opportunities',
+		])
+		const sections = getAppNavSections({ athleteExperience: true })
+		expect(sections.map(s => s.title)).toEqual(['Primary', 'More / Explore', 'Account'])
+		const explore = sections.find(s => s.title === 'More / Explore')!
+		expect(explore.collapsible).toBe(true)
+		expect(explore.items.map(i => i.label)).toEqual(['Network', 'Career Studio', 'Learn & Support'])
+	})
+
+	it('keeps every destination reachable (no routes removed)', () => {
+		const athleteKeys = getAppNavSections({ athleteExperience: true }).flatMap(s => s.items.map(i => i.key))
+		const fullKeys = getAppNavSections().flatMap(s => s.items.map(i => i.key))
+		expect(new Set(athleteKeys)).toEqual(new Set(fullKeys))
+		for (const path of ['/app/network', '/app/career', '/app/learn/nil-hub', '/app/settings']) {
+			expect(resolveAppPath(path).known).toBe(true)
+		}
+	})
+
+	it('non-athlete roles keep the full primary navigation', () => {
+		expect(getPrimaryNav({ athleteExperience: false })).toBe(PRIMARY_NAV)
 	})
 })
