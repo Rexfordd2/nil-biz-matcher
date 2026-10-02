@@ -72,7 +72,7 @@ The NIL files were restored from the edit record of cloud agent `bc-8685fff8-dd6
 | `api/recruiting/houze-receive.ts` | `2bcec6f5257a90d1174891562e7520b1673a9b57` |
 | `scripts/recruiting-receiver/node-runtime-regression.mjs` before the login checks | `116afb331564f0a75a5c28912ca5848749da129b` |
 
-The branch commit SHA is the tested NIL tree and is printed by `git rev-parse HEAD` on `cursor/native-postgres-recruiting-gate-62ba` after this report is committed. There is no Athlete Houze SHA to pair with it.
+Tested NIL commit: `d323e0cc87f79187c29c9432eb0521d6c2bba898` on `cursor/native-postgres-recruiting-gate-62ba`. There is no Athlete Houze SHA to pair with it, because that tree was not present to inspect.
 
 ### Command, runtime, engine
 
