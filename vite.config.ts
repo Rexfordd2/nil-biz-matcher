@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
+import type { IncomingMessage } from 'node:http'
+import { installLazyParsedBody, restoreVercelRequestBody } from './api/_lib/vercelNodeRequestBody'
 
 // Minimal wrapper to adapt Node's ServerResponse to a Vercel-like response
 function wrapRes(res: any) {
@@ -162,18 +164,19 @@ export default defineConfig({
 						// Augment the request with query/body like VercelRequest
 						;(req as any).query = Object.fromEntries(url.searchParams.entries())
 
-						// If body is expected, read and parse it before invoking handler
+						// Match @vercel/node addHelpers: capture the original bytes, restore
+						// the stream, and expose req.body as a lazy parse. Handlers that
+						// verify signatures must read the stream before touching req.body.
 						if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-							let raw = ''
-							req.on('data', (chunk: any) => {
-								raw += chunk
+							const chunks: Buffer[] = []
+							req.on('data', (chunk: Buffer | string) => {
+								chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
 							})
 							req.on('end', async () => {
-								try {
-									;(req as any).body = raw ? JSON.parse(raw) : undefined
-								} catch {
-									;(req as any).body = undefined
-								}
+								const rawBody = Buffer.concat(chunks)
+								const message = req as IncomingMessage
+								restoreVercelRequestBody(message, rawBody)
+								installLazyParsedBody(message, rawBody, req.headers['content-type'])
 								const resLike = wrapRes(res)
 								try {
 									await handler(req as any, resLike)
@@ -206,5 +209,3 @@ export default defineConfig({
 		proxy: {}
 	}
 })
-
-
