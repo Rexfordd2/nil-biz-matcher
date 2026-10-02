@@ -1,3 +1,4 @@
+import { installLazyParsedBody, restoreVercelRequestBody } from './api/_lib/vercelNodeRequestBody.ts';
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -180,25 +181,20 @@ export default defineConfig({
                                 // Augment the request with query/body like VercelRequest
                                 ;
                                 req.query = Object.fromEntries(url.searchParams.entries());
-                                // If body is expected, read and parse it before invoking handler
+                                // Match @vercel/node addHelpers: restore original bytes, then lazy-parse.
                                 if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
                                     raw_1 = '';
                                     req.on('data', function (chunk) {
                                         raw_1 += chunk;
                                     });
                                     req.on('end', function () { return __awaiter(_this, void 0, void 0, function () {
-                                        var resLike, _a;
+                                        var resLike, _a, rawBody;
                                         return __generator(this, function (_b) {
                                             switch (_b.label) {
                                                 case 0:
-                                                    try {
-                                                        ;
-                                                        req.body = raw_1 ? JSON.parse(raw_1) : undefined;
-                                                    }
-                                                    catch (_c) {
-                                                        ;
-                                                        req.body = undefined;
-                                                    }
+                                                    rawBody = Buffer.from(raw_1);
+                                                    restoreVercelRequestBody(req, rawBody);
+                                                    installLazyParsedBody(req, rawBody, req.headers['content-type']);
                                                     resLike = wrapRes(res);
                                                     _b.label = 1;
                                                 case 1:

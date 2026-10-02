@@ -126,3 +126,6 @@ smoke-artifacts/
 
 # Local build environment files (machine-specific build IDs/timestamps)
 .env.build
+
+# Generated Node bundle for the recruiting receiver runtime check
+scripts/recruiting-receiver/.generated/
