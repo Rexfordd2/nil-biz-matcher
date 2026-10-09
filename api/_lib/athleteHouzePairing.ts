@@ -25,10 +25,26 @@ export function loadPreviewPairingConfig(
   const endpoint = env.ATHLETE_HOUZE_PAIRING_URL?.trim()
   const secret = env.ATHLETE_HOUZE_PAIRING_HMAC_SECRET?.trim()
   const nilRosterOrigin = env.NIL_ROSTER_PREVIEW_ORIGIN?.trim()
-  if (!endpoint || !secret || secret.length < 32 || !nilRosterOrigin) return null
+  const authUrl = env.VITE_SUPABASE_URL?.trim() || env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  // The preview Vercel branch has historically pointed at production Supabase.
+  // Require an explicit independent backend assertion before authenticating.
+  if (env.NIL_ROSTER_PREVIEW_DATABASE_ASSERTION !== 'confirmed_non_production') return null
+  if (!endpoint || !secret || secret.length < 32 || !nilRosterOrigin || !authUrl) return null
   try {
     const destination = new URL(endpoint)
     const source = new URL(nilRosterOrigin)
+    const authSource = new URL(authUrl)
+    const authHost = authSource.hostname.toLowerCase()
+    const isLocalAuth = ['localhost', '127.0.0.1'].includes(authHost)
+    if (
+      authHost === 'duuvyyvfqbzozuhzlbek.supabase.co' ||
+      authHost === 'puwjpnmlfwaxtrjtxxsj.supabase.co' ||
+      authHost === 'juyggnkcwfwdbhguzdgn.supabase.co' ||
+      authHost === 'lmcngclletjzukksyszp.supabase.co'
+    ) return null
+    if (!isLocalAuth && !(authHost.endsWith('.supabase.co') && authSource.protocol === 'https:')) return null
+    if (isLocalAuth && authSource.protocol !== 'http:') return null
+    if (authSource.username || authSource.password || authSource.search || authSource.hash) return null
     if (destination.username || destination.password || destination.hash || destination.search) return null
     if (destination.pathname !== '/api/integrations/nil-roster/complete-link') return null
     // Never connect this test sender to the live Athlete Houze domain or workers.dev.
