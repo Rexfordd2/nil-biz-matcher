@@ -46,7 +46,13 @@ describe('preview-only Athlete Houze account pairing contract', () => {
 
   it('sends a correctly signed, privacy-minimized partner request and requires linked acknowledgment', async () => {
     const payload = buildOwnedPairingPayload(sourceId, code)!
-    const fetchImpl = vi.fn().mockResolvedValue(new Response('{"status":"linked"}', { status: 200 }))
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'linked',
+      enrollmentKind: 'production',
+      athleteId: '96bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
+      identityId: '75bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
+      backfillConsented: false,
+    }), { status: 200 }))
     expect(await completePreviewOwnedPairing({
       config: loadPreviewPairingConfig(env)!,
       payload,
@@ -60,6 +66,30 @@ describe('preview-only Athlete Houze account pairing contract', () => {
     const expected = createHmac('sha256', secret).update('1791500000.' + init.body).digest('hex')
     expect(init.headers['x-ah-signature']).toBe('sha256=' + expected)
     expect(init.headers['x-ah-source']).toBe('nil_roster')
+  })
+
+  it('rejects incomplete or canary source acknowledgments despite HTTP 200', async () => {
+    const payload = buildOwnedPairingPayload(sourceId, code)!
+    const base = {
+      status: 'linked',
+      enrollmentKind: 'production',
+      athleteId: '96bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
+      identityId: '75bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
+      backfillConsented: false,
+    }
+    for (const body of [
+      { ...base, enrollmentKind: 'canary' },
+      { ...base, athleteId: 'fake' },
+      { ...base, identityId: '' },
+      { ...base, backfillConsented: true },
+    ]) {
+      const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }))
+      expect(await completePreviewOwnedPairing({
+        config: loadPreviewPairingConfig(env)!,
+        payload,
+        fetchImpl,
+      })).toEqual({ ok: false, code: 'rejected' })
+    }
   })
 
   it('does not turn HTTP 200 without a real linked acknowledgment into success', async () => {
