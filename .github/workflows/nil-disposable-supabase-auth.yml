@@ -52,3 +52,9 @@ jobs:
         env:
           CI: 'true'
         run: node scripts/verify-nil-disposable-auth-postgrest.mjs
+
+      - name: Verify pairing HTTP route against real local GoTrue identities
+        env:
+          CI: 'true'
+          NIL_DISPOSABLE_ROUTE_PROOF: 'true'
+        run: npx vitest run api/integrations/athlete-houze/connect.disposable-auth.test.ts
