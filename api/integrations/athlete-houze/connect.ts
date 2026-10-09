@@ -5,7 +5,7 @@ import {
   completePreviewOwnedPairing,
   loadPreviewPairingConfig,
   validateConnectCode,
-} from '../../_lib/athleteHouzePairing'
+} from '../../_lib/athleteHouzePairing.js'
 
 /**
  * Preview-only pairing proof. No production enrollment or premium entitlement
