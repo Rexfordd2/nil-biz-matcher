@@ -13,6 +13,8 @@ const env = {
   ATHLETE_HOUZE_PAIRING_URL: endpoint,
   ATHLETE_HOUZE_PAIRING_HMAC_SECRET: secret,
   NIL_ROSTER_PREVIEW_ORIGIN: 'https://nil-preview-test.vercel.app',
+  NIL_ROSTER_PREVIEW_DATABASE_ASSERTION: 'confirmed_non_production',
+  VITE_SUPABASE_URL: 'https://independent-nil-test.supabase.co',
 }
 const sourceId = '9a76b680-4523-4852-9721-eaa1bc943f1c'
 const code = 'AHNR-ABCD-2345'
@@ -21,6 +23,9 @@ describe('preview-only Athlete Houze account pairing contract', () => {
   it('refuses missing configuration and all production endpoints', () => {
     expect(loadPreviewPairingConfig({})).toBeNull()
     expect(loadPreviewPairingConfig({ ...env, VERCEL_ENV: 'production' })).toBeNull()
+    expect(loadPreviewPairingConfig({ ...env, NIL_ROSTER_PREVIEW_DATABASE_ASSERTION: undefined })).toBeNull()
+    expect(loadPreviewPairingConfig({ ...env, VITE_SUPABASE_URL: 'https://duuvyyvfqbzozuhzlbek.supabase.co' })).toBeNull()
+    expect(loadPreviewPairingConfig({ ...env, VITE_SUPABASE_URL: 'https://puwjpnmlfwaxtrjtxxsj.supabase.co' })).toBeNull()
     expect(loadPreviewPairingConfig({ ...env, ATHLETE_HOUZE_PAIRING_URL: 'https://athletehouze.com/api/integrations/nil-roster/complete-link' })).toBeNull()
     expect(loadPreviewPairingConfig({ ...env, ATHLETE_HOUZE_PAIRING_URL: 'https://beta.athletehouze.com/api/integrations/nil-roster/complete-link' })).toBeNull()
     expect(loadPreviewPairingConfig({ ...env, ATHLETE_HOUZE_PAIRING_HMAC_SECRET: 'short' })).toBeNull()
