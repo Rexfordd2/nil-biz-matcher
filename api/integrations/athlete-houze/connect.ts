@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? req.headers.authorization[0]
     : req.headers.authorization
   const bearer = typeof authorization === 'string'
-    ? /^Bearer\\s+(.+)$/i.exec(authorization)
+    ? /^Bearer\s+(.+)$/i.exec(authorization)
     : null
   const accessToken = bearer?.[1]?.trim()
   if (!accessToken) return res.status(401).json({ error: 'Authentication required' })
