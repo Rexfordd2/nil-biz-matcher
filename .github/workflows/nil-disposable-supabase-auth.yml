@@ -1,0 +1,54 @@
+name: NIL disposable Supabase Auth/RLS proof
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/nil-disposable-supabase-auth.yml'
+      - 'scripts/verify-nil-disposable-auth-postgrest.mjs'
+      - 'supabase/**'
+      - 'api/integrations/athlete-houze/**'
+      - 'api/_lib/athleteHouzePairing*'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-auth:
+    name: Isolated GoTrue and PostgREST verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up isolated Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.84.2
+
+      - name: Confirm CLI commands and Docker runtime
+        run: |
+          docker info >/dev/null
+          supabase --version
+          supabase --help >/dev/null
+          supabase start --help >/dev/null
+          supabase status --help >/dev/null
+
+      - name: Start disposable local Auth, PostgREST and migrations
+        env:
+          # No SUPABASE_ACCESS_TOKEN, DB password, linked ref or remote credentials.
+          CI: 'true'
+        run: supabase start
+
+      - name: Verify real synthetic A/B login and RLS using local GoTrue and PostgREST
+        env:
+          CI: 'true'
+        run: node scripts/verify-nil-disposable-auth-postgrest.mjs
