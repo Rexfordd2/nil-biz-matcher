@@ -106,7 +106,12 @@ export async function completePreviewOwnedPairing(input: {
     })
     if (result.ok) {
       const json: unknown = await result.json().catch(() => null)
-      if (json && typeof json === 'object' && 'status' in json && json.status === 'linked')
+      if (json && typeof json === 'object' &&
+          'status' in json && json.status === 'linked' &&
+          'enrollmentKind' in json && json.enrollmentKind === 'production' &&
+          'athleteId' in json && typeof json.athleteId === 'string' && UUID.test(json.athleteId) &&
+          'identityId' in json && typeof json.identityId === 'string' && UUID.test(json.identityId) &&
+          'backfillConsented' in json && json.backfillConsented === false)
         return { ok: true }
     }
     return { ok: false, code: 'rejected' }
