@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAuthenticatedSupabaseUser } from '../../_lib/getAuthenticatedSupabaseUser'
+import { createClient } from '@supabase/supabase-js'
 import {
   buildOwnedPairingPayload,
   completePreviewOwnedPairing,
@@ -34,10 +34,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body.athleteConsent !== true || !validateConnectCode(body.connectCode)) {
     return res.status(400).json({ error: 'Invalid request' })
   }
-  const auth = await getAuthenticatedSupabaseUser(req, res)
-  // The NIL public-mode bypass must NEVER authorize account linking.
-  if (auth.bypassed || !auth.user) return res.status(401).json({ error: 'Authentication required' })
-  const payload = buildOwnedPairingPayload(auth.user.id, body.connectCode)
+  // Browser sessions in NIL Roster are stored client-side. Re-verify the
+  // bearer token with the isolated source GoTrue service; never trust a
+  // browser-provided subject or a public-mode session bypass.
+  const authorization = Array.isArray(req.headers.authorization)
+    ? req.headers.authorization[0]
+    : req.headers.authorization
+  const bearer = typeof authorization === 'string'
+    ? /^Bearer\\s+(.+)$/i.exec(authorization)
+    : null
+  const accessToken = bearer?.[1]?.trim()
+  if (!accessToken) return res.status(401).json({ error: 'Authentication required' })
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseAnonKey)
+    return res.status(503).json({ error: 'Pairing unavailable' })
+  const source = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: 'Bearer ' + accessToken } },
+  })
+  let verifiedUserId: string | undefined
+  try {
+    const { data, error } = await source.auth.getUser(accessToken)
+    if (error || !data.user) return res.status(401).json({ error: 'Authentication required' })
+    verifiedUserId = data.user.id
+  } catch {
+    return res.status(401).json({ error: 'Authentication required' })
+  }
+  const payload = buildOwnedPairingPayload(verifiedUserId, body.connectCode)
   if (!payload) return res.status(403).json({ error: 'Ownership not verified' })
   const paired = await completePreviewOwnedPairing({ config, payload })
   if (!paired.ok) return res.status(paired.code === 'unavailable' ? 503 : 409)
