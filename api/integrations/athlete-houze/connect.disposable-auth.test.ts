@@ -1,19 +1,24 @@
 import { execFileSync } from 'node:child_process'
 import { createHmac, randomBytes } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import handler from './connect'
 
 const suite = process.env.NIL_DISPOSABLE_ROUTE_PROOF === 'true' ? describe : describe.skip
 const houze = 'https://houze-beta-test.vercel.app/api/integrations/nil-roster/complete-link'
+const disconnect = 'https://houze-beta-test.vercel.app/api/integrations/nil-roster/server-disconnect'
 const origin = 'https://nil-preview-test.vercel.app'
 const code = 'AHNR-ABCD-2345'
 const secret = 'test-only-' + 'A'.repeat(55)
+const athleteId = '96bf779f-d03a-4fa5-bcc7-7bbd69f0fd53'
+const identityId = '75bf779f-d03a-4fa5-bcc7-7bbd69f0fd53'
 const ids: string[] = []
 const tokens: string[] = []
 let admin: ReturnType<typeof createClient>
 let nativeFetch: typeof fetch
+let anonKey: string
+let apiUrl: string
 
 function request(token: string, body: unknown = { connectCode: code, athleteConsent: true }): VercelRequest {
   return {
@@ -51,6 +56,8 @@ suite('NIL preview source route with REAL local GoTrue', () => {
     const anon = st.ANON_KEY || st.PUBLISHABLE_KEY
     const service = st.SERVICE_ROLE_KEY || st.SECRET_KEY
     if (!anon || !service) throw new Error('Missing disposable Auth keys')
+    apiUrl = url
+    anonKey = anon
     Object.assign(process.env, {
       VERCEL_ENV: 'preview',
       NIL_ROSTER_PREVIEW_DATABASE_ASSERTION: 'confirmed_non_production',
@@ -84,10 +91,11 @@ suite('NIL preview source route with REAL local GoTrue', () => {
     delete process.env.ATHLETE_HOUZE_PAIRING_HMAC_SECRET
   }, 60_000)
 
-  it('authenticates both separate source accounts and signs their distinct IDs', async () => {
+  it('authenticates both separate source accounts, persists enrollment, and signs their distinct IDs', async () => {
     const delivered: Array<{ body: Record<string, unknown>; signature: string; timestamp: string }> = []
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-      if (typeof input === 'string' && input === houze) {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url === houze) {
         const raw = String(init?.body)
         const head = new Headers(init?.headers)
         const signature = head.get('x-ah-signature') ?? ''
@@ -98,10 +106,13 @@ suite('NIL preview source route with REAL local GoTrue', () => {
         return Response.json({
           status: 'linked',
           enrollmentKind: 'production',
-          athleteId: '96bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
-          identityId: '75bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
+          athleteId,
+          identityId,
           backfillConsented: false,
         })
+      }
+      if (url === disconnect) {
+        return Response.json({ ok: true, disconnected: true })
       }
       return nativeFetch(input, init)
     }) as typeof fetch
@@ -110,11 +121,46 @@ suite('NIL preview source route with REAL local GoTrue', () => {
       const res = response()
       await handler(request(token), res as unknown as VercelResponse)
       expect(res.code).toBe(200)
-      expect(res.jsonBody).toEqual({ status: 'linked', premiumAccessActive: false })
+      expect(res.jsonBody).toEqual({
+        status: 'linked',
+        premiumAccessActive: false,
+        enrollmentKind: 'production',
+        athleteId,
+        identityId,
+      })
     }
     expect(delivered.map(d => d.body.externalAthleteId)).toEqual(ids)
     expect(delivered.every(d => d.body.athleteConsent === true && d.body.backfillConsented === false)).toBe(true)
     expect(ids[0]).not.toBe(ids[1])
+
+    for (const userId of ids) {
+      const { data, error } = await admin
+        .from('athlete_houze_enrollments')
+        .select('user_id, houze_athlete_id, status, consent_scope, disconnected_at')
+        .eq('user_id', userId)
+        .maybeSingle()
+      expect(error).toBeNull()
+      expect(data).toEqual({
+        user_id: userId,
+        houze_athlete_id: athleteId,
+        status: 'linked',
+        consent_scope: 'restricted',
+        disconnected_at: null,
+      })
+    }
+
+    // Ownership isolation: user A cannot read user B enrollment via user JWT + RLS.
+    const userA = createClient(apiUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: 'Bearer ' + tokens[0] } },
+    })
+    const { data: foreign, error: foreignError } = await userA
+      .from('athlete_houze_enrollments')
+      .select('user_id')
+      .eq('user_id', ids[1])
+      .maybeSingle()
+    expect(foreignError).toBeNull()
+    expect(foreign).toBeNull()
   }, 45_000)
 
   it('rejects unauthenticated, forged and cross-subject requests before source sends', async () => {

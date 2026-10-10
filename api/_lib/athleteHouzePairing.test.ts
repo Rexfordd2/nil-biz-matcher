@@ -58,7 +58,13 @@ describe('preview-only Athlete Houze account pairing contract', () => {
       payload,
       timestampSeconds: 1791500000,
       fetchImpl,
-    })).toEqual({ ok: true })
+    })).toEqual({
+      ok: true,
+      ack: {
+        athleteId: '96bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
+        identityId: '75bf779f-d03a-4fa5-bcc7-7bbd69f0fd53',
+      },
+    })
     const [url, init] = fetchImpl.mock.calls[0]
     expect(url).toBe(endpoint)
     expect(init.redirect).toBe('error')

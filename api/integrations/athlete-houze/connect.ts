@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -6,10 +7,17 @@ import {
   loadPreviewPairingConfig,
   validateConnectCode,
 } from '../../_lib/athleteHouzePairing.js'
+import { createUserClient } from '../../_lib/athleteHouzeEnrollment.js'
 
 /**
- * Preview-only pairing proof. No production enrollment or premium entitlement
- * is activated by a successful connect-code redemption.
+ * Authenticated pairing proof.
+ *
+ * Preview: requires isolated non-production Auth + explicit origin consent.
+ * After Athlete Houze returns a complete production-kind acknowledgment, the
+ * NIL-side durable enrollment row is written. If that write fails, Houze is
+ * asked to disconnect so the handshake does not leave a one-sided link.
+ *
+ * Premium / 60-day entitlement is never activated here.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'private, no-store')
@@ -64,7 +72,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payload = buildOwnedPairingPayload(verifiedUserId, body.connectCode)
   if (!payload) return res.status(403).json({ error: 'Ownership not verified' })
   const paired = await completePreviewOwnedPairing({ config, payload })
-  if (!paired.ok) return res.status(paired.code === 'unavailable' ? 503 : 409)
-    .json({ error: 'Pairing was not completed' })
-  return res.status(200).json({ status: 'linked', premiumAccessActive: false })
+  if (!paired.ok) {
+    return res.status(paired.code === 'unavailable' ? 503 : 409)
+      .json({ error: 'Pairing was not completed' })
+  }
+
+  const userClient = createUserClient(accessToken)
+  if (!userClient) return res.status(503).json({ error: 'Pairing unavailable' })
+
+  const connectedAt = new Date().toISOString()
+  const { error: enrollmentError } = await userClient.from('athlete_houze_enrollments').upsert(
+    {
+      user_id: verifiedUserId,
+      houze_athlete_id: paired.ack.athleteId,
+      consent_scope: 'restricted',
+      status: 'linked',
+      connected_at: connectedAt,
+      disconnected_at: null,
+      last_error: null,
+    },
+    { onConflict: 'user_id' },
+  )
+
+  if (enrollmentError) {
+    // Compensating action: do not leave a Houze-side link without a durable NIL row.
+    const disconnectBody = JSON.stringify({ externalAthleteId: verifiedUserId })
+    const disconnectEndpoint = new URL(
+      '/api/integrations/nil-roster/server-disconnect',
+      config.endpoint,
+    ).toString()
+    const timestamp = Math.floor(Date.now() / 1000)
+    const signature = createHmac('sha256', config.secret)
+      .update(String(timestamp) + '.')
+      .update(disconnectBody)
+      .digest('hex')
+    await fetch(disconnectEndpoint, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-ah-source': 'nil_roster',
+        'x-ah-timestamp': String(timestamp),
+        'x-ah-signature': 'sha256=' + signature,
+      },
+      body: disconnectBody,
+      signal: AbortSignal.timeout(8000),
+      redirect: 'error',
+    }).catch(() => null)
+    return res.status(500).json({ error: 'enrollment_write_failed' })
+  }
+
+  return res.status(200).json({
+    status: 'linked',
+    premiumAccessActive: false,
+    enrollmentKind: 'production',
+    athleteId: paired.ack.athleteId,
+    identityId: paired.ack.identityId,
+  })
 }
