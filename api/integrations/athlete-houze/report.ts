@@ -93,6 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const report = buildNilRosterOpportunityReport({
 		externalAthleteId,
 		sourceRecordId: source.client_id,
+		sourceRevision: source.updated_at,
 		occurredAt: source.updated_at,
 		status: source.status,
 		category: source.category,

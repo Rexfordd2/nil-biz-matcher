@@ -24,6 +24,8 @@ type ReporterEnvironment = Readonly<Record<string, string | undefined>>
 export type NilRosterOpportunityReport = {
 	externalAthleteId: string
 	sourceRecordId: string
+	/** Stable source row revision (updated_at); retries retain the same value. */
+	sourceRevision: string
 	occurredAt: string
 	status: string
 	category: string
@@ -134,14 +136,15 @@ export async function sendAthleteHouzeReport(
 }
 
 export function buildNilRosterOpportunityReport(input: NilRosterOpportunityReport) {
+	const revision = input.sourceRevision.trim()
+	if (!revision || revision.length > 120) throw new Error('Missing or invalid source revision')
 	const idempotencyDigest = createHash('sha256')
 		.update(
 			[
 				'nil.opportunity.updated',
 				input.externalAthleteId,
 				input.sourceRecordId,
-				input.status,
-				input.category,
+				revision,
 			].join('|')
 		)
 		.digest('hex')
@@ -169,7 +172,7 @@ export function buildNilRosterOpportunityReport(input: NilRosterOpportunityRepor
 				category: input.category,
 			},
 			domainHints: ['nil_market'],
-			attributes: { synthetic_test_data: true },
+			attributes: { synthetic_test_data: true, sourceRevision: revision },
 		},
 		units: {},
 		provenance: {
