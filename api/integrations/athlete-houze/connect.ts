@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -8,6 +8,49 @@ import {
   validateConnectCode,
 } from '../../_lib/athleteHouzePairing.js'
 import { createUserClient } from '../../_lib/athleteHouzeEnrollment.js'
+
+async function bestEffortPartnerAcknowledgment(input: {
+  pairingEndpoint: string
+  secret: string
+  athleteId: string
+  externalAthleteId: string
+}): Promise<void> {
+  const ackUrl = process.env.ATHLETE_HOUZE_PARTNER_ACK_URL?.trim()
+  const ackSecret =
+    process.env.ATHLETE_HOUZE_PARTNER_ACK_HMAC_SECRET?.trim() || input.secret
+  if (!ackUrl || !ackSecret) return
+  try {
+    const destination = new URL(ackUrl)
+    if (destination.pathname !== '/api/integrations/proof-sprint/partner-acknowledgment') return
+    if (/(^|\.)athletehouze\.com$/i.test(destination.hostname)) return
+    const body = JSON.stringify({
+      partner: 'nil_roster',
+      athleteId: input.athleteId,
+      externalAccountId: input.externalAthleteId,
+      acknowledgmentId: randomUUID(),
+    })
+    const timestamp = Math.floor(Date.now() / 1000)
+    const signature = createHmac('sha256', ackSecret)
+      .update(String(timestamp) + '.')
+      .update(body)
+      .digest('hex')
+    await fetch(destination.href, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-ah-source': 'nil_roster',
+        'x-ah-timestamp': String(timestamp),
+        'x-ah-signature': 'sha256=' + signature,
+      },
+      body,
+      signal: AbortSignal.timeout(8000),
+      redirect: 'error',
+    }).catch(() => null)
+  } catch {
+    // Partner ack is evidence for trial activation, not pairing success.
+  }
+}
 
 /**
  * Authenticated pairing proof.
@@ -121,6 +164,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }).catch(() => null)
     return res.status(500).json({ error: 'enrollment_write_failed' })
   }
+
+  // Best-effort trial evidence only. Failures never flip pairing success
+  // or advertise premium access from this route.
+  await bestEffortPartnerAcknowledgment({
+    pairingEndpoint: config.endpoint,
+    secret: config.secret,
+    athleteId: paired.ack.athleteId,
+    externalAthleteId: verifiedUserId,
+  })
 
   return res.status(200).json({
     status: 'linked',
