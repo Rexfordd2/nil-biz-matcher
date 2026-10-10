@@ -3,9 +3,18 @@ import { createClient } from '@supabase/supabase-js'
 import {
 	buildNilRosterOpportunityReport,
 	loadAthleteHouzeReporterConfig,
+	opportunitySourceRevision,
 	sendAthleteHouzeReport,
 	sourceEnvironment,
-} from '../../_lib/athleteHouzeReporter'
+} from '../../_lib/athleteHouzeReporter.js'
+import {
+	createUserClient,
+	drainDeliveryOutbox,
+	enqueueOwnedOpportunityDelivery,
+	isNilCanaryUser,
+	loadActiveEnrollment,
+	loadAthleteHouzeEnrolledReporterConfig,
+} from '../../_lib/athleteHouzeEnrollment.js'
 
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/
 
@@ -66,6 +75,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	})
 	const { data: authData, error: authError } = await supabase.auth.getUser(accessToken)
 	if (authError || !authData.user) return res.status(401).json({ error: 'Unauthorized' })
+
+	const { data: source, error: sourceError } = await supabase
+		.from('opportunities')
+		.select('client_id,status,category,updated_at,created_at')
+		.eq('user_id', authData.user.id)
+		.eq('client_id', clientId)
+		.maybeSingle()
+	if (sourceError || !source) {
+		return res.status(404).json({ error: 'Source record not found' })
+	}
+
+	const enrolledConfig = loadAthleteHouzeEnrolledReporterConfig()
+	if (enrolledConfig && !isNilCanaryUser(authData.user)) {
+		const userClient = createUserClient(accessToken)
+		if (!userClient) return res.status(503).json({ error: 'Integration unavailable' })
+		const enrollment = await loadActiveEnrollment(userClient, authData.user.id)
+		if (!enrollment) {
+			return res.status(403).json({ error: 'Enrollment required' })
+		}
+		try {
+			const queued = await enqueueOwnedOpportunityDelivery({
+				client: userClient,
+				userId: authData.user.id,
+				row: {
+					client_id: source.client_id,
+					status: source.status,
+					category: source.category,
+					updated_at: source.updated_at,
+					created_at: source.created_at || source.updated_at,
+				},
+			})
+			const drained = await drainDeliveryOutbox({
+				client: userClient,
+				userId: authData.user.id,
+				config: enrolledConfig,
+				limit: 5,
+			})
+			return res.status(202).json({
+				accepted: true,
+				enrollmentKind: 'production',
+				eventIdentity: queued.eventIdentity,
+				sourceRevision: queued.sourceRevision,
+				delivered: drained.delivered,
+				failed: drained.failed,
+			})
+		} catch {
+			return res.status(503).json({ error: 'Integration delivery failed' })
+		}
+	}
+
 	const config = loadAthleteHouzeReporterConfig()
 	if (!config) return res.status(503).json({ error: 'Integration unavailable' })
 	const externalAthleteId = operatorExternalAthleteId(authData.user)
@@ -80,26 +139,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		return res.status(403).json({ error: 'Integration disabled' })
 	}
 
-	const { data: source, error: sourceError } = await supabase
-		.from('opportunities')
-		.select('client_id,status,category,updated_at')
-		.eq('user_id', authData.user.id)
-		.eq('client_id', clientId)
-		.maybeSingle()
-	if (sourceError || !source) {
-		return res.status(404).json({ error: 'Source record not found' })
-	}
-
+	const sourceRevision = opportunitySourceRevision({
+		updatedAt: source.updated_at,
+		status: source.status,
+	})
 	const report = buildNilRosterOpportunityReport({
 		externalAthleteId,
 		sourceRecordId: source.client_id,
+		sourceRevision,
 		occurredAt: source.updated_at,
 		status: source.status,
 		category: source.category,
 		environment: sourceEnvironment(),
+		enrollmentKind: 'canary',
 	})
 	const delivered = await sendAthleteHouzeReport(report, config)
 	if (!delivered.ok) return res.status(503).json({ error: 'Integration delivery failed' })
 
-	return res.status(202).json({ accepted: true })
+	return res.status(202).json({ accepted: true, enrollmentKind: 'canary', sourceRevision })
 }
