@@ -85,7 +85,7 @@ export async function completePreviewOwnedPairing(input: {
   payload: SourceOwnedPairingRequest
   fetchImpl?: typeof fetch
   timestampSeconds?: number
-}): Promise<{ ok: true } | { ok: false; code: 'rejected' | 'unavailable' }> {
+}): Promise<{ ok: true; athleteId: string; identityId: string } | { ok: false; code: 'rejected' | 'unavailable' }> {
   const now = input.timestampSeconds ?? Math.floor(Date.now() / 1000)
   const body = JSON.stringify(input.payload)
   const signature = createHmac('sha256', input.config.secret)
@@ -112,7 +112,7 @@ export async function completePreviewOwnedPairing(input: {
           'athleteId' in json && typeof json.athleteId === 'string' && UUID.test(json.athleteId) &&
           'identityId' in json && typeof json.identityId === 'string' && UUID.test(json.identityId) &&
           'backfillConsented' in json && json.backfillConsented === false)
-        return { ok: true }
+        return { ok: true, athleteId: json.athleteId, identityId: json.identityId }
     }
     return { ok: false, code: 'rejected' }
   } catch {
