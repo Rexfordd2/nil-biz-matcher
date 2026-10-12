@@ -75,6 +75,7 @@ import AuthDebugPanel from './components/AuthDebugPanel'
 import GoogleDebugPanel from './components/GoogleDebugPanel'
 import { goToLogin, goToLogout } from './lib/auth/navigation'
 import ChangePasswordForm from './components/auth/ChangePasswordForm'
+import AthleteHouzePreviewPairingCard from './components/AthleteHouzePreviewPairingCard'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: any }> {
 	constructor(props: { children: ReactNode }) {
@@ -960,6 +961,7 @@ function MainApp({ pathname }: MainAppProps) {
 											<div className="text-white">{cloudAvailable ? 'Enabled' : 'Unavailable'}</div>
 										</div>
 										<ChangePasswordForm />
+										<AthleteHouzePreviewPairingCard />
 									</div>
 								) : (
 									<div className="space-y-4">
