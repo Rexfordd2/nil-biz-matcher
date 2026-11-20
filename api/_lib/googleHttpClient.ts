@@ -3,4 +3,4 @@
  * This file re-exports from googleHttp.ts to prevent Vercel module resolution errors
  */
 
-export * from './googleHttp'
+export * from './googleHttp.js'

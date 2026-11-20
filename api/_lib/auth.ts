@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'crypto'
-import prisma from './prisma'
-import { isPublicModeServer } from './publicMode'
+import prisma from './prisma.js'
+import { isPublicModeServer } from './publicMode.js'
 
 const COOKIE_NAME = 'al_session'
 const TOKEN_VERSION = 'v1'

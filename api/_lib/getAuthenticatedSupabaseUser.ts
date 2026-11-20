@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { supabaseServer } from './supabaseServer'
-import { PUBLIC_MODE_SERVER } from './publicMode'
+import { supabaseServer } from './supabaseServer.js'
+import { PUBLIC_MODE_SERVER } from './publicMode.js'
 
 type AuthResult =
 	| { bypassed: true; user: null }
