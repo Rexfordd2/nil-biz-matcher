@@ -223,7 +223,7 @@ export default function RecruitingBlast({ athlete }: Props) {
 				})
 			})
 			if (res.status === 503) {
-				show('Email sending is not configured yet. Ask an admin to set SMTP.')
+				show('Outreach email is disabled. Copy your message and send it from your own email.')
 				return
 			}
 			if (res.status === 404) {

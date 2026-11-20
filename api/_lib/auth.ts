@@ -1,15 +1,15 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { VercelResponse } from '@vercel/node'
 import crypto from 'crypto'
-import prisma from './prisma.js'
-import { isPublicModeServer } from './publicMode.js'
 
 const COOKIE_NAME = 'al_session'
 const TOKEN_VERSION = 'v1'
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24 * 30 // 30 days
+const MIN_SECRET_LENGTH = 32
 
-function getSecret(): string {
-	const secret = process.env.AUTH_SECRET || process.env.JWT_SECRET
-	return secret && secret.trim().length > 0 ? secret : 'dev-secret-change-me'
+/** Legacy session signing has no fallback secret: without a strong one it is unavailable. */
+function getSecret(): string | null {
+	const secret = (process.env.AUTH_SECRET || process.env.JWT_SECRET || '').trim()
+	return secret.length >= MIN_SECRET_LENGTH ? secret : null
 }
 
 function base64url(input: Buffer | string): string {
@@ -18,13 +18,19 @@ function base64url(input: Buffer | string): string {
 }
 
 export function signSession(userId: string, ttlMs: number = DEFAULT_TTL_MS): string {
+	const secret = getSecret()
+	if (!secret) {
+		throw new Error('Legacy session signing is unavailable: no secure secret configured')
+	}
 	const exp = Date.now() + ttlMs
 	const payload = `${TOKEN_VERSION}.${userId}.${exp}`
-	const signature = crypto.createHmac('sha256', getSecret()).update(payload).digest()
+	const signature = crypto.createHmac('sha256', secret).update(payload).digest()
 	return `${payload}.${base64url(signature)}`
 }
 
 export function verifySession(token: string): { userId: string } | null {
+	const secret = getSecret()
+	if (!secret) return null
 	try {
 		const [version, userId, expStr, sig] = token.split('.')
 		if (!version || !userId || !expStr || !sig) return null
@@ -32,26 +38,13 @@ export function verifySession(token: string): { userId: string } | null {
 		const exp = Number(expStr)
 		if (!Number.isFinite(exp) || Date.now() > exp) return null
 		const payload = `${version}.${userId}.${expStr}`
-		const expected = base64url(crypto.createHmac('sha256', getSecret()).update(payload).digest())
+		const expected = base64url(crypto.createHmac('sha256', secret).update(payload).digest())
+		if (sig.length !== expected.length) return null
 		if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
 		return { userId }
 	} catch {
 		return null
 	}
-}
-
-export function setSessionCookie(res: VercelResponse, token: string) {
-	const isProd = process.env.NODE_ENV === 'production'
-	const maxAge = 60 * 60 * 24 * 30 // 30d
-	const cookie = [
-		`${COOKIE_NAME}=${token}`,
-		`Path=/`,
-		`HttpOnly`,
-		`SameSite=Lax`,
-		`Max-Age=${maxAge}`,
-		isProd ? 'Secure' : ''
-	].filter(Boolean).join('; ')
-	res.setHeader('Set-Cookie', cookie)
 }
 
 export function clearSessionCookie(res: VercelResponse) {
@@ -66,77 +59,3 @@ export function clearSessionCookie(res: VercelResponse) {
 	].filter(Boolean).join('; ')
 	res.setHeader('Set-Cookie', cookie)
 }
-
-function getTokenFromRequest(req: VercelRequest): string | null {
-	const cookieHeader = req.headers.cookie || ''
-	const match = cookieHeader
-		.split(';')
-		.map((s: string) => s.trim())
-		.find((kv: string) => kv.startsWith(`${COOKIE_NAME}=`))
-	if (match) {
-		return match.split('=')[1] || null
-	}
-	const auth = req.headers.authorization || ''
-	const parts = auth.split(' ')
-	if (parts[0] === 'Bearer' && parts[1]) return parts[1]
-	return null
-}
-
-export async function getCurrentUser(req: VercelRequest) {
-	const token = getTokenFromRequest(req)
-	if (!token) return null
-	const parsed = verifySession(token)
-	if (!parsed) return null
-	try {
-		if (!prisma) return null
-		const user = await prisma.user.findUnique({ where: { id: parsed.userId } })
-		return user
-	} catch {
-		return null
-	}
-}
-
-export function requireUser(user: any, res: VercelResponse) {
-	if (!user) {
-		res.setHeader('Cache-Control', 'no-store')
-		res.status(401).json({ error: 'Unauthorized' })
-		return false
-	}
-	return true
-}
-
-/**
- * Get user with public mode bypass support
- * Returns { bypassed: true, user: null } when public mode is enabled
- * Returns { bypassed: false, user } when public mode is disabled
- */
-export async function getUserOrBypass(req: VercelRequest): Promise<{ bypassed: boolean; user: any }> {
-	// Check public mode first
-	if (isPublicModeServer()) {
-		return { bypassed: true, user: null }
-	}
-	
-	// Normal auth flow
-	const user = await getCurrentUser(req)
-	return { bypassed: false, user }
-}
-
-/**
- * Require user with public mode bypass support
- * In public mode: returns { bypassed: true, user: null } and does NOT set 401
- * In normal mode: returns { bypassed: false, user } or sends 401 and returns null
- */
-export async function requireUserOrBypass(req: VercelRequest, res: VercelResponse): Promise<{ bypassed: boolean; user: any } | null> {
-	// Check public mode first
-	if (isPublicModeServer()) {
-		return { bypassed: true, user: null }
-	}
-	
-	// Normal auth flow
-	const user = await getCurrentUser(req)
-	if (!requireUser(user, res)) {
-		return null
-	}
-	return { bypassed: false, user }
-}
-

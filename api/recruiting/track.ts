@@ -10,7 +10,6 @@ const PIXEL_GIF = Buffer.from(
 export default async function handler(req: VercelRequest, res: VercelResponse) {
 	const type = String(req.query.type || '')
 	const token = String(req.query.token || '')
-	const url = req.query.url ? String(req.query.url) : ''
 
 	// If Prisma is configured, persist counts
 	try {
@@ -43,13 +42,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	}
 
 	if (type === 'click') {
-		// Very basic allowlist: only allow http(s) destinations
-		if (!/^https?:\/\//i.test(url)) {
-			return res.status(400).send('Invalid redirect')
-		}
-		// Optionally log token+url
+		// Destinations come from the link itself and are not validated, so
+		// clicks are counted but never redirected.
 		res.setHeader('Cache-Control', 'no-store')
-		return res.redirect(url)
+		res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+		return res.status(410).send('This link is no longer available.')
 	}
 
 	return res.status(400).json({ error: 'Invalid tracking type' })
