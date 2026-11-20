@@ -235,7 +235,49 @@ The disposable ledger mirrors the 12 production rows. The harness confirms:
 
 ## 6. Application release readiness: PR #17 and #20
 
-See the PR #17 and #20 section of the release PR description. This document covers the database gates. The application track remains independent.
+The application track is independent of the migrations. Checked heads: PR #17 at `ed60c729`, and PR #20 at `f66b0b59`, stacked on #17. Both PRs change only relative import specifiers to `.js` (plus `import type` in `src/recruiting/programData.ts`) and add ESM load tests. With main's files restored, the new `api/esmRoutes.test.ts` fails with `ERR_MODULE_NOT_FOUND` on exactly the nine routes fixed.
+
+**Local results on the #20 head:**
+
+| Check | Result |
+| --- | --- |
+| `tsc --noEmit` | Passes |
+| Vitest | 41 files, 301/301 tests pass |
+| `npm run build` | Passes with a debug-protection env var set, as CI sets it |
+| NIL Roster CI | Green on both heads |
+| Vercel previews (`athlete-ledger`, `athlete-ledger-beta`) | Ready |
+
+**Actual dependencies, beyond module load.** Each handler was compiled and invoked with mock requests and stubbed network: 41 scenarios, none crashed.
+
+- **Production login and sign-up do not use `api/`.** `LoginSupabase` and `SignUpSupabase` call supabase-js in the browser with the anon key. Sign-up depends on the `handle_new_user()` trigger. The legacy `Login`/`SignUp` components, which call `/api/auth/*`, render only in a DEV build without Supabase configured.
+- **Recruiting:**
+  - in-app search calls `/api/places-search`, which neither PR touches;
+  - the board and blast screens read and write `user_targets`, `orgs`, and `org_contacts` directly under RLS;
+  - Recruiting Blast posts to `/api/recruiting/send`;
+  - `/api/recruiting/search` is used only by the debug page.
+- **Athlete Houze stays disabled.** `/api/integrations/athlete-houze/report` returns 503 unless all four `ATHLETE_HOUZE_*` variables are set and `ATHLETE_HOUZE_REPORTING_MODE` is exactly `canary`. Non-canary users get 403 even then.
+- **Migration interaction:**
+  - none of these routes touch `waitlist`, `anon_sessions`, `profiles`, or the two functions;
+  - `update_anon_session_last_seen` is called only when `getUser()` returns no user, so restricting it from `authenticated` (migration 2) is compatible;
+  - no code inserts into `profiles`.
+
+**Risks that PR #20 makes reachable again.** These routes previously crashed on load; they existed before.
+
+1. **`/api/auth/login`** issues an `al_session` cookie for any existing email without checking a password (verified in source). `api/_lib/auth.ts` falls back to the hardcoded secret `dev-secret-change-me` when `AUTH_SECRET` and `JWT_SECRET` are unset, so tokens are forgeable. The Prisma datasource is SQLite, so on Vercel these routes most likely return 500. That depends on the deployed `DATABASE_URL`, which was not visible here.
+2. **`/api/recruiting/send`** accepts unauthenticated requests when public mode is on. If SMTP is configured, it then works as a mail relay with a caller-chosen sender and raw HTML. For signed-in users it always returns 401, because the UI sends no Supabase cookie or token. That is not a regression.
+3. **`/api/recruiting/track`** redirects to any http(s) URL (open redirect).
+
+**Founder checks on the preview, before deploying:**
+
+1. Log in through the UI with a synthetic Supabase account. Confirm the session survives a refresh.
+2. Sign up a synthetic account and confirm its `profiles` row exists. Repeat after migrations 2 and 3.
+3. In the Vercel env, by name only:
+   - `AUTH_SECRET` or `JWT_SECRET` is set, or `DATABASE_URL` is unusable. Then `POST /api/auth/login` with a known synthetic email must not return 200.
+   - Public mode is off on the release target.
+   - The `ATHLETE_HOUZE_*` variables are not all set with mode `canary`. Then the report route must return 503.
+4. `/api/business/search` returns 200 with a Maps key, or 503 without one. The in-app recruiting search returns results.
+
+**Readiness: conditional GO.** The import fixes are correct and fully tested. Deploy only after checks 1 and 3 pass. If check 3 fails, it is NO-GO until the legacy `/api/auth/*` routes are disabled or a secret is set. Risks 2 and 3 are worth follow-up fixes and do not block an import-only release.
 
 ## 7. Outstanding founder approvals
 
@@ -246,7 +288,8 @@ See the PR #17 and #20 section of the release PR description. This document cove
 5. **Production sign-up smoke:** a synthetic account created, signed in, and deleted through Supabase Auth after migrations 2 and 3.
 6. **Inventory read:** run `privilege_inventory.sql` against production (read-only) and review it.
 7. **Follow-up least-privilege migration:** decide whether to prepare a separate migration for the remaining `TRUNCATE`/`TRIGGER`/`REFERENCES` grants and default privileges. Nothing is prepared or authorized here.
-8. **Application deployment of PR #17 and #20:** a separate approval, gated on the founder-run login and recruiting checks listed in section 6.
+8. **Application deployment of PR #17 and #20:** a separate approval, gated on the founder-run preview checks in section 6.
+9. **Legacy `/api/auth/*` routes:** decide whether to disable them, or require `AUTH_SECRET`, before or with the #20 deployment.
 
 Not requested: merges, deployment, credential rotation, billing changes, or Athlete Houze reporting activation. Reporting stays disabled.
 
@@ -257,6 +300,7 @@ Not requested: merges, deployment, credential rotation, billing changes, or Athl
 | Migration 1 | **GO for execution approval.** SHA matches. Pre/post checks and dry-run path tested. |
 | Migration 2 | **GO for execution approval.** SHA matches. Pre/post checks and separate verification tested. |
 | Migration 3 (replacement) | **NO-GO until approval item 1.** Tested and fail-closed, but its expected definition has not been checked against the preflight evidence by anyone who can read it. |
+| PR #17 + #20 deployment | **Conditional GO.** Requires the founder preview checks in section 6, especially the legacy `/api/auth/login` secret and database check. |
 | Withdrawn `20261120213200` | Out of the execution set and refused by the runner. |
 | Blanket `db push` / `migration repair` | **NO-GO.** |
 | Production SQL changes now | **NO-GO.** Not authorized by this instruction. |
