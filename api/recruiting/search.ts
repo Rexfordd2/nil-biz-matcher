@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { SAMPLE_PROGRAMS } from '../../src/recruiting/programData'
+import { SAMPLE_PROGRAMS } from '../../src/recruiting/programData.js'
 
 /**
  * UI → /api/recruiting/search → static dataset filter

@@ -1,4 +1,4 @@
-import { CollegeProgram } from './programTypes'
+import type { CollegeProgram } from './programTypes'
 
 export const SAMPLE_PROGRAMS: CollegeProgram[] = [
 	{

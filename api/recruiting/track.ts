@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { prisma } from '../_lib/prisma'
+import { prisma } from '../_lib/prisma.js'
 
 // 1x1 transparent GIF
 const PIXEL_GIF = Buffer.from(
