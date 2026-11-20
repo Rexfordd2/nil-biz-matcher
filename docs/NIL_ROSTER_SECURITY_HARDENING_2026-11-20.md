@@ -6,6 +6,25 @@
 **Status:** Proposed. None of these migrations has been applied to production.
 **Secrets:** none in this document
 
+## Production preflight status
+
+| Migration | Status | Reason |
+| --- | --- | --- |
+| `20261120213000` (TRUNCATE) | BLOCKED | Production grants and role memberships have not been read. |
+| `20261120213100` (EXECUTE) | BLOCKED | Production function identities, ACLs, and trigger dependency have not been read. |
+| `20261120213200` (profiles) | BLOCKED, do not approve | A live audit reported different policies: `profiles_anon_insert`, `profiles_insert_own`, `profiles_select_own`, `profiles_update_own`. Their predicates are unknown. The migration's preflight aborts on that shape and changes nothing (tested). A corrected candidate needs the real predicates. |
+
+**SQL access blocker.** The database connector fails with `28P01` (password authentication failed for `postgres`). This agent has no Supabase CLI or Vercel session. The management API still reports `ACTIVE_HEALTHY`, so the project is up and only the database password path fails.
+
+**Repair, with no password rotation needed:**
+
+1. Use a path that authenticates with the founder's Supabase account instead of the database password. Either paste the read-only block below into the dashboard SQL editor, or run it through the management API's SQL query endpoint with the founder's existing access token.
+2. Or point the connector at the current database password from the founder's password manager. If the connector uses the Supavisor pooler, its user must be `postgres.duuvyyvfqbzozuhzlbek`, not `postgres`. A `28P01` there is often a user-format mismatch, not a wrong password.
+
+Until the read-only block below has been run and reviewed, no migration in this document should be approved.
+
+**`profiles_anon_insert` is the priority item.** Its name suggests an INSERT policy for `anon` or `PUBLIC`. Inspect its predicate before anything else. If it allows `anon` to insert with a caller-chosen `id` and `role`, it is a live defect, independent of these migrations.
+
 ## Evidence limits
 
 This run had no Supabase credentials, so production grants, policies, and function definitions were not read directly. The findings come from three sources:
@@ -104,32 +123,78 @@ Result: 115 checks passed, 0 failed. The checks cover:
 
 ## Read-only production preflight
 
-Run these as the database owner before approving. They change nothing.
+Run this as the database owner. It runs inside a `READ ONLY` transaction and ends with `ROLLBACK`, so it cannot write. It returns metadata and counts only, never profile contents.
 
 ```sql
-SELECT c.relname, a.grantor::regrole, CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE a.grantee::regrole::text END AS grantee, a.privilege_type
+BEGIN READ ONLY;
+
+-- Migration 1: TRUNCATE grantors and grantees on the private intake tables
+SELECT c.relname, a.grantor::regrole AS grantor,
+       CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE a.grantee::regrole::text END AS grantee,
+       a.privilege_type, a.is_grantable
 FROM pg_class c, aclexplode(c.relacl) a
 WHERE c.oid IN ('public.waitlist'::regclass, 'public.anon_sessions'::regclass)
 ORDER BY 1, 3, 4;
 
-SELECT r.rolname AS member_of FROM pg_roles r
-WHERE pg_has_role('anon', r.oid, 'MEMBER') OR pg_has_role('authenticated', r.oid, 'MEMBER');
+-- Migrations 1 and 2: every role anon/authenticated can use (SET ROLE paths included)
+SELECT api.rolname AS api_role, r.rolname AS reachable_role, r.rolsuper, r.rolbypassrls
+FROM pg_roles api JOIN pg_roles r ON pg_has_role(api.oid, r.oid, 'MEMBER')
+WHERE api.rolname IN ('anon', 'authenticated') ORDER BY 1, 2;
 
-SELECT p.oid::regprocedure, p.prosecdef, p.proconfig, p.proacl, md5(p.prosrc)
-FROM pg_proc p WHERE p.oid IN ('public.handle_new_user()'::regprocedure, 'public.update_anon_session_last_seen(text)'::regprocedure);
+-- Migration 1: TRUNCATE reachable by client roles, and service_role baseline
+SELECT api.rolname, t.tbl, bool_or(has_table_privilege(r.oid, t.tbl, 'TRUNCATE')) AS truncate_reachable
+FROM pg_roles api JOIN pg_roles r ON pg_has_role(api.oid, r.oid, 'MEMBER')
+CROSS JOIN (VALUES ('public.waitlist'), ('public.anon_sessions')) t(tbl)
+WHERE api.rolname IN ('anon', 'authenticated', 'service_role') GROUP BY 1, 2 ORDER BY 1, 2;
 
+-- Migration 2: exact identities, owners, ACLs, body fingerprints
+SELECT p.oid::regprocedure, pg_get_userbyid(p.proowner) AS owner, p.prorettype::regtype,
+       p.prosecdef, p.proconfig, p.proacl, md5(p.prosrc)
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname IN ('handle_new_user', 'update_anon_session_last_seen');
+
+-- Migration 2: triggers that depend on handle_new_user()
+SELECT t.tgrelid::regclass, t.tgname, t.tgenabled
+FROM pg_trigger t WHERE t.tgfoid = 'public.handle_new_user()'::regprocedure;
+
+-- Migration 3: policies, grants, columns, keys, triggers on profiles
 SELECT policyname, permissive, roles, cmd, qual, with_check FROM pg_policies
 WHERE schemaname = 'public' AND tablename = 'profiles' ORDER BY policyname;
 
-SELECT attname, attgenerated FROM pg_attribute
-WHERE attrelid = 'public.profiles'::regclass AND attname IN ('id', 'user_id');
+SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE a.grantee::regrole::text END AS grantee,
+       string_agg(a.privilege_type, ',' ORDER BY a.privilege_type) AS privileges
+FROM pg_class c, aclexplode(c.relacl) a WHERE c.oid = 'public.profiles'::regclass GROUP BY 1 ORDER BY 1;
 
-SELECT count(*) FILTER (WHERE user_id IS NULL) AS null_user_id,
+SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'public.profiles'::regclass;
+
+SELECT attname, format_type(atttypid, atttypmod), attnotnull, attgenerated
+FROM pg_attribute WHERE attrelid = 'public.profiles'::regclass AND attname IN ('id', 'user_id', 'role');
+
+SELECT conname, contype, pg_get_constraintdef(oid) FROM pg_constraint
+WHERE conrelid = 'public.profiles'::regclass ORDER BY conname;
+
+SELECT tgname, tgfoid::regprocedure, tgenabled FROM pg_trigger
+WHERE tgrelid = 'public.profiles'::regclass AND NOT tgisinternal;
+
+-- Migration 3: aggregate ownership checks (counts only)
+SELECT count(*) AS total,
+       count(*) FILTER (WHERE user_id IS NULL) AS null_user_id,
        count(*) FILTER (WHERE user_id IS NOT NULL AND user_id <> id) AS user_id_differs_from_id,
-       count(*) AS total
-FROM public.profiles;
-```
+       count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id)) AS orphan_id
+FROM public.profiles p;
 
+SELECT count(*) AS user_ids_owning_multiple_rows
+FROM (SELECT user_id FROM public.profiles WHERE user_id IS NOT NULL
+      GROUP BY user_id HAVING count(*) > 1) d;
+
+-- Migration 3: anonymous INSERT paths into profiles
+SELECT has_table_privilege('anon', 'public.profiles', 'INSERT') AS anon_insert_grant,
+       (SELECT array_agg(policyname) FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'profiles' AND cmd IN ('INSERT', 'ALL')
+          AND (roles && ARRAY['anon', 'public']::name[])) AS insert_policies_covering_anon;
+
+ROLLBACK;
+```
 Expected for the migrations to apply as written:
 
 - Owner-granted `TRUNCATE` entries for `anon` and `authenticated`.
