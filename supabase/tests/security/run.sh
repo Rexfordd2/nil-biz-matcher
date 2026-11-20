@@ -150,6 +150,17 @@ build_db neg_profiles production
 psql_db neg_profiles -c "ALTER POLICY profiles_update_own ON public.profiles USING (true)" >/dev/null
 expect_migration_failure neg_profiles "${NEW_MIGRATIONS[2]}" "profiles policy drift"
 
+# Policy names reported by a live audit; predicates there are not yet known.
+build_db neg_profiles_live production
+psql_db neg_profiles_live -c "DROP POLICY profiles_upsert_own ON public.profiles;
+  DROP POLICY profiles_delete_own ON public.profiles;
+  CREATE POLICY profiles_insert_own ON public.profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+  CREATE POLICY profiles_anon_insert ON public.profiles FOR INSERT TO anon WITH CHECK (true);" >/dev/null
+expect_migration_failure neg_profiles_live "${NEW_MIGRATIONS[2]}" "live-audit policy names (anon_insert/insert_own/select_own/update_own)"
+[[ "$(psql_db neg_profiles_live -Atc "SELECT count(*) FROM pg_policies WHERE tablename = 'profiles'")" == 4 ]] \
+  && echo "PASS | negative | aborted profiles migration left live-shaped policies untouched" \
+  || { echo "FAIL | negative | aborted profiles migration changed policies"; FAILED=1; }
+
 build_db neg_rerun clean
 apply_hardening neg_rerun
 psql_db neg_rerun -f "$HERE/20_seed.sql" >/dev/null
