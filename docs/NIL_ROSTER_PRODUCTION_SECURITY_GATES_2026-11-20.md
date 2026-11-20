@@ -233,51 +233,98 @@ The disposable ledger mirrors the 12 production rows. The harness confirms:
 
 **Why not `supabase db push`:** with three new files present, `db push` applies every pending file in one run and records each one. That would take the decision out of the per-migration approval.
 
-## 6. Application release readiness: PR #17 and #20
+## 6. Application release gate: PR #17, #20 and #23
 
-The application track is independent of the migrations. Checked heads: PR #17 at `ed60c729`, and PR #20 at `f66b0b59`, stacked on #17. Both PRs change only relative import specifiers to `.js` (plus `import type` in `src/recruiting/programData.ts`) and add ESM load tests. With main's files restored, the new `api/esmRoutes.test.ts` fails with `ERR_MODULE_NOT_FOUND` on exactly the nine routes fixed.
+**Founder decision (2026-11-20): disable legacy authentication.** PR #20 makes the legacy `/api/auth/*`, `/api/recruiting/send` and `/api/recruiting/track` routes loadable again. The founder ruled that a missing Vercel variable is not an acceptable boundary, so they are closed in code by [PR #23](https://github.com/Rexfordd2/nil-biz-matcher/pull/23). PR #23 is stacked on #20, which is stacked on #17.
 
-**Local results on the #20 head:**
+### What PR #23 changes
+
+- `/api/auth/login`, `/register` and `/me` always return `410 LEGACY_AUTH_DISABLED`: no cookie, no Prisma access, no account creation.
+- The `dev-secret-change-me` fallback is removed. Signing needs a secret of at least 32 characters and otherwise throws; verification returns null.
+- The public-mode bypass helpers and `getAuthenticatedSupabaseUser.ts` are removed.
+- The client's simulated local accounts exist only in `import.meta.env.DEV` builds.
+- `/api/recruiting/send` always returns `503 OUTREACH_DISABLED`, with no auth lookup, public-mode check or SMTP. Drafts, templates and copy-to-clipboard are unchanged.
+- `/api/recruiting/track` ignores `url`, and clicks return `410` with no `Location`. The open pixel is unchanged.
+- No environment flag re-enables any of this. Re-enabling needs a code change and review.
+- `/api/auth/logout`, Supabase auth, Athlete Houze and database grants are untouched.
+
+### Release commit
+
+The release head is `4387992905c5d24700586041b3fa03de3d9b8d76`, the head of PR #23. It is a linear descendant of production `main` `2534a012806c9190fd1c7b34a9bc8fd48731fb51`. Its five commits are:
+
+| Commit | Source |
+| --- | --- |
+| `512509b`, `ed60c72` | PR #17 (head `ed60c729`) |
+| `f66b0b5` | PR #20 (head `f66b0b59`) |
+| `2d8ad15` | Security patch |
+| `4387992` | Local acceptance suite |
+
+`main` can therefore be fast-forwarded to exactly this commit, and production builds that same tree once.
+
+### Results on the release head
 
 | Check | Result |
 | --- | --- |
 | `tsc --noEmit` | Passes |
-| Vitest | 41 files, 301/301 tests pass |
-| `npm run build` | Passes with a debug-protection env var set, as CI sets it |
-| NIL Roster CI | Green on both heads |
-| Vercel previews (`athlete-ledger`, `athlete-ledger-beta`) | Ready |
+| Vitest | 43 files, 324/324 tests pass. 23 are new and run with a production-like env: `DATABASE_URL`, strong `AUTH_SECRET`/`JWT_SECRET`, all three public-mode flags, `APP_URL`, `SMTP_*`. 17 of them fail on the unpatched #20 head. |
+| `api/esmRoutes.test.ts` | Every API route loads under native Node ESM |
+| `npm run build` | Passes |
+| CI and Vercel previews on `4387992` | NIL Roster CI green. Both Vercel previews built. On the `athlete-ledger` preview (`/api/build-id` reports `gitCommitSha` `4387992905c5…`): login, register and me return 410 with no `Set-Cookie`; send returns 503; click tracking returns 410 with no `Location` for absolute, `//` and `javascript:` URLs; Houze without a token returns 401; healthz and `/auth/signup` return 200. The `athlete-ledger-beta` preview is behind Vercel Authentication and was not probed. |
+| Local acceptance (`tests/acceptance/supabase-local/`) | 9/9 Playwright tests pass on the current production schema, and again with migrations 1–3 applied. 0 SMTP connections. |
+| Negative control: the same suite on unpatched #20 | Exactly the 3 security tests fail: one SMTP connection from the public-mode relay, a 307 to `https://evil.example/phish`, and the legacy login running instead of returning 410 |
 
-**Actual dependencies, beyond module load.** Each handler was compiled and invoked with mock requests and stubbed network: 41 scenarios, none crashed.
+The local acceptance stack is a disposable PostgreSQL 16 built from this branch's production-shaped fixture, migration ledger and audited `profiles` shape. It adds:
+- real Supabase Auth v2.198.0 and PostgREST 12.2.3;
+- the release head's production build;
+- the compiled API handlers, running with production-like secrets and public-mode flags, and with SMTP pointed at a sink that counts connections.
 
-- **Production login and sign-up do not use `api/`.** `LoginSupabase` and `SignUpSupabase` call supabase-js in the browser with the anon key. Sign-up depends on the `handle_new_user()` trigger. The legacy `Login`/`SignUp` components, which call `/api/auth/*`, render only in a DEV build without Supabase configured.
-- **Recruiting:**
-  - in-app search calls `/api/places-search`, which neither PR touches;
-  - the board and blast screens read and write `user_targets`, `orgs`, and `org_contacts` directly under RLS;
-  - Recruiting Blast posts to `/api/recruiting/send`;
-  - `/api/recruiting/search` is used only by the debug page.
-- **Athlete Houze stays disabled.** `/api/integrations/athlete-houze/report` returns 503 unless all four `ATHLETE_HOUZE_*` variables are set and `ATHLETE_HOUZE_REPORTING_MODE` is exactly `canary`. Non-canary users get 403 even then.
-- **Migration interaction:**
-  - none of these routes touch `waitlist`, `anon_sessions`, `profiles`, or the two functions;
-  - `update_anon_session_last_seen` is called only when `getUser()` returns no user, so restricting it from `authenticated` (migration 2) is compatible;
-  - no code inserts into `profiles`.
+It covers:
+- signup creating the `profiles` row;
+- invalid and valid login;
+- session restore on reload, and logout;
+- board persistence;
+- blast drafts;
+- cross-account isolation of `user_targets`, `orgs`, `org_contacts` and `profiles`;
+- legacy, outreach and redirect denial;
+- Houze returning 503 for a signed-in user;
+- every route loading.
 
-**Risks that PR #20 makes reachable again.** These routes previously crashed on load; they existed before.
+Synthetic accounts only; no email or report leaves the machine.
 
-1. **`/api/auth/login`** issues an `al_session` cookie for any existing email without checking a password (verified in source). `api/_lib/auth.ts` falls back to the hardcoded secret `dev-secret-change-me` when `AUTH_SECRET` and `JWT_SECRET` are unset, so tokens are forgeable. The Prisma datasource is SQLite, so on Vercel these routes most likely return 500. That depends on the deployed `DATABASE_URL`, which was not visible here.
-2. **`/api/recruiting/send`** accepts unauthenticated requests when public mode is on. If SMTP is configured, it then works as a mail relay with a caller-chosen sender and raw HTML. For signed-in users it always returns 401, because the UI sends no Supabase cookie or token. That is not a regression.
-3. **`/api/recruiting/track`** redirects to any http(s) URL (open redirect).
+### Deployment mechanics (read-only findings)
 
-**Founder checks on the preview, before deploying:**
+- **Production is deployed by the Vercel Git integration** on every push to `main`, for two projects: `athlete-ledger` and `athlete-ledger-beta`. The GitHub workflows only validate (`deployment_owner=Vercel Git integration`).
+- **Merging #17 or #20 into `main` on its own would deploy them to production without the patch.** That is not allowed.
+- **Current production, the rollback target:** `main` `2534a012`, deployed 2026-08-10 22:43 PDT:
+  - `athlete-ledger-ey2yoq85g-athleteledger.vercel.app` (GitHub deployment 5845063526);
+  - `athlete-ledger-beta-60kcu4tyx-athleteledger.vercel.app` (GitHub deployment 5845069216).
+- **The previous production before that** is `cddbb2df`.
 
-1. Log in through the UI with a synthetic Supabase account. Confirm the session survives a refresh.
-2. Sign up a synthetic account and confirm its `profiles` row exists. Repeat after migrations 2 and 3.
-3. In the Vercel env, by name only:
-   - `AUTH_SECRET` or `JWT_SECRET` is set, or `DATABASE_URL` is unusable. Then `POST /api/auth/login` with a known synthetic email must not return 200.
-   - Public mode is off on the release target.
-   - The `ATHLETE_HOUZE_*` variables are not all set with mode `canary`. Then the report route must return 503.
-4. `/api/business/search` returns 200 with a Maps key, or 503 without one. The in-app recruiting search returns results.
+### Gated deployment procedure (needs founder approval; not performed)
 
-**Readiness: conditional GO.** The import fixes are correct and fully tested. Deploy only after checks 1 and 3 pass. If check 3 fails, it is NO-GO until the legacy `/api/auth/*` routes are disabled or a secret is set. Risks 2 and 3 are worth follow-up fixes and do not block an import-only release.
+1. **Freeze.** Do not merge #17 or #20 to `main` individually. Approve #17, #20 and #23 together as one release.
+2. **Confirm the release head.**
+   - The head of PR #23 is still `4387992905c5d24700586041b3fa03de3d9b8d76`, or a reviewed successor.
+   - `git merge-base --is-ancestor origin/main <head>` succeeds, and `origin/main` is still `2534a012`.
+   - NIL Roster CI and both Vercel previews are green on that SHA.
+3. **Preview checks on the `athlete-ledger` preview of that SHA**, with synthetic accounts only:
+   - Supabase sign-up, then log in, refresh, and log out.
+   - `POST /api/auth/login` returns 410 with no `Set-Cookie`.
+   - `POST /api/recruiting/send` returns 503.
+   - `/api/recruiting/track?type=click&id=x&url=https://example.com` returns 410 with no `Location`.
+   - `/api/integrations/athlete-houze/report` with a signed-in token returns 503.
+4. **Single production change.** Fast-forward `main` to the approved SHA in one push, for example `git push origin <sha>:main` with no merge commit. Equivalently, merge the stack top-down so that only the final merge lands on `main`:
+   - retarget #23 onto #20, and #20 onto #17;
+   - merge #17 into `main` only once its branch contains #20 and #23.
+
+   Either way, `main` moves from `2534a012` straight to a tree containing all three PRs. No intermediate production deployment exists. GitHub's "Rebase and merge" or "Squash" rewrite the SHA, so if either is used, re-verify the resulting tree against `4387992` with `git diff --stat 4387992 origin/main`, which must be empty.
+5. **Watch the production builds** of both Vercel projects for the new SHA. Then repeat the step-3 checks against production, with synthetic accounts.
+6. **Rollback** if any check fails:
+   - Use Vercel Instant Rollback (dashboard, or `vercel rollback <deployment>`) to `athlete-ledger-ey2yoq85g` and `athlete-ledger-beta-60kcu4tyx`, which are `2534a012`. This needs no git change, and the database is unaffected: the application release contains no migrations.
+   - Then revert `main` with a reviewed revert. Do not force-push. After an Instant Rollback, Vercel stops assigning new production builds to the domains until someone promotes one.
+7. **Migrations stay separate.** The application release does not depend on migrations 1–3. The acceptance suite passes before and after them. Apply each one only under its own approval (section 7).
+
+**Readiness: GO for the combined release once a founder approves it, after the step-3 preview checks pass. NO-GO for #17 or #20 deployed without #23.**
 
 ## 7. Outstanding founder approvals
 
@@ -288,8 +335,8 @@ The application track is independent of the migrations. Checked heads: PR #17 at
 5. **Production sign-up smoke:** a synthetic account created, signed in, and deleted through Supabase Auth after migrations 2 and 3.
 6. **Inventory read:** run `privilege_inventory.sql` against production (read-only) and review it.
 7. **Follow-up least-privilege migration:** decide whether to prepare a separate migration for the remaining `TRUNCATE`/`TRIGGER`/`REFERENCES` grants and default privileges. Nothing is prepared or authorized here.
-8. **Application deployment of PR #17 and #20:** a separate approval, gated on the founder-run preview checks in section 6.
-9. **Legacy `/api/auth/*` routes:** decide whether to disable them, or require `AUTH_SECRET`, before or with the #20 deployment.
+8. **Application release of PR #17 + #20 + #23:** one approval for one production deployment of the combined head, following the gated procedure in section 6.
+9. **Legacy authentication:** decided on 2026-11-20: disabled in code by PR #23. Re-enabling it would need a new reviewed change.
 
 Not requested: merges, deployment, credential rotation, billing changes, or Athlete Houze reporting activation. Reporting stays disabled.
 
@@ -300,7 +347,9 @@ Not requested: merges, deployment, credential rotation, billing changes, or Athl
 | Migration 1 | **GO for execution approval.** SHA matches. Pre/post checks and dry-run path tested. |
 | Migration 2 | **GO for execution approval.** SHA matches. Pre/post checks and separate verification tested. |
 | Migration 3 (replacement) | **NO-GO until approval item 1.** Tested and fail-closed, but its expected definition has not been checked against the preflight evidence by anyone who can read it. |
-| PR #17 + #20 deployment | **Conditional GO.** Requires the founder preview checks in section 6, especially the legacy `/api/auth/login` secret and database check. |
+| Combined application release #17 + #20 + #23 (`4387992`) | **GO for founder release approval.** Tests, local Supabase acceptance and the negative control pass. Deploy only as the single gated release in section 6. |
+| #17 or #20 to production without #23 | **NO-GO.** It would restore the legacy session, outreach relay and open redirect. |
+| Production promotion now | **Not performed.** Awaiting founder approval. |
 | Withdrawn `20261120213200` | Out of the execution set and refused by the runner. |
 | Blanket `db push` / `migration repair` | **NO-GO.** |
 | Production SQL changes now | **NO-GO.** Not authorized by this instruction. |
