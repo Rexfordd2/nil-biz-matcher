@@ -15,6 +15,11 @@ export type CurrentUser = {
 
 import { createLocalUser, getCurrentUser as getLocalCurrentUser, loginLocalUser, logoutUser } from '../lib/authClient'
 
+// The server-side legacy endpoints are disabled. Browser-only simulated users
+// exist for local development and must never be available in a production build.
+const LOCAL_SIMULATED_AUTH = import.meta.env.DEV
+const LEGACY_AUTH_DISABLED_MESSAGE = 'Legacy sign-in is disabled. Sign in with your NIL Roster account.'
+
 export async function authMe(): Promise<CurrentUser | null> {
 	// Prefer server session if available; fall back to local
 	try {
@@ -26,7 +31,7 @@ export async function authMe(): Promise<CurrentUser | null> {
 	} catch {
 		// Fall back to local user
 	}
-	return getLocalCurrentUser() as CurrentUser | null
+	return LOCAL_SIMULATED_AUTH ? (getLocalCurrentUser() as CurrentUser | null) : null
 }
 
 export async function authRegister(input: { email: string; fullName: string; phone?: string; marketingConsent?: boolean }): Promise<CurrentUser> {
@@ -44,6 +49,7 @@ export async function authRegister(input: { email: string; fullName: string; pho
 		const data = await res.json()
 		return data.user as CurrentUser
 	} catch (err) {
+		if (!LOCAL_SIMULATED_AUTH) throw new Error(LEGACY_AUTH_DISABLED_MESSAGE)
 		// Fallback to local (offline/dev) behavior
 		const user = createLocalUser(input)
 		return user as CurrentUser
@@ -65,6 +71,7 @@ export async function authLogin(input: { email: string }): Promise<CurrentUser> 
 		const data = await res.json()
 		return data.user as CurrentUser
 	} catch (err: any) {
+		if (!LOCAL_SIMULATED_AUTH) throw new Error(LEGACY_AUTH_DISABLED_MESSAGE)
 		// Fallback to local (offline/dev) behavior
 		const user = loginLocalUser(input.email)
 		if (!user) {
