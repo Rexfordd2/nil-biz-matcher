@@ -35,7 +35,7 @@ export default function Status() {
 
 			<section className="space-y-2">
 				<h2 className="text-xl font-semibold">Live Features</h2>
-				<ul className="list-disc pl-6 space-y-1 text-gray-200">
+				<ul className="list-disc pl-6 space-y-1 text-gray-700">
 					{LIVE_FEATURES.map((item, idx) => (
 						<li key={idx}>{item}</li>
 					))}
@@ -45,9 +45,9 @@ export default function Status() {
 			<section className="space-y-2">
 				<h2 className="text-xl font-semibold">Known limitations / Beta</h2>
 				{KNOWN_LIMITATIONS.length === 0 ? (
-					<p className="text-gray-300">No known limitations at this time.</p>
+					<p className="text-gray-600">No known limitations at this time.</p>
 				) : (
-					<ul className="list-disc pl-6 space-y-1 text-gray-200">
+					<ul className="list-disc pl-6 space-y-1 text-gray-700">
 						{KNOWN_LIMITATIONS.map((item, idx) => (
 							<li key={idx}>{item}</li>
 						))}
@@ -56,7 +56,7 @@ export default function Status() {
 			</section>
 
 			<section>
-				<p className="text-sm text-gray-300">
+				<p className="text-sm text-gray-600">
 					Need help?{' '}
 					<a className="underline" href="https://athletehouze.com" target="_blank" rel="noreferrer">
 						Contact Athlete Houze
