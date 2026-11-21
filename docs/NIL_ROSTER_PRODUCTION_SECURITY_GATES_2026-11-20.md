@@ -326,6 +326,42 @@ Synthetic accounts only; no email or report leaves the machine.
 
 **Readiness: GO for the combined release once a founder approves it, after the step-3 preview checks pass. NO-GO for #17 or #20 deployed without #23.**
 
+### Release record (2026-11-20, founder-authorized)
+
+**Gate 2.** The founder set `athlete-ledger-beta` Production `ATHLETE_HOUZE_REPORTING_MODE=off` through their Vercel account, and verified it from the variable's metadata. No other variables changed. The agent had no Vercel access and could not read the value. The deployed code treats any value other than `canary` as disabled.
+
+**Gate 3.** `main` was moved from `2534a012` to `4387992905c5d24700586041b3fa03de3d9b8d76` at 16:33 PST:
+- One push, with an expected-SHA lease; it was a fast-forward and nothing was forced.
+- Beforehand: 5 ahead, 0 behind, and CI plus both Vercel checks green.
+- No intermediate commit reached `main`.
+- GitHub marked PR #17 merged. PRs #20 and #23 still show as open against their stack bases, but their commits are in `main`.
+
+**Production deployments** of `4387992`, created 16:36 PST:
+
+| Project | Deployment ID (GitHub) | URL | `/api/build-id` |
+| --- | --- | --- | --- |
+| `athlete-ledger` | 7955893109 | `athlete-ledger-ef3229nif-athleteledger.vercel.app`, served at `athlete-ledger.vercel.app` | `4387992905c5…` |
+| `athlete-ledger-beta` | 7955893034 | `athlete-ledger-beta-ehlzwhme9-athleteledger.vercel.app`, served at `athlete-ledger-beta.vercel.app` | `4387992905c5…` |
+
+**Gate 4.** Both production hosts gave identical results. No accounts were created and no mail or reports were sent.
+- **Legacy auth:** login, register and me return 410 with no `Set-Cookie`.
+- **Outreach and tracking:** send returns 503. Click tracking returns 410 with no `Location` for absolute, `//`, `javascript:`, relative and empty URLs.
+- **Athlete Houze:** GET returns 405, and POST without a token returns 401.
+- **Other routes:** healthz (Supabase connected) and ping return 200. places-search without a query returns 400. business/search and recruiting/search return 405 to POST, which proves they load without a Google call. waitlist with an invalid email returns 400.
+- **Browser:**
+  - signup renders with Supabase configured (not submitted);
+  - a login with a nonexistent synthetic address reaches Supabase (`POST /auth/v1/token` returns 400) and shows "Invalid email or password", with no session stored;
+  - `/app/recruiting/board` and `/blast` load behind the auth gate;
+  - no page or console errors.
+
+**Not verified in production** (would need an authorized synthetic account):
+- a successful Supabase sign-in and signup;
+- session restore;
+- an existing board or drafts while signed in;
+- the authenticated `503 Integration unavailable` path of the report route.
+
+These are covered by the local acceptance suite above. Rollback was not needed. The targets remain `athlete-ledger-ey2yoq85g` and `athlete-ledger-beta-60kcu4tyx` (`2534a012`).
+
 ## 7. Outstanding founder approvals
 
 1. **Migration 3 definition:** confirm the five `profiles_anon_insert` values above, and the owner policies' `{authenticated}` roles, against the preflight's `pg_policies` output. If they match, approve SHA `ecb426a6…12ec90` and change its manifest status to `approved` in a reviewed commit. If they differ, request a recut.
@@ -347,9 +383,9 @@ Not requested: merges, deployment, credential rotation, billing changes, or Athl
 | Migration 1 | **GO for execution approval.** SHA matches. Pre/post checks and dry-run path tested. |
 | Migration 2 | **GO for execution approval.** SHA matches. Pre/post checks and separate verification tested. |
 | Migration 3 (replacement) | **NO-GO until approval item 1.** Tested and fail-closed, but its expected definition has not been checked against the preflight evidence by anyone who can read it. |
-| Combined application release #17 + #20 + #23 (`4387992`) | **GO for founder release approval.** Tests, local Supabase acceptance and the negative control pass. Deploy only as the single gated release in section 6. |
+| Combined application release #17 + #20 + #23 (`4387992`) | **Released to production 2026-11-20 (GO).** Both projects serve `4387992`, and the production acceptance in section 6 passed. Authenticated Supabase flows are pending an authorized synthetic account. |
 | #17 or #20 to production without #23 | **NO-GO.** It would restore the legacy session, outreach relay and open redirect. |
-| Production promotion now | **Not performed.** Awaiting founder approval. |
+| Database migrations 1–3 | Unchanged by the application release. Each still needs its own approval. |
 | Withdrawn `20261120213200` | Out of the execution set and refused by the runner. |
 | Blanket `db push` / `migration repair` | **NO-GO.** |
 | Production SQL changes now | **NO-GO.** Not authorized by this instruction. |
