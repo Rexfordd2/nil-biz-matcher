@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import Button from './ui/Button'
+import { navigate } from '../routes/RootRouter'
+import { PUBLIC_MODE } from '../config/publicMode'
 
 type Props = {
 	source?: string
@@ -83,15 +85,27 @@ export default function WaitlistEmbed({ source = 'landing' }: Props) {
 		)
 	}
 
-	// No embed configured - show fallback message
 	return (
-		<div className="text-center space-y-4 p-6 border border-border rounded-lg bg-mid/30">
-			<p className="text-gray-300 text-sm">
-				Waitlist embed not configured. Contact the team to get early access.
+		<div className="text-center space-y-4 p-6 border border-border rounded-lg bg-mid/30" data-testid="waitlist-unavailable">
+			<p className="text-gray-700 text-sm">
+				Early-access signups are not being collected here right now.
 			</p>
-			<p className="text-xs text-gray-500">
-				(Set VITE_WAITLIST_EMBED_HTML or VITE_WAITLIST_EMBED_URL in environment variables)
-			</p>
+			{!PUBLIC_MODE && (
+				<>
+					<p className="text-gray-600 text-sm">You can create a free account to open NIL Roster instead.</p>
+					<Button
+						onClick={() => navigate('/auth/signup')}
+						className="w-full red-glow"
+						data-testid="waitlist-unavailable-signup"
+					>
+						Create a free account
+					</Button>
+				</>
+			)}
 		</div>
 	)
+}
+
+export function isWaitlistEmbedConfigured(): boolean {
+	return Boolean(import.meta.env.VITE_WAITLIST_EMBED_HTML || import.meta.env.VITE_WAITLIST_EMBED_URL)
 }
