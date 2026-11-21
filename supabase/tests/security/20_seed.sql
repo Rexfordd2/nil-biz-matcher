@@ -40,4 +40,16 @@ SELECT
      SELECT 'anon_sessions', * FROM security_test.non_truncate_acl('public.anon_sessions')
    ) a) AS intake_non_truncate_acl,
   (SELECT has_table_privilege('service_role', 'public.waitlist', 'TRUNCATE')
-      AND has_table_privilege('service_role', 'public.anon_sessions', 'TRUNCATE')) AS service_truncate;
+      AND has_table_privilege('service_role', 'public.anon_sessions', 'TRUNCATE')) AS service_truncate,
+  (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.policyname)
+   FROM pg_policies p WHERE p.tablename = 'profiles'
+     AND p.policyname IN ('profiles_insert_own', 'profiles_select_own', 'profiles_update_own')) AS profiles_owner_policies,
+  (SELECT to_jsonb(relacl::text[]) FROM pg_class WHERE oid = 'public.profiles'::regclass) AS profiles_acl,
+  (SELECT coalesce(jsonb_agg(jsonb_build_array(tgname, tgenabled, pg_get_triggerdef(oid)) ORDER BY tgname), '[]')
+   FROM pg_trigger WHERE tgrelid = 'public.profiles'::regclass AND NOT tgisinternal) AS profiles_triggers,
+  (SELECT coalesce(jsonb_agg(jsonb_build_array(conname, pg_get_constraintdef(oid)) ORDER BY conname), '[]')
+   FROM pg_constraint WHERE conrelid = 'public.profiles'::regclass) AS profiles_constraints,
+  (SELECT jsonb_agg(jsonb_build_array(a.attname, a.attgenerated, pg_get_expr(d.adbin, d.adrelid)) ORDER BY a.attnum)
+   FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+   WHERE a.attrelid = 'public.profiles'::regclass AND a.attnum > 0 AND NOT a.attisdropped) AS profiles_columns,
+  (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM public.profiles p) AS profiles_rows;
