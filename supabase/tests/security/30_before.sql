@@ -23,24 +23,27 @@ SELECT security_test.expect('before', 'authenticated calls update_anon_session_l
 
 SELECT security_test.check('before', 'sign-up metadata role is copied unvalidated into profiles.role',
   (SELECT role = 'coach' FROM public.profiles WHERE id = :other));
+-- Audited profiles shape: the anon policy exists but is dormant.
+SELECT security_test.check('before', 'profiles_anon_insert policy present',
+  EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'profiles_anon_insert'));
+SELECT security_test.check('before', 'anon holds no INSERT privilege on profiles (policy dormant)',
+  NOT has_any_column_privilege('anon', 'public.profiles', 'INSERT'));
 SELECT security_test.expect('before', 'anon cannot insert profiles', '42501',
   'anon', NULL, format($q$INSERT INTO public.profiles (id, role) VALUES (%L, 'admin')$q$, :legacy));
-
-DO $$
-BEGIN
-  IF (SELECT attgenerated = '' FROM pg_attribute
-      WHERE attrelid = 'public.profiles'::regclass AND attname = 'user_id') THEN
-    PERFORM security_test.expect('before',
-      'production shape: authenticated inserts a profile for another account id', 'ok',
-      'authenticated', 'aaaaaaaa-0000-4000-8000-000000000002',
-      $q$INSERT INTO public.profiles (id, user_id, role, full_name)
-         VALUES ('aaaaaaaa-0000-4000-8000-000000000003',
-                 'aaaaaaaa-0000-4000-8000-000000000002', 'admin', 'Spoofed')$q$);
-    PERFORM security_test.expect('before',
-      'production shape: owner cannot read the profile created at sign-up', 'ok',
-      'authenticated', 'aaaaaaaa-0000-4000-8000-000000000001',
-      $q$DO $d$ BEGIN
-         IF (SELECT count(*) FROM public.profiles) <> 0 THEN RAISE EXCEPTION 'visible'; END IF;
-         END $d$ $q$);
-  END IF;
-END $$;
+SELECT security_test.expect('before', 'owner reads own sign-up profile (id-keyed)', 'ok',
+  'authenticated', :athlete, $q$DO $d$ BEGIN
+     IF (SELECT count(*) FROM public.profiles) <> 1 THEN RAISE EXCEPTION 'expected exactly own row'; END IF;
+     END $d$ $q$);
+SELECT security_test.expect('before', 'cross-account profile insert denied', '42501',
+  'authenticated', :other, format(
+    $q$INSERT INTO public.profiles (id, role, full_name) VALUES (%L, 'admin', 'Spoofed')$q$, :legacy));
+SELECT security_test.check('before', 'sign-up profiles have user_id = id (generated)',
+  NOT EXISTS (SELECT 1 FROM public.profiles WHERE user_id IS DISTINCT FROM id));
+SELECT security_test.check('before', 'inventory finding: authenticated holds TRUNCATE on profiles',
+  has_table_privilege('authenticated', 'public.profiles', 'TRUNCATE'));
+SELECT security_test.expect('before', 'authenticated TRUNCATE profiles succeeds at SQL level (rolled back)', 'ok',
+  'authenticated', :athlete, 'TRUNCATE public.profiles');
+SELECT security_test.expect('before', 'dormant policy goes live if anon is ever granted INSERT (rolled back)', 'ok',
+  'postgres', NULL, format($q$GRANT INSERT ON public.profiles TO anon;
+     SET LOCAL ROLE anon;
+     INSERT INTO public.profiles (id, role, full_name) VALUES (%L, 'admin', 'Anon-chosen')$q$, :legacy));

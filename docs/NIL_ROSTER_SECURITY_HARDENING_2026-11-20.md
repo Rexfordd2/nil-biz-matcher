@@ -4,6 +4,8 @@
 **Remote project:** Athlete Ledger `duuvyyvfqbzozuhzlbek`
 **Builds on:** `20261115064747_private_intake_read_containment` (applied; not reapplied, not renamed)
 **Status:** Proposed. None of these migrations has been applied to production.
+
+> **Superseded for release decisions by `NIL_ROSTER_PRODUCTION_SECURITY_GATES_2026-11-20.md`.** The preflight has since been completed. `20261120213200` is withdrawn and removed from `supabase/migrations`. Production already keys the `profiles` owner policies on `id`, and `user_id` is a stored generated column. The only `profiles` change now proposed is `20261120233000_drop_dormant_profiles_anon_insert.sql`. Text below about `20261120213200` and the blocked preflight is kept as history.
 **Secrets:** none in this document
 
 ## Production preflight status
