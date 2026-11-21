@@ -1,1 +1,5 @@
 supabase/migrations/20261115064747_private_intake_read_containment.sql text eol=lf
+supabase/migrations/20261120213000_revoke_private_intake_truncate.sql text eol=lf
+supabase/migrations/20261120213100_restrict_security_definer_execute.sql text eol=lf
+supabase/migrations/20261120213200_profiles_owner_policies_by_id.sql text eol=lf
+supabase/tests/security/** text eol=lf
