@@ -8,19 +8,34 @@ import { hasWaitlistJoined, markWaitlistJoined } from '../lib/waitlistState'
 import { isDemoMode } from '../config/appMode'
 import { goToLogin } from '../lib/auth/navigation'
 
-export default function Waitlist() {
-	const [joined, setJoined] = useState(() => hasWaitlistJoined())
-	const waitlistConfigured = isWaitlistEmbedConfigured()
-	
-	// Set Open Graph meta tags
-	useEffect(() => {
-		setOpenGraphTags({
+export function waitlistPageMeta(waitlistConfigured: boolean): { title: string; description: string } {
+	return waitlistConfigured
+		? {
 			title: 'NIL Roster — Join Waitlist',
 			description: 'Get early access to NIL Roster. Build a verified athlete profile, find the right place to play, grow your professional network, and connect with businesses.',
+		}
+		: {
+			title: 'NIL Roster — Early Access',
+			description: 'NIL Roster is not collecting early-access signups here right now.',
+		}
+}
+
+export default function Waitlist() {
+	const waitlistConfigured = isWaitlistEmbedConfigured()
+	// A joined flag left in localStorage from an earlier form must not claim a list exists when none is collected.
+	const [joined, setJoined] = useState(() => waitlistConfigured && hasWaitlistJoined())
+
+	useEffect(() => {
+		const previousTitle = document.title
+		setOpenGraphTags({
+			...waitlistPageMeta(waitlistConfigured),
 			url: window.location.href,
 			type: 'website'
 		})
-	}, [])
+		return () => {
+			document.title = previousTitle
+		}
+	}, [waitlistConfigured])
 	
 	function handleAlreadyJoined() {
 		markWaitlistJoined()

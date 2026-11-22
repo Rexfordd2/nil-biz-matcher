@@ -74,4 +74,43 @@ describe('waitlist without a configured signup form', () => {
 		expect(html).toContain('I already joined')
 		expect(html).toContain('data-testid="waitlist-embed-button"')
 	})
+
+	describe('returning visitor with a joined flag from an earlier form', () => {
+		beforeEach(() => {
+			vi.stubGlobal('localStorage', {
+				getItem: (key: string) => (key === 'al_waitlist_joined' ? 'true' : null),
+				setItem: () => {},
+			})
+		})
+
+		afterEach(() => {
+			vi.unstubAllGlobals()
+		})
+
+		it('does not say they are on a list or will be notified', async () => {
+			const { default: Waitlist } = await import('../Waitlist')
+			const html = renderToStaticMarkup(createElement(Waitlist))
+
+			expect(html).not.toMatch(/on the list/)
+			expect(html).not.toMatch(/notify you/)
+			expect(html).toContain('Early-access signups are not being collected here right now.')
+		})
+
+		it('still confirms the joined state when a signup form is configured', async () => {
+			vi.stubEnv('VITE_WAITLIST_EMBED_URL', 'https://forms.gle/example')
+			const { default: Waitlist } = await import('../Waitlist')
+			const html = renderToStaticMarkup(createElement(Waitlist))
+
+			expect(html).toMatch(/You(&#x27;|')re on the list/)
+		})
+	})
+
+	it('titles the page Early Access instead of inviting visitors to join a waitlist', async () => {
+		const { waitlistPageMeta } = await import('../Waitlist')
+
+		const meta = waitlistPageMeta(false)
+		expect(meta.title).toBe('NIL Roster — Early Access')
+		expect(`${meta.title} ${meta.description}`).not.toMatch(/join|waitlist|get early access/i)
+		expect(waitlistPageMeta(true).title).toBe('NIL Roster — Join Waitlist')
+	})
 })
