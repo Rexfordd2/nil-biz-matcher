@@ -153,7 +153,7 @@ export function buildNilRosterOpportunityReport(input: NilRosterOpportunityRepor
 		eventId: `nil-opportunity-${idempotencyDigest}`,
 		eventType: 'nil.opportunity.updated',
 		sourceSystem: 'nil_roster',
-		sourceEnvironment: input.environment ?? 'production',
+		sourceEnvironment: input.environment ?? 'local',
 		externalAthleteId: input.externalAthleteId,
 		occurredAt: input.occurredAt,
 		receivedAt: reportedAt,

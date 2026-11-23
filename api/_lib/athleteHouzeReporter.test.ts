@@ -42,6 +42,20 @@ describe('Athlete Houze NILRoster reporter', () => {
 		expect(JSON.stringify(first)).not.toContain('school')
 	})
 
+	it('labels a report local when the caller omits the environment', () => {
+		const input = {
+			externalAthleteId: 'nil-canary-0001',
+			sourceRecordId: 'opportunity-canary-0001',
+			occurredAt: '2026-08-09T20:00:00.000Z',
+			status: 'idea',
+			category: 'local_brand_deal',
+		}
+		expect(buildNilRosterOpportunityReport(input).sourceEnvironment).toBe('local')
+		expect(
+			buildNilRosterOpportunityReport({ ...input, environment: 'production' }).sourceEnvironment
+		).toBe('production')
+	})
+
 	it('signs the exact body and retries temporary failures', async () => {
 		const secret = 'test-secret-do-not-use-in-production'
 		const fetchImpl = vi
