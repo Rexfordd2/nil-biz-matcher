@@ -26,6 +26,7 @@ describe('Athlete Houze NILRoster reporter', () => {
 		const input = {
 			externalAthleteId: 'nil-canary-0001',
 			sourceRecordId: 'opportunity-canary-0001',
+			sourceRevision: 'rev-001',
 			occurredAt: '2026-08-09T20:00:00.000Z',
 			status: 'idea',
 			category: 'local_brand_deal',
@@ -40,6 +41,38 @@ describe('Athlete Houze NILRoster reporter', () => {
 		expect(JSON.stringify(first)).not.toContain('email')
 		expect(JSON.stringify(first)).not.toContain('phone')
 		expect(JSON.stringify(first)).not.toContain('school')
+	})
+
+	it('uses stable source revisions for retries and new revisions for status reversals', () => {
+		const base = {
+			externalAthleteId: 'nil-canary-0001',
+			sourceRecordId: 'opportunity-canary-0001',
+			sourceRevision: 'rev-A1',
+			occurredAt: '2026-08-09T20:00:00.000Z',
+			status: 'idea',
+			category: 'local_brand_deal',
+		}
+		const first = buildNilRosterOpportunityReport(base)
+		const retry = buildNilRosterOpportunityReport({ ...base })
+		const second = buildNilRosterOpportunityReport({ ...base, status: 'active', sourceRevision: 'rev-B2' })
+		const third = buildNilRosterOpportunityReport({ ...base, sourceRevision: 'rev-A3' })
+		expect(first.eventId).toBe(retry.eventId)
+		expect(first.idempotencyKey).toBe(retry.idempotencyKey)
+		expect(new Set([first.eventId, second.eventId, third.eventId]).size).toBe(3)
+		expect(third.evidencePayload.attributes.sourceRevision).toBe('rev-A3')
+		expect(third.evidencePayload.metrics.status).toBe('idea')
+	})
+
+	it('rejects invalid source revisions instead of suppressing legitimate events', () => {
+		const base = {
+			externalAthleteId: 'nil-canary-0001',
+			sourceRecordId: 'opportunity-canary-0001',
+			occurredAt: '2026-08-09T20:00:00.000Z',
+			status: 'idea',
+			category: 'local_brand_deal',
+		}
+		expect(() => buildNilRosterOpportunityReport({ ...base, sourceRevision: '  ' })).toThrow(/revision/i)
+		expect(() => buildNilRosterOpportunityReport({ ...base, sourceRevision: 'x'.repeat(121) })).toThrow(/revision/i)
 	})
 
 	it('signs the exact body and retries temporary failures', async () => {
